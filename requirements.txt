@@ -1,0 +1,9 @@
+Django==5.2.*
+djangorestframework
+gunicorn
+psycopg[binary]
+redis
+django-redis
+pymongo
+python-dotenv
+djangorestframework
