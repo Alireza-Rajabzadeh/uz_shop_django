@@ -7,3 +7,4 @@ django-redis
 pymongo
 python-dotenv
 djangorestframework
+factory-boy
