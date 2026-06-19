@@ -10,7 +10,7 @@ class Command(BaseCommand):
     def handle(self, *args, **kwargs):
         seeders = [
             CategorySeeder(),
-            ProductSeeder(),
+            # ProductSeeder(),
         ]
 
         for seeder in seeders:
