@@ -1,8 +1,7 @@
 import traceback
 from django.conf import settings
 from rest_framework.views import exception_handler
-from commons.responses import api_response
-
+from responses import api_response
 
 def custom_exception_handler(exc, context):
     """
