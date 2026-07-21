@@ -1,1 +1,2 @@
-from .customer import CustomerRegisterSerializer, CustomerLoginSerializer, CustomerProfileSerializer
+from .customer import CustomerRegisterSerializer, CustomerLoginSerializer, CustomerProfileSerializer, CustomerUpdateSerializer
+from .address import CustomerAddressSerializer

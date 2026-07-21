@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "domains.catalog.apps.CatalogConfig",
     "domains.inventory.apps.InventoryConfig",
+    "domains.location.apps.LocationConfig",
     "domains.customer.apps.CustomerConfig",
     "core",
     "domains.users",
