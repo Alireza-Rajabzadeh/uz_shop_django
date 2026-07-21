@@ -1,4 +1,4 @@
-from seeders.base import BaseSeeder
+from core.management.seeders.base import BaseSeeder
 from domains.catalog.models import  CategoryStatus
 from domains.catalog.enums.CategoryStatusEnum import CategoryStatusEnum
 class CategorySeeder(BaseSeeder):

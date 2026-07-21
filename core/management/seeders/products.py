@@ -1,4 +1,4 @@
-from seeders.base import BaseSeeder
+from core.management.seeders.base import BaseSeeder
 from domains.catalog.models import Product
 from domains.catalog.models.category import Category
 

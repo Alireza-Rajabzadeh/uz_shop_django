@@ -5,10 +5,10 @@ class ProductDetails(models.Model):
     class Meta:
         db_table = "catalog_product_details"
         
-    status = models.ForeignKey(
+    product = models.ForeignKey(
         "Product",
         on_delete=models.PROTECT,
-        related_name="details_product"
+        related_name="details"
     )
 
     detail = models.ForeignKey("CategoryDetail", on_delete=models.CASCADE)

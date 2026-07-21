@@ -48,7 +48,9 @@ INSTALLED_APPS = [
     "rest_framework",
     "domains.catalog.apps.CatalogConfig",
     "domains.inventory.apps.InventoryConfig",
+    "domains.customer.apps.CustomerConfig",
     "core",
+    "domains.users",
 ]
 
 MIDDLEWARE = [
@@ -143,8 +145,14 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
+        "domains.customer.auth.CustomerJWTAuthentication",
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
+    "DEFAULT_PERMISSION_CLASSES": (
+        "rest_framework.permissions.IsAuthenticated",
+    ),
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 20,
     "EXCEPTION_HANDLER": "core.exceptions.custom_exception_handler",
 }
 

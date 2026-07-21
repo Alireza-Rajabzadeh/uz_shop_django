@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 
-from seeders.categories import CategorySeeder
-from seeders.products import ProductSeeder
+from core.management.seeders.categories import CategorySeeder
+from core.management.seeders.products import ProductSeeder
 
 
 class Command(BaseCommand):
