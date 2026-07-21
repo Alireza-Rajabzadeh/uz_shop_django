@@ -1,46 +1,49 @@
 import traceback
 from django.conf import settings
 from rest_framework.views import exception_handler
-from responses import api_response
+from .responses import api_response
+
 
 def custom_exception_handler(exc, context):
-    """
-    Global DRF exception handler that:
-    - Keeps consistent apiResponse format
-    - Handles DRF validation/auth errors
-    - Handles unexpected server errors
-    - Adds stack trace in DEBUG mode
-    """
+    debug = settings.DEBUG
 
-    debug = getattr(settings, "DEBUG", False)
-
-    # optional stack trace (only in development)
-    trace = traceback.format_exc() if debug else None
-
-    # let DRF handle known exceptions first
     response = exception_handler(exc, context)
 
     if response is not None:
+        errors = response.data
+
+        if debug:
+            errors = {
+                "details": response.data,
+                "exception": exc.__class__.__name__,
+                "trace": traceback.format_exc(),
+            }
+
         return api_response(
             success=False,
             message=_extract_drf_message(response),
             data=None,
-            errors=response.data,
+            errors=errors,
             status_code=response.status_code,
         )
 
-    # fallback for unexpected errors (500)
+    errors = {
+        "type": exc.__class__.__name__,
+    }
+
+    if debug:
+        errors.update({
+            "message": str(exc),
+            "trace": traceback.format_exc(),
+        })
+
     return api_response(
         success=False,
-        message=str(exc),
+        message="Internal server error" if not debug else str(exc),
         data=None,
-        errors={
-            "type": exc.__class__.__name__,
-            "trace": trace,
-        },
+        errors=errors,
         status_code=500,
     )
-
 
 def _extract_drf_message(response):
     """
