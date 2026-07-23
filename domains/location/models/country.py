@@ -9,6 +9,7 @@ class Country(models.Model):
     name = models.CharField(max_length=100)
     code = models.CharField(max_length=2, unique=True)
     phone_code = models.CharField(max_length=10)
+    fa_title = models.CharField(max_length=100, blank=True)
 
     def __str__(self):
         return self.name

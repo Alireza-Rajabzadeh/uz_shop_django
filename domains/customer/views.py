@@ -1,3 +1,4 @@
+from django.utils.translation import gettext as _
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.exceptions import NotFound
@@ -24,7 +25,7 @@ class CustomerRegister(APIView):
         service = CustomerAuthService()
         result = service.register(serializer.validated_data)
 
-        return api_response(True, "Registration successful.", result, status_code=201)
+        return api_response(True, _("Registration successful."), result, status_code=201)
 
 
 class CustomerLogin(APIView):
@@ -40,7 +41,7 @@ class CustomerLogin(APIView):
             serializer.validated_data["password"],
         )
 
-        return api_response(True, "Login successful.", result)
+        return api_response(True, _("Login successful."), result)
 
 
 class CustomerMe(APIView):
@@ -57,7 +58,7 @@ class CustomerMe(APIView):
         service = CustomerAuthService()
         result = service.update_profile(request.user, serializer.validated_data)
 
-        return api_response(True, "Profile updated.", result)
+        return api_response(True, _("Profile updated."), result)
 
 
 class CustomerAddressListCreate(APIView):
@@ -77,7 +78,7 @@ class CustomerAddressListCreate(APIView):
         address = service.create(customer=request.user, **serializer.validated_data)
         result = CustomerAddressSerializer(address).data
 
-        return api_response(True, "Address created.", result, status_code=201)
+        return api_response(True, _("Address created."), result, status_code=201)
 
 
 class CustomerAddressDetail(APIView):
@@ -87,7 +88,7 @@ class CustomerAddressDetail(APIView):
         service = CustomerAddressService()
         address = service.get_or_none(address_id)
         if address is None or address.customer_id != customer.id:
-            raise NotFound("Address not found.")
+            raise NotFound(_("Address not found."))
         return address
 
     def get(self, request, address_id):
@@ -104,13 +105,13 @@ class CustomerAddressDetail(APIView):
         service.update(address, **serializer.validated_data)
         result = CustomerAddressSerializer(address).data
 
-        return api_response(True, "Address updated.", result)
+        return api_response(True, _("Address updated."), result)
 
     def delete(self, request, address_id):
         address = self._get_address(request.user, address_id)
         service = CustomerAddressService()
         service.delete(address)
-        return api_response(True, "Address deleted.", None)
+        return api_response(True, _("Address deleted."), None)
 
 
 class CustomerPreferenceView(APIView):
@@ -131,7 +132,7 @@ class CustomerPreferenceView(APIView):
             if field in request.data:
                 setattr(preference, field, request.data[field])
         preference.save()
-        return api_response(True, "Preferences updated.", {
+        return api_response(True, _("Preferences updated."), {
             "receive_order_emails": preference.receive_order_emails,
             "receive_sms_notifications": preference.receive_sms_notifications,
             "receive_push_notifications": preference.receive_push_notifications,

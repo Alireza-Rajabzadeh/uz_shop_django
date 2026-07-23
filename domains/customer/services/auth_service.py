@@ -1,17 +1,17 @@
 from django.utils import timezone
+from django.utils.translation import gettext as _
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework_simplejwt.tokens import RefreshToken
-from domains.customer.models import Customer, CustomerStatus, CustomerPreference
+from domains.customer.models import Customer, CustomerPreference
+from domains.customer.enums.CustomerStatusEnum import CustomerStatusEnum
 
 
 class CustomerAuthService:
     def register(self, validated_data):
         password = validated_data.pop("password")
-        status = CustomerStatus.objects.filter(is_active=True).first()
-        if not status:
-            raise ValidationError("No active customer status available.")
+        validated_data.pop("password_confirmation")
 
-        customer = Customer(**validated_data, status=status)
+        customer = Customer(**validated_data, status_id=CustomerStatusEnum.ACTIVE.value)
         customer.set_password(password)
         customer.save()
 
@@ -23,16 +23,16 @@ class CustomerAuthService:
         try:
             customer = Customer.objects.get(phone=phone)
         except Customer.DoesNotExist:
-            raise AuthenticationFailed("Invalid phone number or password.")
+            raise AuthenticationFailed(_("Invalid phone number or password."))
 
         if not customer.check_password(password):
-            raise AuthenticationFailed("Invalid phone number or password.")
+            raise AuthenticationFailed(_("Invalid phone number or password."))
 
         if not customer.status.is_active:
-            raise ValidationError("Account is inactive.")
+            raise ValidationError(_("Account is inactive."))
 
-        customer.last_login_at = timezone.now()
-        customer.save(update_fields=["last_login_at"])
+        customer.last_login = timezone.now()
+        customer.save(update_fields=["last_login"])
 
         return self._build_auth_response(customer)
 

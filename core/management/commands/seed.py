@@ -2,6 +2,8 @@ from django.core.management.base import BaseCommand
 
 from core.management.seeders.categories import CategorySeeder
 from core.management.seeders.products import ProductSeeder
+from core.management.seeders.customers import CustomerSeeder
+from core.management.seeders.location import LocationSeeder
 
 
 class Command(BaseCommand):
@@ -9,7 +11,9 @@ class Command(BaseCommand):
 
     def handle(self, *args, **kwargs):
         seeders = [
+            LocationSeeder(),
             CategorySeeder(),
+            CustomerSeeder(),
             # ProductSeeder(),
         ]
 

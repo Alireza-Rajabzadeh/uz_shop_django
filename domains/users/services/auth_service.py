@@ -1,4 +1,5 @@
 from django.contrib.auth import authenticate
+from django.utils.translation import gettext as _
 from rest_framework.exceptions import AuthenticationFailed, PermissionDenied, ValidationError
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -8,13 +9,13 @@ class AuthService:
         user = authenticate(username=username, password=password)
 
         if user is None:
-            raise AuthenticationFailed("Invalid username or password.")
+            raise AuthenticationFailed(_("Invalid username or password."))
 
         if not user.is_active:
-            raise ValidationError("User account is inactive.")
+            raise ValidationError(_("User account is inactive."))
 
         if not user.is_staff:
-            raise PermissionDenied("You do not have permission to access this resource.")
+            raise PermissionDenied(_("You do not have permission to access this resource."))
 
         return self._generate_token_response(user)
 

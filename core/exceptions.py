@@ -1,5 +1,6 @@
 import traceback
 from django.conf import settings
+from django.utils.translation import gettext as _
 from rest_framework.views import exception_handler
 from .responses import api_response
 
@@ -39,7 +40,7 @@ def custom_exception_handler(exc, context):
 
     return api_response(
         success=False,
-        message="Internal server error" if not debug else str(exc),
+        message=_("Internal server error") if not debug else str(exc),
         data=None,
         errors=errors,
         status_code=500,
@@ -65,4 +66,4 @@ def _extract_drf_message(response):
             return str(value)
 
     # fallback
-    return "Request failed"
+    return _("Request failed")

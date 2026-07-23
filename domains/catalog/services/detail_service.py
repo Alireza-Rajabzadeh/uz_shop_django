@@ -1,3 +1,4 @@
+from django.utils.translation import gettext as _
 from core.services.base import BaseService
 from domains.catalog.models import CategoryDetail
 from domains.catalog.models.category_detail_relation import CategoryDetailRelation
@@ -20,5 +21,5 @@ class DetailService(BaseService):
         if detail.type == "select" and detail.options:
             options = [o.strip() for o in detail.options.split(",")]
             if value not in options:
-                raise ValueError(f"'{value}' is not a valid option. Choices: {', '.join(options)}")
+                raise ValueError(_("'{value}' is not a valid option. Choices: {choices}").format(value=value, choices=", ".join(options)))
         return True

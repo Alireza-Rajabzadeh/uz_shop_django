@@ -1,3 +1,4 @@
+from django.utils.translation import gettext as _
 from rest_framework import serializers
 from domains.customer.models import Customer
 
@@ -8,6 +9,7 @@ class CustomerRegisterSerializer(serializers.Serializer):
     email = serializers.EmailField(required=False, allow_blank=True, allow_null=True)
     phone = serializers.CharField(required=True, max_length=20)
     password = serializers.CharField(required=True, write_only=True, min_length=6)
+    password_confirmation = serializers.CharField(write_only=True, required=True)
     date_of_birth = serializers.DateField(required=False, allow_null=True)
     gender = serializers.ChoiceField(
         choices=["male", "female", "other"],
@@ -17,8 +19,13 @@ class CustomerRegisterSerializer(serializers.Serializer):
 
     def validate_phone(self, value):
         if Customer.objects.filter(phone=value).exists():
-            raise serializers.ValidationError("Phone number already registered.")
+            raise serializers.ValidationError(_("Phone number already registered."))
         return value
+
+    def validate(self, attrs):
+        if attrs["password"] != attrs["password_confirmation"]:
+            raise serializers.ValidationError({"password_confirmation": _("Passwords do not match.")})
+        return attrs
 
 
 class CustomerLoginSerializer(serializers.Serializer):

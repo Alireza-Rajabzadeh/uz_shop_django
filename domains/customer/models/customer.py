@@ -1,5 +1,5 @@
 from django.db import models
-from django.contrib.auth.hashers import make_password, check_password
+from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 
 
 GENDER_CHOICES = [
@@ -9,7 +9,24 @@ GENDER_CHOICES = [
 ]
 
 
-class Customer(models.Model):
+class CustomerManager(BaseUserManager):
+    def create_user(self, phone, password=None, **extra_fields):
+        if not phone:
+            raise ValueError("Phone number is required")
+        customer = self.model(phone=phone, **extra_fields)
+        customer.set_password(password)
+        customer.save(using=self._db)
+        return customer
+
+    use_in_migrations = True
+
+
+class Customer(AbstractBaseUser):
+    USERNAME_FIELD = "phone"
+    REQUIRED_FIELDS = ["first_name", "last_name"]
+
+    objects = CustomerManager()
+
     class Meta:
         db_table = "customer"
         verbose_name_plural = "customers"
@@ -18,7 +35,6 @@ class Customer(models.Model):
     last_name = models.CharField(max_length=100)
     email = models.EmailField(null=True, blank=True)
     phone = models.CharField(max_length=20, unique=True, db_index=True)
-    password = models.CharField(max_length=128)
     status = models.ForeignKey(
         "CustomerStatus",
         on_delete=models.PROTECT,
@@ -29,15 +45,9 @@ class Customer(models.Model):
     gender = models.CharField(max_length=10, choices=GENDER_CHOICES, null=True, blank=True)
     email_verified_at = models.DateTimeField(null=True, blank=True)
     phone_verified_at = models.DateTimeField(null=True, blank=True)
-    last_login_at = models.DateTimeField(null=True, blank=True)
+    last_login = models.DateTimeField(null=True, blank=True, db_column="last_login_at")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
-    def set_password(self, raw_password):
-        self.password = make_password(raw_password)
-
-    def check_password(self, raw_password):
-        return check_password(raw_password, self.password)
 
     def generate_customer_code(self):
         last = Customer.objects.order_by("id").last()
