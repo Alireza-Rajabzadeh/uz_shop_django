@@ -9,6 +9,7 @@ from .serializers import (
     CustomerProfileSerializer,
     CustomerUpdateSerializer,
     CustomerAddressSerializer,
+    CustomerPreferenceSerializer,
 )
 from .services.auth_service import CustomerAuthService
 from .services.address_service import CustomerAddressService
@@ -118,22 +119,13 @@ class CustomerPreferenceView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        preference, _ = CustomerPreference.objects.get_or_create(customer=request.user)
-        return api_response(True, "", {
-            "receive_order_emails": preference.receive_order_emails,
-            "receive_sms_notifications": preference.receive_sms_notifications,
-            "receive_push_notifications": preference.receive_push_notifications,
-        })
+        preference, created = CustomerPreference.objects.get_or_create(customer=request.user)
+        serializer = CustomerPreferenceSerializer(preference)
+        return api_response(True, "", serializer.data)
 
     def patch(self, request):
-        preference, _ = CustomerPreference.objects.get_or_create(customer=request.user)
-        allowed = ["receive_order_emails", "receive_sms_notifications", "receive_push_notifications"]
-        for field in allowed:
-            if field in request.data:
-                setattr(preference, field, request.data[field])
-        preference.save()
-        return api_response(True, _("Preferences updated."), {
-            "receive_order_emails": preference.receive_order_emails,
-            "receive_sms_notifications": preference.receive_sms_notifications,
-            "receive_push_notifications": preference.receive_push_notifications,
-        })
+        preference, created = CustomerPreference.objects.get_or_create(customer=request.user)
+        serializer = CustomerPreferenceSerializer(preference, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return api_response(True, _("Preferences updated."), serializer.data)

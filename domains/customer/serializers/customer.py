@@ -1,6 +1,6 @@
 from django.utils.translation import gettext as _
 from rest_framework import serializers
-from domains.customer.models import Customer
+from domains.customer.models import Customer, CustomerPreference
 
 
 class CustomerRegisterSerializer(serializers.Serializer):
@@ -54,4 +54,14 @@ class CustomerUpdateSerializer(serializers.ModelSerializer):
         model = Customer
         fields = [
             "first_name", "last_name", "email", "date_of_birth", "gender",
+        ]
+
+
+class CustomerPreferenceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomerPreference
+        fields = [
+            "receive_order_emails",
+            "receive_sms_notifications",
+            "receive_push_notifications",
         ]
