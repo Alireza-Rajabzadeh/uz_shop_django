@@ -28,5 +28,6 @@ class AuthService:
                 "id": user.id,
                 "username": user.username,
                 "email": user.email,
+                "permissions": list(user.get_all_permissions()),
             },
         }

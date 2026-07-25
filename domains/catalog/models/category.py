@@ -14,6 +14,9 @@ class Category(models.Model):
     
     class Meta:
         db_table = "catalog_category"
+        permissions = [
+            ("assign_details_to_category", "Can assign details to category"),
+        ]
     
     name = models.CharField(max_length=100)
 

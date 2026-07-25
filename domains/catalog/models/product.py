@@ -15,6 +15,10 @@ class ProductStatus(models.Model):
 class Product(models.Model):
     class Meta:
         db_table = "catalog_product"
+        permissions = [
+            ("add_detail_to_product", "Can add product details"),
+            ("add_variant_to_product", "Can add product variants"),
+        ]
         
    
     name = models.CharField(max_length=250)
