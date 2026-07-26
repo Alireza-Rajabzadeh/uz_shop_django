@@ -40,5 +40,5 @@ class UserPermissions(APIView):
             })
         return api_response(True, "", {
             "permissions": grouped,
-            "user_permissions": list(request.user.get_all_permissions()),
+            "user_permissions": list(getattr(request.user, "get_all_permissions", lambda: set())()),
         })
