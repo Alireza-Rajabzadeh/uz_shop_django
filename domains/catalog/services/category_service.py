@@ -1,6 +1,6 @@
 from django.db import transaction
 from core.services.base import BaseService
-from domains.catalog.models import Category
+from domains.catalog.models import Category, CategoryStatus
 from domains.catalog.models.category_detail_relation import CategoryDetailRelation
 
 
@@ -19,8 +19,21 @@ class CategoryService(BaseService):
     def get_category(self, id):
         return self._get(id)
 
-    def search_categories(self, **filters):
-        return self._list(**filters)
+    def search_categories(self, ordering=None, **filters):
+        ordering_fields = {
+            "id": "id",
+            "name": "name",
+            "parent_name": "parent__name",
+            "status_name": "status__name",
+        }
+        queryset = self.model.objects.filter(**filters).select_related("parent", "status")
+        descending = ordering and ordering.startswith("-")
+        requested_field = ordering.lstrip("-") if ordering else "id"
+        order_field = ordering_fields.get(requested_field, "id")
+        return queryset.order_by(f"-{order_field}" if descending else order_field)
+
+    def list_statuses(self):
+        return CategoryStatus.objects.order_by("id")
 
     def get_tree(self):
         return self.model.objects.filter(parent__isnull=True).prefetch_related("children")

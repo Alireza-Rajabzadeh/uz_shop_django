@@ -14,9 +14,9 @@ class Command(BaseCommand):
         seeders = [
             LocationSeeder(),
             CategorySeeder(),
+            ProductSeeder(),
             InventorySeeder(),
             CustomerSeeder(),
-            # ProductSeeder(),
         ]
 
         for seeder in seeders:

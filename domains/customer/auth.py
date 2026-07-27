@@ -11,5 +11,10 @@ class CustomerJWTAuthentication(JWTAuthentication):
             return None
 
     def get_user(self, validated_token):
+        if validated_token.get("user_type") != "customer":
+            raise AuthenticationFailed("Invalid token type.")
         user_id = validated_token["user_id"]
-        return Customer.objects.get(id=user_id)
+        try:
+            return Customer.objects.get(id=user_id)
+        except Customer.DoesNotExist as exc:
+            raise AuthenticationFailed("Customer not found.") from exc

@@ -2,6 +2,7 @@ from django.utils.translation import gettext as _
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import NotFound, PermissionDenied
+from rest_framework.pagination import PageNumberPagination
 from core.responses import api_response
 from .permissions import CatalogModelPermissions, CustomActionPermission, MethodPermission
 from .serializers import (
@@ -10,7 +11,13 @@ from .serializers import (
     ProductDetailsSerializer, ProductStatusSerializer, CategoryStatusSerializer,
     ProductVariantSerializer,
 )
-from domains.catalog.models import Category, CategoryDetail, Product, ProductDetails, ProductVariants
+from domains.catalog.models import (
+    Category,
+    CategoryDetail as CategoryDetailModel,
+    Product,
+    ProductDetails,
+    ProductVariants,
+)
 from domains.catalog.services import CategoryService, DetailService, ProductService
 
 
@@ -33,9 +40,14 @@ class CategoryListCreate(APIView):
             filters["name__icontains"] = name
         if status_id:
             filters["status_id"] = status_id
-        categories = category_service.search_categories(**filters)
-        serializer = CategoryListSerializer(categories, many=True)
-        return api_response(True, "", serializer.data)
+        categories = category_service.search_categories(
+            ordering=request.query_params.get("ordering"),
+            **filters,
+        )
+        paginator = PageNumberPagination()
+        page = paginator.paginate_queryset(categories, request, view=self)
+        serializer = CategoryListSerializer(page, many=True)
+        return api_response(True, "", paginator.get_paginated_response(serializer.data).data)
 
     def post(self, request):
         serializer = CategorySerializer(data=request.data)
@@ -84,6 +96,16 @@ class CategoryTree(APIView):
         return api_response(True, "", serializer.data)
 
 
+class CategoryStatusList(APIView):
+    permission_classes = [CustomActionPermission]
+    required_permission = "catalog.view_category"
+
+    def get(self, request):
+        statuses = category_service.list_statuses()
+        serializer = CategoryStatusSerializer(statuses, many=True)
+        return api_response(True, "", serializer.data)
+
+
 class CategoryAssignDetails(APIView):
     permission_classes = [CustomActionPermission]
     required_permission = "catalog.assign_details_to_category"
@@ -102,7 +124,7 @@ class CategoryAssignDetails(APIView):
 # ─────────────────────── Category Details ───────────────────────
 
 class CategoryDetailListCreate(APIView):
-    model = CategoryDetail
+    model = CategoryDetailModel
     permission_classes = [CatalogModelPermissions]
 
     def get(self, request):
@@ -113,9 +135,14 @@ class CategoryDetailListCreate(APIView):
             filters["name__icontains"] = name
         if detail_type:
             filters["type"] = detail_type
-        details = detail_service.search_category_details(**filters)
-        serializer = CategoryDetailSerializer(details, many=True)
-        return api_response(True, "", serializer.data)
+        details = detail_service.search_category_details(
+            ordering=request.query_params.get("ordering"),
+            **filters,
+        )
+        paginator = PageNumberPagination()
+        page = paginator.paginate_queryset(details, request, view=self)
+        serializer = CategoryDetailSerializer(page, many=True)
+        return api_response(True, "", paginator.get_paginated_response(serializer.data).data)
 
     def post(self, request):
         serializer = CategoryDetailSerializer(data=request.data)
@@ -126,7 +153,7 @@ class CategoryDetailListCreate(APIView):
 
 
 class CategoryDetailDetail(APIView):
-    model = CategoryDetail
+    model = CategoryDetailModel
     permission_classes = [CatalogModelPermissions]
 
     def get_object(self, id):
@@ -171,9 +198,14 @@ class ProductListCreate(APIView):
             filters["category_id"] = category_id
         if status_id:
             filters["status_id"] = status_id
-        products = product_service.search_products(**filters)
-        serializer = ProductListSerializer(products, many=True)
-        return api_response(True, "", serializer.data)
+        products = product_service.search_products(
+            ordering=request.query_params.get("ordering"),
+            **filters,
+        )
+        paginator = PageNumberPagination()
+        page = paginator.paginate_queryset(products, request, view=self)
+        serializer = ProductListSerializer(page, many=True)
+        return api_response(True, "", paginator.get_paginated_response(serializer.data).data)
 
     def post(self, request):
         serializer = ProductSerializer(data=request.data)

@@ -12,6 +12,12 @@ class CatalogModelPermissions(DjangoModelPermissions):
         "DELETE": ["%(app_label)s.delete_%(model_name)s"],
     }
 
+    def _queryset(self, view):
+        model = getattr(view, "model", None)
+        if model is not None:
+            return model._default_manager.all()
+        return super()._queryset(view)
+
 
 class CustomActionPermission(BasePermission):
     def has_permission(self, request, view):

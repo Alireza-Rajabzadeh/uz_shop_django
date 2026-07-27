@@ -19,8 +19,19 @@ class DetailService(BaseService):
     def get_category_detail(self, id):
         return self._get(id)
 
-    def search_category_details(self, **filters):
-        return self._list(**filters)
+    def search_category_details(self, ordering=None, **filters):
+        ordering_fields = {
+            "id": "id",
+            "name": "name",
+            "type": "type",
+            "required": "required",
+            "filterable": "filterable",
+        }
+        queryset = self.model.objects.filter(**filters)
+        descending = ordering and ordering.startswith("-")
+        requested_field = ordering.lstrip("-") if ordering else "id"
+        order_field = ordering_fields.get(requested_field, "id")
+        return queryset.order_by(f"-{order_field}" if descending else order_field)
 
     def assign_to_category(self, category, detail, value):
         return CategoryDetailRelation.objects.create(

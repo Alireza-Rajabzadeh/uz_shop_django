@@ -91,11 +91,8 @@ class ProductSerializer(serializers.ModelSerializer):
 class ProductListSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source="category.name", read_only=True)
     status_name = serializers.CharField(source="status.name", read_only=True)
-    variant_count = serializers.SerializerMethodField()
+    variant_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Product
         fields = ["id", "name", "category", "category_name", "status", "status_name", "description", "variant_count"]
-
-    def get_variant_count(self, obj):
-        return obj.products.count()

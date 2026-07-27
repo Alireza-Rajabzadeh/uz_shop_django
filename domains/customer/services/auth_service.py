@@ -60,6 +60,7 @@ class CustomerAuthService:
 
     def _build_auth_response(self, customer):
         refresh = RefreshToken.for_user(customer)
+        refresh["user_type"] = "customer"
         return {
             "access": str(refresh.access_token),
             "refresh": str(refresh),

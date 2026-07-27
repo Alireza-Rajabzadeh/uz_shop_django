@@ -21,6 +21,7 @@ class AuthService:
 
     def _generate_token_response(self, user):
         refresh = RefreshToken.for_user(user)
+        refresh["user_type"] = "admin"
         return {
             "access": str(refresh.access_token),
             "refresh": str(refresh),
