@@ -4,6 +4,12 @@ from django.db import models
 class ProductDetails(models.Model):
     class Meta:
         db_table = "catalog_product_details"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["product", "detail"],
+                name="catalog_product_detail_unique",
+            ),
+        ]
         
     product = models.ForeignKey(
         "Product",
@@ -17,4 +23,4 @@ class ProductDetails(models.Model):
     extra_value = models.CharField(max_length=250, blank=True , null=True)
 
     def __str__(self):
-        return self.name
+        return f"{self.product} - {self.detail}"

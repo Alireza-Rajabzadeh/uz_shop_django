@@ -4,6 +4,7 @@ from .views import (
     CategoryNameSuggestions,
     CategoryDetailListCreate, CategoryDetailDetail, CategoryDetailNameSuggestions,
     ProductListCreate, ProductDetail,
+    ProductFormOptions, ProductDetailDefinitions, ProductCompleteCreate,
     ProductDetailListCreate,
     ProductVariantListCreate, VariantDetail, VariantList,
 )
@@ -23,6 +24,9 @@ urlpatterns = [
     path("category-details/<int:id>", CategoryDetailDetail.as_view()),
 
     # Products
+    path("product-form-options", ProductFormOptions.as_view()),
+    path("product-detail-definitions", ProductDetailDefinitions.as_view()),
+    path("products/create", ProductCompleteCreate.as_view()),
     path("products", ProductListCreate.as_view()),
     path("products/<int:id>", ProductDetail.as_view()),
     path("products/<int:product_id>/details", ProductDetailListCreate.as_view()),

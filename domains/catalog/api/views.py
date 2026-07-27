@@ -12,6 +12,8 @@ from .serializers import (
     ProductVariantSerializer, CategoryNameSuggestionQuerySerializer,
     CategoryNameSuggestionSerializer, CategoryDetailNameSuggestionQuerySerializer,
     CategoryDetailNameSuggestionSerializer,
+    CategoryDetailAssignmentWriteSerializer, CategoryDetailAssignmentOptionSerializer,
+    ProductCategorySelectionSerializer, ProductCompleteCreateSerializer,
 )
 from domains.catalog.models import (
     Category,
@@ -153,15 +155,65 @@ class CategoryAssignDetails(APIView):
     permission_classes = [CustomActionPermission]
     required_permission = "catalog.assign_details_to_category"
 
-    def post(self, request, id):
+    def get_category(self, id):
         try:
-            category = category_service.get_category(id)
+            return category_service.get_category(id)
         except Exception:
             raise NotFound(_("Category not found."))
 
-        detail_data_list = request.data.get("details", [])
-        category_service.assign_multiple_detail_to_category(category, detail_data_list)
-        return api_response(True, _("Details assigned to category."), None)
+    def get(self, request, id):
+        category = self.get_category(id)
+        assigned_details = list(category_service.get_assigned_details(category))
+        assigned_ids = {detail.id for detail in assigned_details}
+        used_ids = category_service.get_used_detail_ids(category)
+
+        filters = {}
+        name = request.query_params.get("name")
+        detail_type = request.query_params.get("type")
+        if name:
+            filters["name__icontains"] = name
+        if detail_type:
+            filters["type"] = detail_type
+        details = detail_service.search_category_details(ordering="name", **filters)
+        paginator = PageNumberPagination()
+        page = paginator.paginate_queryset(details, request, view=self)
+        context = {"assigned_ids": assigned_ids, "used_ids": used_ids}
+        page_data = CategoryDetailAssignmentOptionSerializer(
+            page, many=True, context=context
+        ).data
+        assignment_data = CategoryDetailAssignmentOptionSerializer(
+            assigned_details, many=True, context=context
+        ).data
+        return api_response(True, "", {
+            "category": {"id": category.id, "name": category.name},
+            "assignments": assignment_data,
+            "details": paginator.get_paginated_response(page_data).data,
+        })
+
+    def post(self, request, id):
+        category = self.get_category(id)
+        serializer = CategoryDetailAssignmentWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            assigned_details = category_service.assign_multiple_detail_to_category(
+                category, serializer.validated_data["details"]
+            )
+        except CategoryService.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
+
+        assigned_details = list(assigned_details)
+        assigned_ids = {detail.id for detail in assigned_details}
+        used_ids = category_service.get_used_detail_ids(category)
+        result = CategoryDetailAssignmentOptionSerializer(
+            assigned_details,
+            many=True,
+            context={"assigned_ids": assigned_ids, "used_ids": used_ids},
+        ).data
+        return api_response(
+            True,
+            _("Category details updated."),
+            {"assignments": result},
+        )
 
 
 # ─────────────────────── Category Details ───────────────────────
@@ -265,6 +317,72 @@ class CategoryDetailNameSuggestions(APIView):
 
 
 # ─────────────────────── Products ───────────────────────
+
+class ProductFormOptions(APIView):
+    permission_classes = [CustomActionPermission]
+    required_permission = "catalog.add_product"
+
+    def get(self, request):
+        categories, statuses = product_service.get_form_options()
+        return api_response(True, "", {
+            "categories": categories,
+            "statuses": ProductStatusSerializer(statuses, many=True).data,
+        })
+
+
+class ProductDetailDefinitions(APIView):
+    permission_classes = [CustomActionPermission]
+    required_permission = "catalog.add_product"
+
+    def get(self, request):
+        raw_ids = request.query_params.getlist("category_ids")
+        category_ids = [
+            item
+            for raw_id in raw_ids
+            for item in raw_id.split(",")
+            if item
+        ]
+        serializer = ProductCategorySelectionSerializer(
+            data={"category_ids": category_ids}
+        )
+        serializer.is_valid(raise_exception=True)
+        categories = serializer.validated_data["category_ids"]
+        details, category_ids_by_detail = product_service.get_detail_definitions(categories)
+        return api_response(True, "", [
+            {
+                "id": detail.id,
+                "name": detail.name,
+                "type": detail.type,
+                "required": detail.required,
+                "filterable": detail.filterable,
+                "options": [
+                    option.strip()
+                    for option in detail.options.split(",")
+                    if option.strip()
+                ],
+                "category_ids": category_ids_by_detail.get(detail.id, []),
+            }
+            for detail in details
+        ])
+
+
+class ProductCompleteCreate(APIView):
+    permission_classes = [CustomActionPermission]
+    required_permission = "catalog.add_product"
+
+    def post(self, request):
+        serializer = ProductCompleteCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            product = product_service.create_complete_product(**serializer.validated_data)
+        except ProductService.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
+        return api_response(
+            True,
+            _("Product created."),
+            ProductSerializer(product).data,
+            status_code=201,
+        )
 
 class ProductListCreate(APIView):
     model = Product

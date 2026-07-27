@@ -1,12 +1,28 @@
+from decimal import Decimal, InvalidOperation
+
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.db.models import Count
+from django.utils.translation import gettext as _
 from core.services.base import BaseService
-from domains.catalog.models import Product, ProductVariants
+from domains.catalog.models import (
+    Category,
+    CategoryDetail,
+    CategoryDetailRelation,
+    Product,
+    ProductStatus,
+    ProductVariants,
+)
 from domains.catalog.models.product_details import ProductDetails
 
 
 class ProductService(BaseService):
     model = Product
+
+    class ValidationError(Exception):
+        def __init__(self, errors):
+            self.errors = errors
+            super().__init__(str(errors))
 
     def create_product(self, **data):
         return self._create(**data)
@@ -40,6 +56,107 @@ class ProductService(BaseService):
 
     def list_by_category(self, category_id):
         return self.model.objects.filter(category_id=category_id)
+
+    def get_form_options(self):
+        categories = list(Category.objects.select_related("parent").order_by("name"))
+        category_map = {category.id: category for category in categories}
+        options = []
+        for category in categories:
+            path = [category.name]
+            parent_id = category.parent_id
+            seen = {category.id}
+            while parent_id and parent_id not in seen:
+                seen.add(parent_id)
+                parent = category_map.get(parent_id)
+                if not parent:
+                    break
+                path.append(parent.name)
+                parent_id = parent.parent_id
+            options.append({
+                "id": category.id,
+                "name": category.name,
+                "path": " / ".join(reversed(path)),
+            })
+        return options, ProductStatus.objects.order_by("id")
+
+    def get_detail_definitions(self, categories):
+        details = CategoryDetail.objects.filter(
+            categorydetailrelation__category__in=categories
+        ).distinct().order_by("name")
+        category_ids_by_detail = {}
+        for detail_id, category_id in CategoryDetailRelation.objects.filter(
+            category__in=categories
+        ).values_list("detail_id", "category_id"):
+            category_ids_by_detail.setdefault(detail_id, []).append(category_id)
+        return details, category_ids_by_detail
+
+    @transaction.atomic
+    def create_complete_product(
+        self, *, name, status, category_ids, description=None, details=()
+    ):
+        category = Category.objects.select_for_update().get(pk=category_ids[0].pk)
+        assigned_details = {
+            detail.id: detail
+            for detail in CategoryDetail.objects.filter(
+                categorydetailrelation__category=category
+            )
+        }
+        supplied_details = {item["detail"].id: item for item in details}
+
+        invalid_ids = set(supplied_details) - set(assigned_details)
+        if invalid_ids:
+            raise self.ValidationError({
+                "details": [_("One or more details are not assigned to the selected category.")]
+            })
+
+        missing_required = [
+            detail.name
+            for detail in assigned_details.values()
+            if detail.required and not supplied_details.get(detail.id, {}).get("value", "").strip()
+        ]
+        if missing_required:
+            raise self.ValidationError({
+                "details": [
+                    _("Required product details are missing: {names}.").format(
+                        names=", ".join(sorted(missing_required))
+                    )
+                ]
+            })
+
+        for item in details:
+            detail = item["detail"]
+            value = item["value"].strip()
+            if detail.type == "select" and value:
+                options = [option.strip() for option in detail.options.split(",") if option.strip()]
+                if value not in options:
+                    raise self.ValidationError({
+                        "details": [
+                            _("'{value}' is not valid for {name}.").format(
+                                value=value, name=detail.name
+                            )
+                        ]
+                    })
+            if detail.type == "number" and value:
+                try:
+                    Decimal(value)
+                except InvalidOperation as exc:
+                    raise self.ValidationError({
+                        "details": [_("{name} must be a number.").format(name=detail.name)]
+                    }) from exc
+            item["value"] = value
+
+        product = self.model.objects.create(
+            name=name.strip(),
+            status=status,
+            category=category,
+            description=description or "",
+        )
+        ProductDetails.objects.bulk_create([
+            ProductDetails(product=product, detail=item["detail"], value=item["value"])
+            for item in details
+            if item["value"] or item["detail"].required
+        ])
+        return product
 
     def add_detail_to_product(self, product, details_data):
         instances = []

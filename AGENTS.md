@@ -27,6 +27,7 @@ Run these commands from `back/` unless stated otherwise.
 | `python manage.py makemigrations` | Create migrations after model changes |
 | `python manage.py seed` | Seed reference data and temporary catalog development fixtures |
 | `python manage.py test` | Run Django tests |
+| `python manage.py test domains.catalog.tests` | Run the focused catalog API tests |
 | `python manage.py makemessages -l fa -l en` | Update translation message files |
 | `python manage.py compilemessages` | Compile translations |
 
@@ -165,6 +166,62 @@ Product list: `GET /api/catalog/products`
 Views parse request query parameters, apply pagination, serialize results, and return `api_response`. Domain services own filter querysets, allowlisted ordering, related-object loading, and annotations. Do not move these queryset rules into frontend code or duplicate them in views.
 
 `CatalogModelPermissions` supports APIViews that declare a `model` attribute. Category status options require `catalog.view_category` so a user who can list categories can also populate the list filter.
+
+### Catalog Write Workflows
+
+Category and category-detail names are globally unique after case/outer-whitespace normalization. The services also collapse repeated internal whitespace before writing. Keep friendly service validation and database constraints aligned when changing name rules.
+
+Category writes:
+
+- Create: `POST /api/catalog/categories`
+- Partial update: `PATCH /api/catalog/categories/{id}`
+- Similar-name check: `GET /api/catalog/categories/name-suggestions?name=...&exclude_id=...`
+- Parent is optional (`null` for a root); updates reject self-parenting and descendant cycles.
+- Exact normalized duplicates are rejected; fuzzy matches are warnings supplied to the admin panel.
+
+Category-detail definition writes:
+
+- Create: `POST /api/catalog/category-details`
+- Partial update: `PATCH /api/catalog/category-details/{id}`
+- Similar-name check: `GET /api/catalog/category-details/name-suggestions?name=...&exclude_id=...`
+- Types are `text`, `number`, and `select`.
+- Select definitions require comma-separated options; options are normalized before storage.
+- Text and number definitions always store `options=""`.
+
+Category-to-detail assignments use one specialized resource:
+
+- Read picker state: `GET /api/catalog/categories/{id}/assign-details`
+- Replace assignments: `POST /api/catalog/categories/{id}/assign-details` with `{ "details": [1, 2] }`
+- Both methods require `catalog.assign_details_to_category`.
+- GET returns the complete assignment snapshot plus filtered/paginated candidates with `assigned` and `in_use` flags.
+- POST requires the `details` key, performs an atomic full replacement, and returns the canonical final assignments.
+- Details used by products or variants cannot be deassigned. Preserve the category/relationship locks and server-side check when changing this workflow.
+- The relationship's legacy `value` is not part of the current assignment UI; new assignments store an empty value.
+
+### Product Creation
+
+The admin product wizard keeps draft data client-side and submits once, so product and initial detail values are created atomically:
+
+- Form options: `GET /api/catalog/product-form-options`
+- Category-derived fields: `GET /api/catalog/product-detail-definitions?category_ids=1`
+- Atomic creation: `POST /api/catalog/products/create`
+- All three endpoints require `catalog.add_product`.
+
+The create payload uses plural `category_ids` deliberately, but validation currently requires exactly one category because `Product.category` remains a foreign key. Keep category-dependent logic behind `ProductService` methods so a future many-to-many migration does not require rewriting views or frontend state.
+
+Product creation validates that:
+
+- Submitted details are assigned to the selected category.
+- Every required definition has a nonblank value.
+- Number values parse as numbers.
+- Select values match the definition's options.
+- `(product, detail)` remains unique at the database level.
+
+Descriptions currently store Markdown/plain text, not trusted HTML. Do not render them as HTML without adding server-side sanitization.
+
+### Development Reloading
+
+Docker bind-mounts backend source, but Gunicorn does not auto-reload it. After changing URLs, views, serializers, or services, run `docker compose restart django` from the workspace root before browser/proxy verification. A stale worker can return HTML 404 pages for newly added routes.
 
 ## Internationalization
 

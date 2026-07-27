@@ -2,7 +2,13 @@ from django.db import IntegrityError, transaction
 from django.utils.translation import gettext as _
 from rapidfuzz import fuzz
 from core.services.base import BaseService
-from domains.catalog.models import Category, CategoryStatus
+from domains.catalog.models import (
+    Category,
+    CategoryDetail,
+    CategoryStatus,
+    ProductDetails,
+    ProductVariantsDetails,
+)
 from domains.catalog.models.category_detail_relation import CategoryDetailRelation
 
 
@@ -112,27 +118,53 @@ class CategoryService(BaseService):
             "categorydetailrelation_set__detail"
         ).get(id=id)
 
+    def get_assigned_details(self, category):
+        return CategoryDetail.objects.filter(
+            categorydetailrelation__category=category
+        ).order_by("name")
+
+    def get_used_detail_ids(self, category):
+        product_detail_ids = ProductDetails.objects.filter(
+            product__category=category
+        ).values_list("detail_id", flat=True)
+        variant_detail_ids = ProductVariantsDetails.objects.filter(
+            variant__product__category=category
+        ).values_list("detail_id", flat=True)
+        return set(product_detail_ids).union(variant_detail_ids)
+
     @transaction.atomic
-    def assign_multiple_detail_to_category(self, category, detail_data_list):
+    def assign_multiple_detail_to_category(self, category, details):
+        self.model.objects.select_for_update().get(pk=category.pk)
         existing_ids = set(
-            CategoryDetailRelation.objects.filter(category=category)
+            CategoryDetailRelation.objects.select_for_update().filter(category=category)
             .values_list("detail_id", flat=True)
         )
-        incoming_ids = {item["detail_id"] for item in detail_data_list}
+        incoming_ids = {detail.id for detail in details}
+        removed_ids = existing_ids - incoming_ids
+        blocked_ids = removed_ids.intersection(self.get_used_detail_ids(category))
+        if blocked_ids:
+            blocked_names = list(
+                CategoryDetail.objects.filter(id__in=blocked_ids)
+                .order_by("name")
+                .values_list("name", flat=True)
+            )
+            raise self.ValidationError({
+                "details": [
+                    _("Cannot remove details used by products or variants: {names}.").format(
+                        names=", ".join(blocked_names)
+                    )
+                ]
+            })
 
         CategoryDetailRelation.objects.filter(
-            category=category, detail_id__in=existing_ids - incoming_ids
+            category=category, detail_id__in=removed_ids
         ).delete()
 
-        to_add = []
-        for item in detail_data_list:
-            if item["detail_id"] not in existing_ids:
-                to_add.append(
-                    CategoryDetailRelation(
-                        category=category,
-                        detail_id=item["detail_id"],
-                        value=item.get("value", ""),
-                    )
-                )
+        to_add = [
+            CategoryDetailRelation(category=category, detail=detail, value="")
+            for detail in details
+            if detail.id not in existing_ids
+        ]
         if to_add:
             CategoryDetailRelation.objects.bulk_create(to_add)
+        return self.get_assigned_details(category)
