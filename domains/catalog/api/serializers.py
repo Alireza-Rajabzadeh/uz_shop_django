@@ -18,6 +18,22 @@ class CategoryDetailSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+class CategoryDetailNameSuggestionQuerySerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=100)
+    exclude_id = serializers.IntegerField(required=False, min_value=1)
+
+
+class CategoryDetailNameSuggestionSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    name = serializers.CharField()
+    type = serializers.CharField()
+    required = serializers.BooleanField()
+    options = serializers.CharField(allow_blank=True)
+    filterable = serializers.BooleanField()
+    similarity = serializers.IntegerField()
+    exact = serializers.BooleanField()
+
+
 class CategoryDetailRelationSerializer(serializers.ModelSerializer):
     detail_name = serializers.CharField(source="detail.name", read_only=True)
     detail_type = serializers.CharField(source="detail.type", read_only=True)
@@ -48,6 +64,23 @@ class CategoryListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
         fields = ["id", "name", "parent", "parent_name", "status", "status_name", "logo"]
+
+
+class CategoryNameSuggestionQuerySerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=100)
+    exclude_id = serializers.IntegerField(required=False, min_value=1)
+
+
+class CategoryNameSuggestionSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    name = serializers.CharField()
+    parent = serializers.IntegerField(allow_null=True)
+    parent_name = serializers.CharField(allow_null=True)
+    status = serializers.IntegerField()
+    status_name = serializers.CharField()
+    logo = serializers.CharField(allow_null=True)
+    similarity = serializers.IntegerField(read_only=True)
+    exact = serializers.BooleanField(read_only=True)
 
 
 class ProductStatusSerializer(serializers.ModelSerializer):

@@ -1,7 +1,7 @@
 from django.utils.translation import gettext as _
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.exceptions import NotFound, PermissionDenied
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.pagination import PageNumberPagination
 from core.responses import api_response
 from .permissions import CatalogModelPermissions, CustomActionPermission, MethodPermission
@@ -9,7 +9,9 @@ from .serializers import (
     CategorySerializer, CategoryListSerializer, CategoryDetailSerializer,
     CategoryDetailRelationSerializer, ProductSerializer, ProductListSerializer,
     ProductDetailsSerializer, ProductStatusSerializer, CategoryStatusSerializer,
-    ProductVariantSerializer,
+    ProductVariantSerializer, CategoryNameSuggestionQuerySerializer,
+    CategoryNameSuggestionSerializer, CategoryDetailNameSuggestionQuerySerializer,
+    CategoryDetailNameSuggestionSerializer,
 )
 from domains.catalog.models import (
     Category,
@@ -27,6 +29,14 @@ product_service = ProductService()
 
 
 # ─────────────────────── Categories ───────────────────────
+
+def save_category(serializer, instance=None):
+    try:
+        if instance:
+            return category_service.update_category(instance, **serializer.validated_data)
+        return category_service.create_category(**serializer.validated_data)
+    except CategoryService.ValidationError as exc:
+        raise ValidationError(exc.errors) from exc
 
 class CategoryListCreate(APIView):
     model = Category
@@ -52,7 +62,7 @@ class CategoryListCreate(APIView):
     def post(self, request):
         serializer = CategorySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        category = category_service.create_category(**serializer.validated_data)
+        category = save_category(serializer)
         result = CategorySerializer(category).data
         return api_response(True, _("Category created."), result, status_code=201)
 
@@ -76,7 +86,7 @@ class CategoryDetail(APIView):
         category = self.get_object(id)
         serializer = CategorySerializer(category, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        category_service.update_category(category, **serializer.validated_data)
+        category = save_category(serializer, category)
         result = CategorySerializer(category).data
         return api_response(True, _("Category updated."), result)
 
@@ -94,6 +104,39 @@ class CategoryTree(APIView):
         tree = category_service.get_tree()
         serializer = CategorySerializer(tree, many=True)
         return api_response(True, "", serializer.data)
+
+
+class CategoryNameSuggestions(APIView):
+    permission_classes = [CustomActionPermission]
+    required_permission = "catalog.view_category"
+
+    def get(self, request):
+        query = CategoryNameSuggestionQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        exact_duplicate, matches = category_service.find_name_matches(
+            query.validated_data["name"],
+            query.validated_data.get("exclude_id"),
+        )
+        suggestions = [
+            {
+                "id": category.id,
+                "name": category.name,
+                "parent": category.parent_id,
+                "parent_name": category.parent.name if category.parent else None,
+                "status": category.status_id,
+                "status_name": category.status.name,
+                "logo": category.logo,
+                "similarity": score,
+                "exact": exact,
+            }
+            for exact, score, category in matches
+        ]
+        serializer = CategoryNameSuggestionSerializer(suggestions, many=True)
+        return api_response(
+            True,
+            "",
+            {"exact_duplicate": exact_duplicate, "suggestions": serializer.data},
+        )
 
 
 class CategoryStatusList(APIView):
@@ -123,6 +166,14 @@ class CategoryAssignDetails(APIView):
 
 # ─────────────────────── Category Details ───────────────────────
 
+def save_category_detail(serializer, instance=None):
+    try:
+        if instance:
+            return detail_service.update_category_detail(instance, **serializer.validated_data)
+        return detail_service.create_category_detail(**serializer.validated_data)
+    except DetailService.ValidationError as exc:
+        raise ValidationError(exc.errors) from exc
+
 class CategoryDetailListCreate(APIView):
     model = CategoryDetailModel
     permission_classes = [CatalogModelPermissions]
@@ -147,7 +198,7 @@ class CategoryDetailListCreate(APIView):
     def post(self, request):
         serializer = CategoryDetailSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        detail = detail_service.create_category_detail(**serializer.validated_data)
+        detail = save_category_detail(serializer)
         result = CategoryDetailSerializer(detail).data
         return api_response(True, _("Category detail created."), result, status_code=201)
 
@@ -171,7 +222,7 @@ class CategoryDetailDetail(APIView):
         detail = self.get_object(id)
         serializer = CategoryDetailSerializer(detail, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        detail_service.update_category_detail(detail, **serializer.validated_data)
+        detail = save_category_detail(serializer, detail)
         result = CategoryDetailSerializer(detail).data
         return api_response(True, _("Category detail updated."), result)
 
@@ -179,6 +230,38 @@ class CategoryDetailDetail(APIView):
         detail = self.get_object(id)
         detail_service.delete_category_detail(detail)
         return api_response(True, _("Category detail deleted."), None)
+
+
+class CategoryDetailNameSuggestions(APIView):
+    permission_classes = [CustomActionPermission]
+    required_permission = "catalog.view_categorydetail"
+
+    def get(self, request):
+        query = CategoryDetailNameSuggestionQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        exact_duplicate, matches = detail_service.find_name_matches(
+            query.validated_data["name"],
+            query.validated_data.get("exclude_id"),
+        )
+        suggestions = [
+            {
+                "id": detail.id,
+                "name": detail.name,
+                "type": detail.type,
+                "required": detail.required,
+                "options": detail.options,
+                "filterable": detail.filterable,
+                "similarity": score,
+                "exact": exact,
+            }
+            for exact, score, detail in matches
+        ]
+        serializer = CategoryDetailNameSuggestionSerializer(suggestions, many=True)
+        return api_response(
+            True,
+            "",
+            {"exact_duplicate": exact_duplicate, "suggestions": serializer.data},
+        )
 
 
 # ─────────────────────── Products ───────────────────────

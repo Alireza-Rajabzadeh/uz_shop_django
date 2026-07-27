@@ -1,5 +1,6 @@
 
 from django.db import models
+from django.db.models.functions import Lower, Trim
 
 class CategoryStatus(models.Model):
     class Meta:
@@ -16,6 +17,12 @@ class Category(models.Model):
         db_table = "catalog_category"
         permissions = [
             ("assign_details_to_category", "Can assign details to category"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                Lower(Trim("name")),
+                name="catalog_category_normalized_name_unique",
+            ),
         ]
     
     name = models.CharField(max_length=100)

@@ -1,4 +1,6 @@
-from django.db import transaction
+from django.db import IntegrityError, transaction
+from django.utils.translation import gettext as _
+from rapidfuzz import fuzz
 from core.services.base import BaseService
 from domains.catalog.models import Category, CategoryStatus
 from domains.catalog.models.category_detail_relation import CategoryDetailRelation
@@ -7,11 +9,60 @@ from domains.catalog.models.category_detail_relation import CategoryDetailRelati
 class CategoryService(BaseService):
     model = Category
 
-    def create_category(self, **data):
-        return self._create(**data)
+    class ValidationError(Exception):
+        def __init__(self, errors):
+            self.errors = errors
+            super().__init__(str(errors))
 
+    @staticmethod
+    def normalize_name(name):
+        return " ".join(name.split())
+
+    def _validate_category(self, name, parent=None, instance=None):
+        normalized_name = self.normalize_name(name)
+        duplicates = self.model.objects.all()
+        if instance:
+            duplicates = duplicates.exclude(pk=instance.pk)
+        if any(
+            self.normalize_name(category_name).casefold() == normalized_name.casefold()
+            for category_name in duplicates.values_list("name", flat=True)
+        ):
+            raise self.ValidationError(
+                {"name": [_("A category with this name already exists.")]}
+            )
+
+        if instance and parent:
+            ancestor = parent
+            while ancestor:
+                if ancestor.pk == instance.pk:
+                    raise self.ValidationError(
+                        {"parent": [_("A category cannot use itself or a descendant as its parent.")]}
+                    )
+                ancestor = ancestor.parent
+
+        return normalized_name
+
+    @transaction.atomic
+    def create_category(self, **data):
+        data["name"] = self._validate_category(data["name"], data.get("parent"))
+        try:
+            return self._create(**data)
+        except IntegrityError as exc:
+            raise self.ValidationError(
+                {"name": [_("A category with this name already exists.")]}
+            ) from exc
+
+    @transaction.atomic
     def update_category(self, instance, **data):
-        return self._update(instance, **data)
+        name = data.get("name", instance.name)
+        parent = data.get("parent", instance.parent)
+        data["name"] = self._validate_category(name, parent, instance)
+        try:
+            return self._update(instance, **data)
+        except IntegrityError as exc:
+            raise self.ValidationError(
+                {"name": [_("A category with this name already exists.")]}
+            ) from exc
 
     def delete_category(self, instance):
         self._delete(instance)
@@ -37,6 +88,24 @@ class CategoryService(BaseService):
 
     def get_tree(self):
         return self.model.objects.filter(parent__isnull=True).prefetch_related("children")
+
+    def find_name_matches(self, name, exclude_id=None, limit=5, threshold=65):
+        normalized_name = self.normalize_name(name)
+        queryset = self.model.objects.select_related("parent", "status")
+        if exclude_id:
+            queryset = queryset.exclude(pk=exclude_id)
+
+        matches = []
+        exact_duplicate = False
+        for category in queryset:
+            score = round(fuzz.WRatio(normalized_name.casefold(), category.name.casefold()))
+            exact = self.normalize_name(category.name).casefold() == normalized_name.casefold()
+            exact_duplicate = exact_duplicate or exact
+            if exact or score >= threshold:
+                matches.append((exact, score, category))
+
+        matches.sort(key=lambda match: (not match[0], -match[1], match[2].name.casefold()))
+        return exact_duplicate, matches[:limit]
 
     def get_with_details(self, id):
         return self.model.objects.prefetch_related(
