@@ -477,7 +477,10 @@ Returns full product with nested `details` and `variants`:
         "price": "29.99",
         "discount_type": null,
         "discount_value": null,
-        "inventory_strategy": 1
+        "inventory_strategy": 1,
+        "inventory_strategy_code": "normal",
+        "inventory_strategy_name": "Normal",
+        "details": []
       }
     ]
   }
@@ -500,12 +503,49 @@ Authorization: Bearer <token>
 {
   "name": "Cotton T-Shirt",
   "category": 3,
-  "status": 1,
   "description": "A comfortable cotton t-shirt"
 }
 ```
 
-After creating the product, add details via `POST /products/{id}/details` and variants via `POST /products/{id}/variants`.
+Status defaults to `pending`. After creating the product, add details via `POST /products/{id}/details` and variants via `POST /products/{id}/variants`.
+
+---
+
+### Create Complete Product
+
+```
+POST /catalog/products/create
+Content-Type: application/json
+Authorization: Bearer <token>
+```
+
+Creates the product and its selected category-detail values atomically. Status is assigned to `pending` by the server.
+
+```json
+{
+  "name": "Cotton T-Shirt",
+  "category_ids": [3],
+  "description": "A comfortable cotton t-shirt",
+  "details": [{ "detail_id": 1, "value": "Cotton" }]
+}
+```
+
+Each submitted detail must be assigned to the selected category. Required, number, and select definitions are validated before the product is saved.
+
+---
+
+### Update Complete Product
+
+```
+GET   /catalog/products/{id}/update
+PATCH /catalog/products/{id}/update
+Content-Type: application/json
+Authorization: Bearer <token>
+```
+
+**Required permission:** `catalog.change_product`
+
+GET returns the complete product for the edit form. PATCH accepts the same aggregate body as complete creation, preserves status, and atomically replaces category-derived product details.
 
 ---
 
@@ -519,7 +559,7 @@ Authorization: Bearer <token>
 
 **Required permission:** `catalog.change_product`
 
-Partial update of basic fields only. For details/variants, use their specific endpoints.
+Partial update of `name` and `description` only. Omitted details are preserved. Use the complete-update endpoint to change category or replace category-derived details atomically.
 
 ---
 
@@ -578,6 +618,19 @@ Upserts — if a detail already exists for this product, its value is updated.
 
 ## Product Variants
 
+### Variant Form Options
+
+```
+GET /catalog/products/{product_id}/variant-form-options
+Authorization: Bearer <token>
+```
+
+**Required permission:** `catalog.view_productvariants`, `catalog.add_variant_to_product`, or `catalog.change_productvariants`
+
+Returns product context, the current normal creation strategy, and all detail definitions. Category-assigned details have `category_default: true` so clients can prioritize them without restricting selection.
+
+---
+
 ### List Variants for a Product
 
 ```
@@ -605,7 +658,10 @@ Authorization: Bearer <token>
   "price": "29.99",
   "discount_type": null,
   "discount_value": null,
-  "inventory_strategy": 1
+  "details": [
+    { "detail_id": 1, "value": "Red" },
+    { "detail_id": 2, "value": "Large" }
+  ]
 }
 ```
 
@@ -615,7 +671,9 @@ Authorization: Bearer <token>
 | `price` | decimal | yes | |
 | `discount_type` | string | no | `percentage` or `fixed` |
 | `discount_value` | decimal | no | |
-| `inventory_strategy` | int | yes | 1 = normal, 2 = serialized |
+| `details` | array | no | Selected detail/value pairs; details need not belong to the product category |
+
+The backend assigns the `normal` strategy when creating a variant. Updating an existing variant preserves its current strategy.
 
 ---
 
@@ -662,13 +720,13 @@ Authorization: Bearer <token>
 | `catalog.delete_categorydetail` | DELETE category-details/{id} |
 | `catalog.view_product` | GET products, products/{id} |
 | `catalog.add_product` | POST products |
-| `catalog.change_product` | PATCH products/{id} |
+| `catalog.change_product` | PATCH products/{id}, GET/PATCH products/{id}/update |
 | `catalog.delete_product` | DELETE products/{id} |
 | `catalog.view_productdetails` | GET products/{id}/details |
 | `catalog.add_detail_to_product` | POST products/{id}/details |
-| `catalog.view_productvariants` | GET products/{id}/variants, GET variants, GET variants/{id} |
-| `catalog.add_variant_to_product` | POST products/{id}/variants |
-| `catalog.change_productvariants` | PATCH variants/{id} |
+| `catalog.view_productvariants` | GET products/{id}/variants, GET products/{id}/variant-form-options, GET variants, GET variants/{id} |
+| `catalog.add_variant_to_product` | POST products/{id}/variants, GET products/{id}/variant-form-options |
+| `catalog.change_productvariants` | PATCH variants/{id}, GET products/{id}/variant-form-options |
 | `catalog.delete_productvariants` | DELETE variants/{id} |
 
 ---

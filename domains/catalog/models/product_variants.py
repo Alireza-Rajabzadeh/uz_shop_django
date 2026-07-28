@@ -8,7 +8,7 @@ class ProductVariants(models.Model):
     product = models.ForeignKey(
         "Product",
         on_delete=models.PROTECT,
-        related_name="products"
+        related_name="variants"
     )
     
     inventory_strategy = models.ForeignKey(
@@ -34,4 +34,4 @@ class ProductVariants(models.Model):
     )
     
     def __str__(self):
-        return self.name
+        return self.sku or f"{self.product} #{self.pk}"

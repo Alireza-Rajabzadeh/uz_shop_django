@@ -5,8 +5,9 @@ from .views import (
     CategoryDetailListCreate, CategoryDetailDetail, CategoryDetailNameSuggestions,
     ProductListCreate, ProductDetail,
     ProductFormOptions, ProductDetailDefinitions, ProductCompleteCreate,
+    ProductCompleteUpdate,
     ProductDetailListCreate,
-    ProductVariantListCreate, VariantDetail, VariantList,
+    ProductVariantListCreate, ProductVariantFormOptions, VariantDetail, VariantList,
 )
 
 urlpatterns = [
@@ -27,10 +28,12 @@ urlpatterns = [
     path("product-form-options", ProductFormOptions.as_view()),
     path("product-detail-definitions", ProductDetailDefinitions.as_view()),
     path("products/create", ProductCompleteCreate.as_view()),
+    path("products/<int:id>/update", ProductCompleteUpdate.as_view()),
     path("products", ProductListCreate.as_view()),
     path("products/<int:id>", ProductDetail.as_view()),
     path("products/<int:product_id>/details", ProductDetailListCreate.as_view()),
     path("products/<int:product_id>/variants", ProductVariantListCreate.as_view()),
+    path("products/<int:product_id>/variant-form-options", ProductVariantFormOptions.as_view()),
 
     # Variants (standalone)
     path("variants", VariantList.as_view()),

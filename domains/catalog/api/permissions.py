@@ -23,6 +23,9 @@ class CustomActionPermission(BasePermission):
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
+        perms = getattr(view, "required_permissions", None)
+        if perms is not None:
+            return any(request.user.has_perm(perm) for perm in perms)
         perm = getattr(view, "required_permission", None)
         if perm is None:
             return True

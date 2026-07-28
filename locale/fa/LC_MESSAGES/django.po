@@ -96,3 +96,31 @@ msgstr "حساب کاربری غیرفعال است."
 #: backend/domains/users/services/auth_service.py:18
 msgid "You do not have permission to access this resource."
 msgstr "شما مجوز دسترسی به این منبع را ندارید."
+
+#: domains/catalog/services/product_service.py
+msgid "One or more details are not assigned to the selected category."
+msgstr "یک یا چند جزئیات به دسته‌بندی انتخاب‌شده اختصاص ندارند."
+
+#: domains/catalog/services/product_service.py
+#, python-brace-format
+msgid "Required product details are missing: {names}."
+msgstr "جزئیات الزامی محصول وارد نشده‌اند: {names}."
+
+#: domains/catalog/services/product_service.py
+#, python-brace-format
+msgid "'{value}' is not valid for {name}."
+msgstr "مقدار '{value}' برای {name} معتبر نیست."
+
+#: domains/catalog/services/product_service.py
+#, python-brace-format
+msgid "{name} must be a number."
+msgstr "{name} باید عدد باشد."
+
+#: domains/catalog/services/product_service.py
+#, python-brace-format
+msgid "{name} must be a finite number."
+msgstr "{name} باید یک عدد متناهی باشد."
+
+#: domains/catalog/services/product_service.py
+msgid "Each product detail can only be submitted once."
+msgstr "هر جزئیات محصول فقط یک بار قابل ارسال است."

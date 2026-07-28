@@ -14,6 +14,7 @@ from .serializers import (
     CategoryDetailNameSuggestionSerializer,
     CategoryDetailAssignmentWriteSerializer, CategoryDetailAssignmentOptionSerializer,
     ProductCategorySelectionSerializer, ProductCompleteCreateSerializer,
+    ProductBasicUpdateSerializer, ProductVariantWriteSerializer,
 )
 from domains.catalog.models import (
     Category,
@@ -320,19 +321,18 @@ class CategoryDetailNameSuggestions(APIView):
 
 class ProductFormOptions(APIView):
     permission_classes = [CustomActionPermission]
-    required_permission = "catalog.add_product"
+    required_permissions = ["catalog.add_product", "catalog.change_product"]
 
     def get(self, request):
-        categories, statuses = product_service.get_form_options()
+        categories = product_service.get_form_options()
         return api_response(True, "", {
             "categories": categories,
-            "statuses": ProductStatusSerializer(statuses, many=True).data,
         })
 
 
 class ProductDetailDefinitions(APIView):
     permission_classes = [CustomActionPermission]
-    required_permission = "catalog.add_product"
+    required_permissions = ["catalog.add_product", "catalog.change_product"]
 
     def get(self, request):
         raw_ids = request.query_params.getlist("category_ids")
@@ -384,6 +384,37 @@ class ProductCompleteCreate(APIView):
             status_code=201,
         )
 
+
+class ProductCompleteUpdate(APIView):
+    permission_classes = [CustomActionPermission]
+    required_permission = "catalog.change_product"
+
+    def get_product(self, id):
+        try:
+            return product_service.get_product(id)
+        except Exception:
+            raise NotFound(_("Product not found."))
+
+    def get(self, request, id):
+        return api_response(True, "", ProductSerializer(self.get_product(id)).data)
+
+    def patch(self, request, id):
+        product = self.get_product(id)
+        serializer = ProductCompleteCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            product = product_service.update_complete_product(
+                product, **serializer.validated_data
+            )
+        except ProductService.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
+        return api_response(
+            True,
+            _("Product updated."),
+            ProductSerializer(product).data,
+        )
+
+
 class ProductListCreate(APIView):
     model = Product
     permission_classes = [CatalogModelPermissions]
@@ -433,7 +464,7 @@ class ProductDetail(APIView):
 
     def patch(self, request, id):
         product = self.get_object(id)
-        serializer = ProductSerializer(product, data=request.data, partial=True)
+        serializer = ProductBasicUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         product_service.update_product(product, **serializer.validated_data)
         result = ProductSerializer(product).data
@@ -469,7 +500,10 @@ class ProductDetailListCreate(APIView):
         except Exception:
             raise NotFound(_("Product not found."))
         details_data = request.data if isinstance(request.data, list) else [request.data]
-        instances = product_service.add_detail_to_product(product, details_data)
+        try:
+            instances = product_service.add_detail_to_product(product, details_data)
+        except ProductService.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
         serializer = ProductDetailsSerializer(instances, many=True)
         return api_response(True, _("Product details added."), serializer.data, status_code=201)
 
@@ -497,11 +531,41 @@ class ProductVariantListCreate(APIView):
             product = product_service.get_product(product_id)
         except Exception:
             raise NotFound(_("Product not found."))
-        serializer = ProductVariantSerializer(data=request.data)
+        serializer = ProductVariantWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        variant = product_service.add_variant_to_product(product, **serializer.validated_data)
+        try:
+            variant = product_service.add_variant_to_product(
+                product, **serializer.validated_data
+            )
+        except ProductService.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
         result = ProductVariantSerializer(variant).data
         return api_response(True, _("Variant added."), result, status_code=201)
+
+
+class ProductVariantFormOptions(APIView):
+    permission_classes = [CustomActionPermission]
+    required_permissions = [
+        "catalog.view_productvariants",
+        "catalog.add_variant_to_product",
+        "catalog.change_productvariants",
+    ]
+
+    def get(self, request, product_id):
+        try:
+            product = product_service.get_product(product_id)
+        except Exception:
+            raise NotFound(_("Product not found."))
+        return api_response(True, "", {
+            "product": {
+                "id": product.id,
+                "name": product.name,
+                "category": product.category_id,
+                "category_name": product.category.name,
+            },
+            "inventory_strategy": {"code": "normal", "name": "Normal"},
+            "details": product_service.get_variant_form_options(product),
+        })
 
 
 # ─────────────────────── Variants (standalone) ───────────────────────
@@ -523,9 +587,14 @@ class VariantDetail(APIView):
 
     def patch(self, request, id):
         variant = self.get_object(id)
-        serializer = ProductVariantSerializer(variant, data=request.data, partial=True)
+        serializer = ProductVariantWriteSerializer(
+            variant, data=request.data, partial=True
+        )
         serializer.is_valid(raise_exception=True)
-        product_service.update_variant(variant, **serializer.validated_data)
+        try:
+            product_service.update_variant(variant, **serializer.validated_data)
+        except ProductService.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
         result = ProductVariantSerializer(variant).data
         return api_response(True, _("Variant updated."), result)
 

@@ -130,17 +130,34 @@ class ProductDetailsSerializer(serializers.ModelSerializer):
 
 
 class ProductVariantSerializer(serializers.ModelSerializer):
+    inventory_strategy_code = serializers.CharField(
+        source="inventory_strategy.code", read_only=True
+    )
+    inventory_strategy_name = serializers.CharField(
+        source="inventory_strategy.name", read_only=True
+    )
+    details = serializers.SerializerMethodField()
+
     class Meta:
         model = ProductVariants
-        fields = "__all__"
+        fields = [
+            "id", "product", "sku", "price", "discount_type", "discount_value",
+            "inventory_strategy", "inventory_strategy_code", "inventory_strategy_name",
+            "details",
+        ]
+        read_only_fields = ["product", "inventory_strategy"]
+
+    def get_details(self, obj):
+        return ProductVariantDetailsSerializer(obj.details.all(), many=True).data
 
 
 class ProductVariantDetailsSerializer(serializers.ModelSerializer):
     detail_name = serializers.CharField(source="detail.name", read_only=True)
+    detail_type = serializers.CharField(source="detail.type", read_only=True)
 
     class Meta:
         model = ProductVariantsDetails
-        fields = "__all__"
+        fields = ["id", "detail", "detail_name", "detail_type", "value"]
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -150,6 +167,16 @@ class ProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = "__all__"
+        read_only_fields = ["status"]
+
+
+class ProductBasicUpdateSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=250, required=False)
+    description = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+    )
 
 
 class ProductListSerializer(serializers.ModelSerializer):
@@ -159,7 +186,10 @@ class ProductListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Product
-        fields = ["id", "name", "category", "category_name", "status", "status_name", "description", "variant_count"]
+        fields = [
+            "id", "name", "category", "category_name", "status", "status_name",
+            "description", "variant_count",
+        ]
 
 
 class ProductCategorySelectionSerializer(serializers.Serializer):
@@ -185,9 +215,48 @@ class ProductDetailValueWriteSerializer(serializers.Serializer):
     value = serializers.CharField(max_length=250, allow_blank=True)
 
 
+class ProductVariantWriteSerializer(serializers.Serializer):
+    sku = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    price = serializers.DecimalField(max_digits=15, decimal_places=2, min_value=0)
+    discount_type = serializers.ChoiceField(
+        choices=["percentage", "fixed"], required=False, allow_null=True
+    )
+    discount_value = serializers.DecimalField(
+        max_digits=12, decimal_places=2, min_value=0, required=False, allow_null=True
+    )
+    details = ProductDetailValueWriteSerializer(many=True, required=False, default=list)
+
+    def validate_details(self, details):
+        ids = [item["detail"].id for item in details]
+        if len(ids) != len(set(ids)):
+            raise serializers.ValidationError("Each variant detail can only be submitted once.")
+        return details
+
+    def validate(self, attrs):
+        discount_type = attrs.get(
+            "discount_type", getattr(self.instance, "discount_type", None)
+        )
+        discount_value = attrs.get(
+            "discount_value", getattr(self.instance, "discount_value", None)
+        )
+        price = attrs.get("price", getattr(self.instance, "price", None))
+        if bool(discount_type) != (discount_value is not None):
+            raise serializers.ValidationError({
+                "discount_value": "Discount type and value must be provided together."
+            })
+        if discount_type == "percentage" and discount_value > 100:
+            raise serializers.ValidationError({
+                "discount_value": "Percentage discount cannot exceed 100."
+            })
+        if discount_type == "fixed" and price is not None and discount_value > price:
+            raise serializers.ValidationError({
+                "discount_value": "Fixed discount cannot exceed the price."
+            })
+        return attrs
+
+
 class ProductCompleteCreateSerializer(ProductCategorySelectionSerializer):
     name = serializers.CharField(max_length=250)
-    status = serializers.PrimaryKeyRelatedField(queryset=ProductStatus.objects.all())
     description = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     details = ProductDetailValueWriteSerializer(many=True, required=False, default=list)
 

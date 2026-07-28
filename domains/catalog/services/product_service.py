@@ -1,19 +1,22 @@
 from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
-from django.shortcuts import get_object_or_404
 from django.db.models import Count
+from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext as _
+
 from core.services.base import BaseService
 from domains.catalog.models import (
     Category,
     CategoryDetail,
     CategoryDetailRelation,
     Product,
+    ProductDetails,
     ProductStatus,
     ProductVariants,
+    ProductVariantsDetails,
 )
-from domains.catalog.models.product_details import ProductDetails
+from domains.inventory.models import InventoryStrategy
 
 
 class ProductService(BaseService):
@@ -25,6 +28,7 @@ class ProductService(BaseService):
             super().__init__(str(errors))
 
     def create_product(self, **data):
+        data["status"] = ProductStatus.objects.get(name__iexact="pending")
         return self._create(**data)
 
     def update_product(self, instance, **data):
@@ -47,7 +51,7 @@ class ProductService(BaseService):
         queryset = (
             self.model.objects.filter(**filters)
             .select_related("category", "status")
-            .annotate(variant_count=Count("products"))
+            .annotate(variant_count=Count("variants"))
         )
         descending = ordering and ordering.startswith("-")
         requested_field = ordering.lstrip("-") if ordering else "id"
@@ -77,7 +81,7 @@ class ProductService(BaseService):
                 "name": category.name,
                 "path": " / ".join(reversed(path)),
             })
-        return options, ProductStatus.objects.order_by("id")
+        return options
 
     def get_detail_definitions(self, categories):
         details = CategoryDetail.objects.filter(
@@ -92,9 +96,36 @@ class ProductService(BaseService):
 
     @transaction.atomic
     def create_complete_product(
-        self, *, name, status, category_ids, description=None, details=()
+        self, *, name, category_ids, description=None, details=()
     ):
         category = Category.objects.select_for_update().get(pk=category_ids[0].pk)
+        self._validate_complete_product_details(category, details)
+
+        product = self.model.objects.create(
+            name=name.strip(),
+            status=ProductStatus.objects.get(name__iexact="pending"),
+            category=category,
+            description=description or "",
+        )
+        self._replace_product_details(product, details)
+        return product
+
+    @transaction.atomic
+    def update_complete_product(
+        self, product, *, name, category_ids, description=None, details=()
+    ):
+        product = self.model.objects.select_for_update().get(pk=product.pk)
+        category = Category.objects.select_for_update().get(pk=category_ids[0].pk)
+        self._validate_complete_product_details(category, details)
+
+        product.name = name.strip()
+        product.category = category
+        product.description = description or ""
+        product.save(update_fields=["name", "category", "description"])
+        self._replace_product_details(product, details)
+        return product
+
+    def _validate_complete_product_details(self, category, details):
         assigned_details = {
             detail.id: detail
             for detail in CategoryDetail.objects.filter(
@@ -103,16 +134,29 @@ class ProductService(BaseService):
         }
         supplied_details = {item["detail"].id: item for item in details}
 
-        invalid_ids = set(supplied_details) - set(assigned_details)
-        if invalid_ids:
+        if set(supplied_details) - set(assigned_details):
             raise self.ValidationError({
                 "details": [_("One or more details are not assigned to the selected category.")]
             })
+        self._validate_detail_values(
+            definitions=assigned_details,
+            supplied=supplied_details,
+            items=details,
+        )
 
+    def _replace_product_details(self, product, details):
+        product.details.all().delete()
+        ProductDetails.objects.bulk_create([
+            ProductDetails(product=product, detail=item["detail"], value=item["value"])
+            for item in details
+            if item["value"] or item["detail"].required
+        ])
+
+    def _validate_detail_values(self, *, definitions, supplied, items):
         missing_required = [
             detail.name
-            for detail in assigned_details.values()
-            if detail.required and not supplied_details.get(detail.id, {}).get("value", "").strip()
+            for detail in definitions.values()
+            if detail.required and not supplied.get(detail.id, {}).get("value", "").strip()
         ]
         if missing_required:
             raise self.ValidationError({
@@ -123,7 +167,7 @@ class ProductService(BaseService):
                 ]
             })
 
-        for item in details:
+        for item in items:
             detail = item["detail"]
             value = item["value"].strip()
             if detail.type == "select" and value:
@@ -138,33 +182,47 @@ class ProductService(BaseService):
                     })
             if detail.type == "number" and value:
                 try:
-                    Decimal(value)
+                    number = Decimal(value)
                 except InvalidOperation as exc:
                     raise self.ValidationError({
-                        "details": [_("{name} must be a number.").format(name=detail.name)]
+                        "details": [_('{name} must be a number.').format(name=detail.name)]
                     }) from exc
+                if not number.is_finite():
+                    raise self.ValidationError({
+                        "details": [_('{name} must be a finite number.').format(name=detail.name)]
+                    })
+                value = "0" if number == 0 else format(number.normalize(), "f")
             item["value"] = value
 
-        product = self.model.objects.create(
-            name=name.strip(),
-            status=status,
-            category=category,
-            description=description or "",
-        )
-        ProductDetails.objects.bulk_create([
-            ProductDetails(product=product, detail=item["detail"], value=item["value"])
-            for item in details
-            if item["value"] or item["detail"].required
-        ])
-        return product
-
+    @transaction.atomic
     def add_detail_to_product(self, product, details_data):
+        detail_ids = [item.get("detail_id") for item in details_data]
+        if len(detail_ids) != len(set(detail_ids)):
+            raise self.ValidationError({
+                "details": [_("Each product detail can only be submitted once.")]
+            })
+        definitions = {
+            detail.id: detail
+            for detail in CategoryDetail.objects.filter(
+                id__in=detail_ids,
+                categorydetailrelation__category=product.category,
+            )
+        }
+        if set(detail_ids) != set(definitions):
+            raise self.ValidationError({
+                "details": [_("One or more details are not assigned to the selected category.")]
+            })
+        items = [
+            {"detail": definitions[item["detail_id"]], "value": item.get("value", "")}
+            for item in details_data
+        ]
+        self._validate_detail_values(definitions={}, supplied={}, items=items)
         instances = []
-        for item in details_data:
-            obj, _ = ProductDetails.objects.update_or_create(
+        for raw_item, item in zip(details_data, items):
+            obj, _created = ProductDetails.objects.update_or_create(
                 product=product,
-                detail_id=item["detail_id"],
-                defaults={"value": item.get("value", ""), "extra_value": item.get("extra_value")},
+                detail=item["detail"],
+                defaults={"value": item["value"], "extra_value": raw_item.get("extra_value")},
             )
             instances.append(obj)
         return instances
@@ -172,23 +230,79 @@ class ProductService(BaseService):
     def list_product_details(self, product):
         return ProductDetails.objects.filter(product=product).select_related("detail")
 
-    def add_variant_to_product(self, product, **variant_data):
-        return ProductVariants.objects.create(product=product, **variant_data)
+    def get_variant_form_options(self, product):
+        category_detail_ids = set(CategoryDetailRelation.objects.filter(
+            category=product.category
+        ).values_list("detail_id", flat=True))
+        details = CategoryDetail.objects.order_by(
+            "name"
+        )
+        return [{
+            "id": detail.id,
+            "name": detail.name,
+            "type": detail.type,
+            "required": detail.required,
+            "filterable": detail.filterable,
+            "options": [
+                option.strip() for option in detail.options.split(",") if option.strip()
+            ],
+            "category_default": detail.id in category_detail_ids,
+        } for detail in details]
+
+    @transaction.atomic
+    def add_variant_to_product(self, product, *, details=(), **variant_data):
+        self._validate_variant_details(details)
+        variant = ProductVariants.objects.create(
+            product=product,
+            inventory_strategy=InventoryStrategy.objects.get(code="normal"),
+            **variant_data,
+        )
+        self._replace_variant_details(variant, details)
+        return variant
 
     def list_product_variants(self, product):
-        return ProductVariants.objects.filter(product=product)
+        return ProductVariants.objects.filter(product=product).select_related(
+            "inventory_strategy"
+        ).prefetch_related("details__detail").order_by("id")
 
     def get_variant(self, id):
         return get_object_or_404(ProductVariants, id=id)
 
-    def update_variant(self, instance, **data):
+    @transaction.atomic
+    def update_variant(self, instance, *, details=None, **data):
+        if details is not None:
+            self._validate_variant_details(details)
         for attr, value in data.items():
             setattr(instance, attr, value)
         instance.save()
+        if details is not None:
+            self._replace_variant_details(instance, details)
         return instance
+
+    def _validate_variant_details(self, details):
+        definitions = {item["detail"].id: item["detail"] for item in details}
+        supplied = {item["detail"].id: item for item in details}
+        self._validate_detail_values(
+            definitions=definitions,
+            supplied=supplied,
+            items=details,
+        )
+
+    def _replace_variant_details(self, variant, details):
+        variant.details.all().delete()
+        ProductVariantsDetails.objects.bulk_create([
+            ProductVariantsDetails(
+                variant=variant,
+                detail=item["detail"],
+                value=item["value"],
+            )
+            for item in details
+        ])
 
     def delete_variant(self, instance):
         instance.delete()
 
     def search_variants(self, **filters):
-        return ProductVariants.objects.filter(**filters)
+        return ProductVariants.objects.filter(**filters).select_related(
+            "inventory_strategy"
+        ).prefetch_related("details__detail")

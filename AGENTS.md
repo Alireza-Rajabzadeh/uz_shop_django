@@ -200,24 +200,53 @@ Category-to-detail assignments use one specialized resource:
 
 ### Product Creation
 
-The admin product wizard keeps draft data client-side and submits once, so product and initial detail values are created atomically:
+The admin product wizard keeps draft data client-side and submits once, so the product and its initial category-derived detail values are created atomically:
 
 - Form options: `GET /api/catalog/product-form-options`
 - Category-derived fields: `GET /api/catalog/product-detail-definitions?category_ids=1`
 - Atomic creation: `POST /api/catalog/products/create`
-- All three endpoints require `catalog.add_product`.
+- Atomic update: `PATCH /api/catalog/products/{id}/update`
+- Creation requires `catalog.add_product`. Form options accept add or change permission, and complete updates require `catalog.change_product`.
 
 The create payload uses plural `category_ids` deliberately, but validation currently requires exactly one category because `Product.category` remains a foreign key. Keep category-dependent logic behind `ProductService` methods so a future many-to-many migration does not require rewriting views or frontend state.
 
 Product creation validates that:
 
+- The backend assigns the `pending` product status; clients do not submit a status.
 - Submitted details are assigned to the selected category.
 - Every required definition has a nonblank value.
 - Number values parse as numbers.
 - Select values match the definition's options.
 - `(product, detail)` remains unique at the database level.
 
+Complete product updates use the same aggregate payload, replace category-derived detail values atomically, and preserve product status. Generic `PATCH /api/catalog/products/{id}` remains a partial basic-field update and must not delete omitted details.
+
+### Current Product Variant Workflow
+
+- List/create variants: `GET|POST /api/catalog/products/{id}/variants`
+- Form options: `GET /api/catalog/products/{id}/variant-form-options`
+- Read/update/delete one variant: `GET|PATCH|DELETE /api/catalog/variants/{id}`
+- New variants are assigned the `normal` inventory strategy by the backend. Variant updates preserve the existing strategy.
+- Pricing and selected detail values are written atomically. Variant details may come from outside the product category; category-assigned details are only prioritized in the admin picker.
+- `(variant, detail)` is unique, and deleting a variant cascades to its owned detail values.
+
 Descriptions currently store Markdown/plain text, not trusted HTML. Do not render them as HTML without adding server-side sanitization.
+
+### Variant Option Design Under Discussion
+
+The current variant-detail implementation remains active. The following is a future design proposal only; do not implement or migrate toward it until the user confirms the remaining decisions:
+
+- Separate descriptive product details from sellable variant attributes and options.
+- Keep shared attribute definitions small (for example Color, Storage, and Size), while products select only the attributes and options they actually sell.
+- Bounded domains may use canonical global options. Color may use a limited family such as Red, Blue, Black, and White rather than a global record for every shade.
+- If exact shades are independently sellable, store them as product-specific options mapped to a canonical color family. Search and filtering use the family; variant display uses the exact shade label.
+- Variant values should be selectable options, not arbitrary free text. Each product variant selects one option from every variant axis configured for that product.
+- A selected option combination must be unique within a product, independent of SKU uniqueness.
+- A proposed readable SKU combines a product base code with stable selected-option codes, for example `PD12-BLK-128`. Option labels may change, but codes should become immutable once referenced by stock or orders.
+- Product-scoped options avoid maintaining an exhaustive global list. Automatically suggested, editable option codes are preferred if readable SKUs are retained.
+- Product base-code generation, global versus product-scoped option storage, exact SKU rules, and migration from `ProductVariantsDetails` are unresolved.
+
+Do not conflate SKU duplicate checks with product or variant-combination duplicate checks. Those are separate business rules and require separate validation.
 
 ### Development Reloading
 
@@ -232,7 +261,7 @@ Docker bind-mounts backend source, but Gunicorn does not auto-reload it. After c
 
 ## Environment
 
-Django loads `back/.env`. The repository-level `.env.example` documents these variables:
+Django loads `back/.env`. Copy `back/.env.example` to `back/.env` for direct local development. The database/cache variables are effective now; `DEBUG` and `SECRET_KEY` remain commented placeholders until settings stop hardcoding them.
 
 - `DEBUG`, `SECRET_KEY`
 - `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`
@@ -270,6 +299,5 @@ The product seeder creates active/inactive/pending product statuses and idempote
 These are known repository issues. Do not silently work around or fix them during unrelated tasks:
 
 1. `config/settings.py` currently hardcodes `SECRET_KEY` and `DEBUG` rather than using the corresponding environment variables.
-2. There is no `back/.env.example`; the available example is at the repository root.
 
 Confirm the intended change with the user before investigating these issues deeply or changing infrastructure configuration.
