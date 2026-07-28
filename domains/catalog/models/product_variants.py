@@ -5,6 +5,12 @@ from core.constants import DISCOUNT_TYPES
 class ProductVariants(models.Model):
     class Meta:
         db_table = "catalog_product_variants"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["product", "combination_key"],
+                name="catalog_product_variant_combination_unique",
+            ),
+        ]
     product = models.ForeignKey(
         "Product",
         on_delete=models.PROTECT,
@@ -16,7 +22,8 @@ class ProductVariants(models.Model):
         on_delete=models.PROTECT
     )
     
-    sku = models.CharField(max_length=50, blank=True)
+    sku = models.CharField(max_length=255, unique=True)
+    combination_key = models.CharField(max_length=500)
     price = models.DecimalField(max_digits=15, decimal_places=2, blank=True)
 
     discount_type = models.CharField(

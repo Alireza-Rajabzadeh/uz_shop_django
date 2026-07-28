@@ -6,7 +6,12 @@ from .models.category_detail_relation import CategoryDetailRelation
 from .models.product import Product, ProductStatus
 from .models.product_details import ProductDetails
 from .models.product_variants import ProductVariants
-from .models.product_variants_details import ProductVariantsDetails
+from .models.product_variant_selection import ProductVariantSelection
+from .models.variant_attribute import (
+    CategoryVariantAttribute,
+    VariantAttribute,
+    VariantOption,
+)
 
 
 class CategoryDetailRelationInline(admin.TabularInline):
@@ -15,12 +20,18 @@ class CategoryDetailRelationInline(admin.TabularInline):
     autocomplete_fields = ["detail"]
 
 
+class CategoryVariantAttributeInline(admin.TabularInline):
+    model = CategoryVariantAttribute
+    extra = 1
+    autocomplete_fields = ["attribute"]
+
+
 @admin.register(Category)
 class CategoryAdmin(ModelAdmin):
     list_display = ["name", "parent", "status"]
     list_filter = ["status"]
     search_fields = ["name"]
-    inlines = [CategoryDetailRelationInline]
+    inlines = [CategoryDetailRelationInline, CategoryVariantAttributeInline]
 
 
 @admin.register(CategoryStatus)
@@ -74,10 +85,10 @@ class ProductDetailAdmin(ModelAdmin):
     autocomplete_fields = ["product", "detail"]
 
 
-class ProductVariantsDetailsInline(admin.TabularInline):
-    model = ProductVariantsDetails
+class ProductVariantSelectionInline(admin.TabularInline):
+    model = ProductVariantSelection
     extra = 1
-    autocomplete_fields = ["detail"]
+    autocomplete_fields = ["attribute", "option"]
 
 
 @admin.register(ProductVariants)
@@ -85,11 +96,38 @@ class ProductVariantAdmin(ModelAdmin):
     list_display = ["product", "sku", "price"]
     list_filter = ["product"]
     search_fields = ["sku"]
-    inlines = [ProductVariantsDetailsInline]
+    readonly_fields = ["sku", "combination_key"]
+    inlines = [ProductVariantSelectionInline]
 
 
-@admin.register(ProductVariantsDetails)
-class ProductVariantDetailsAdmin(ModelAdmin):
-    list_display = ["variant", "detail", "value"]
+@admin.register(ProductVariantSelection)
+class ProductVariantSelectionAdmin(ModelAdmin):
+    list_display = ["variant", "attribute", "option"]
     list_filter = ["variant"]
-    autocomplete_fields = ["variant", "detail"]
+    autocomplete_fields = ["variant", "attribute", "option"]
+
+
+class VariantOptionInline(admin.TabularInline):
+    model = VariantOption
+    extra = 1
+
+
+@admin.register(VariantAttribute)
+class VariantAttributeAdmin(ModelAdmin):
+    list_display = ["name"]
+    search_fields = ["name"]
+    inlines = [VariantOptionInline]
+
+
+@admin.register(VariantOption)
+class VariantOptionAdmin(ModelAdmin):
+    list_display = ["name", "attribute", "sku_code"]
+    list_filter = ["attribute"]
+    search_fields = ["name", "sku_code"]
+    autocomplete_fields = ["attribute"]
+
+
+@admin.register(CategoryVariantAttribute)
+class CategoryVariantAttributeAdmin(ModelAdmin):
+    list_display = ["category", "attribute"]
+    autocomplete_fields = ["category", "attribute"]

@@ -221,32 +221,29 @@ Product creation validates that:
 
 Complete product updates use the same aggregate payload, replace category-derived detail values atomically, and preserve product status. Generic `PATCH /api/catalog/products/{id}` remains a partial basic-field update and must not delete omitted details.
 
-### Current Product Variant Workflow
+### Product Variant Workflow
 
-- List/create variants: `GET|POST /api/catalog/products/{id}/variants`
+- Global `VariantAttribute` and `VariantOption` records define selectable axes and values independently from descriptive `CategoryDetail` records.
+- Category assignments are suggestions only. A product variant may select options from any global attribute.
+- Category suggestions: `GET|POST /api/catalog/categories/{id}/assign-variant-attributes`
+- Attribute CRUD: `GET|POST /api/catalog/variant-attributes` and `GET|PATCH|DELETE /api/catalog/variant-attributes/{id}`
+- Option CRUD: `GET|POST /api/catalog/variant-options` and `GET|PATCH|DELETE /api/catalog/variant-options/{id}`
+- List/create product variants: `GET|POST /api/catalog/products/{id}/variants`
 - Form options: `GET /api/catalog/products/{id}/variant-form-options`
 - Read/update/delete one variant: `GET|PATCH|DELETE /api/catalog/variants/{id}`
-- New variants are assigned the `normal` inventory strategy by the backend. Variant updates preserve the existing strategy.
-- Pricing and selected detail values are written atomically. Variant details may come from outside the product category; category-assigned details are only prioritized in the admin picker.
-- `(variant, detail)` is unique, and deleting a variant cascades to its owned detail values.
+- Variant writes use `selections: [{attribute_id, option_id}]`, require at least one selection, and allow at most one option per attribute.
+- The backend generates globally unique SKUs as `CG{category_id}-PD{product_id}-{option_codes}`, ordering option codes by attribute ID. Clients must not submit SKUs.
+- `ProductVariants.combination_key` and a database constraint prevent duplicate option combinations within one product independently from SKU uniqueness.
+- Changing selections, an option SKU code, or a product category regenerates affected SKUs.
+- Variant writes choose `inventory_strategy_code` as `normal` or `serialized`; strategy changes are rejected while the current strategy has stock.
+- Normal writes use `inventory: {quantity, sellable}` in the single default warehouse. Inventory must satisfy `0 <= reserved <= sellable <= quantity`.
+- Serialized writes use a full `serial_items: [{id?, serial_number, on_sale}]` snapshot. New rows are in stock and unreserved; sold, reserved, or historical rows cannot be changed or removed.
+- Variant responses expose `total_item_count`, `sellable_item_count`, and `available_item_count`. Serialized availability requires in-stock, on-sale, and unreserved.
+- Full inventory edit state is read from `GET /api/inventory/variants/{id}`; product-variant lists intentionally omit serial rows.
+- Deleting a variant cascades to its owned `ProductVariantSelection` rows.
+- Variants with nonzero normal stock or any serialized rows cannot be deleted.
 
 Descriptions currently store Markdown/plain text, not trusted HTML. Do not render them as HTML without adding server-side sanitization.
-
-### Variant Option Design Under Discussion
-
-The current variant-detail implementation remains active. The following is a future design proposal only; do not implement or migrate toward it until the user confirms the remaining decisions:
-
-- Separate descriptive product details from sellable variant attributes and options.
-- Keep shared attribute definitions small (for example Color, Storage, and Size), while products select only the attributes and options they actually sell.
-- Bounded domains may use canonical global options. Color may use a limited family such as Red, Blue, Black, and White rather than a global record for every shade.
-- If exact shades are independently sellable, store them as product-specific options mapped to a canonical color family. Search and filtering use the family; variant display uses the exact shade label.
-- Variant values should be selectable options, not arbitrary free text. Each product variant selects one option from every variant axis configured for that product.
-- A selected option combination must be unique within a product, independent of SKU uniqueness.
-- A proposed readable SKU combines a product base code with stable selected-option codes, for example `PD12-BLK-128`. Option labels may change, but codes should become immutable once referenced by stock or orders.
-- Product-scoped options avoid maintaining an exhaustive global list. Automatically suggested, editable option codes are preferred if readable SKUs are retained.
-- Product base-code generation, global versus product-scoped option storage, exact SKU rules, and migration from `ProductVariantsDetails` are unresolved.
-
-Do not conflate SKU duplicate checks with product or variant-combination duplicate checks. Those are separate business rules and require separate validation.
 
 ### Development Reloading
 

@@ -5,6 +5,16 @@ class WarehouseStock(models.Model):
     class Meta:
         db_table = "inventory_warehouse_stock"
         unique_together = ("variant", "warehouse")
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(sellable__lte=models.F("quantity")),
+                name="inventory_stock_sellable_lte_quantity",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(reserved__lte=models.F("sellable")),
+                name="inventory_stock_reserved_lte_sellable",
+            ),
+        ]
 
     variant = models.ForeignKey(
         "catalog.ProductVariants",

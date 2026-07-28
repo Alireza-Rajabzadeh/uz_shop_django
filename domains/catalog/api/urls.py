@@ -4,10 +4,12 @@ from .views import (
     CategoryNameSuggestions,
     CategoryDetailListCreate, CategoryDetailDetail, CategoryDetailNameSuggestions,
     ProductListCreate, ProductDetail,
-    ProductFormOptions, ProductDetailDefinitions, ProductCompleteCreate,
+    ProductFormOptions, ProductFilterOptions, ProductDetailDefinitions, ProductCompleteCreate,
     ProductCompleteUpdate,
     ProductDetailListCreate,
     ProductVariantListCreate, ProductVariantFormOptions, VariantDetail, VariantList,
+    CategoryAssignVariantAttributes, VariantAttributeListCreate,
+    VariantAttributeDetail, VariantOptionListCreate, VariantOptionDetail,
 )
 
 urlpatterns = [
@@ -18,14 +20,22 @@ urlpatterns = [
     path("category-statuses", CategoryStatusList.as_view()),
     path("categories/<int:id>", CategoryDetail.as_view()),
     path("categories/<int:id>/assign-details", CategoryAssignDetails.as_view()),
+    path("categories/<int:id>/assign-variant-attributes", CategoryAssignVariantAttributes.as_view()),
 
     # Category Details (attributes)
     path("category-details", CategoryDetailListCreate.as_view()),
     path("category-details/name-suggestions", CategoryDetailNameSuggestions.as_view()),
     path("category-details/<int:id>", CategoryDetailDetail.as_view()),
 
+    # Variant attributes and options
+    path("variant-attributes", VariantAttributeListCreate.as_view()),
+    path("variant-attributes/<int:id>", VariantAttributeDetail.as_view()),
+    path("variant-options", VariantOptionListCreate.as_view()),
+    path("variant-options/<int:id>", VariantOptionDetail.as_view()),
+
     # Products
     path("product-form-options", ProductFormOptions.as_view()),
+    path("product-filter-options", ProductFilterOptions.as_view()),
     path("product-detail-definitions", ProductDetailDefinitions.as_view()),
     path("products/create", ProductCompleteCreate.as_view()),
     path("products/<int:id>/update", ProductCompleteUpdate.as_view()),

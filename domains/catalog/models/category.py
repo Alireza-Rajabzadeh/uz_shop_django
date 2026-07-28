@@ -17,6 +17,10 @@ class Category(models.Model):
         db_table = "catalog_category"
         permissions = [
             ("assign_details_to_category", "Can assign details to category"),
+            (
+                "assign_variant_attributes_to_category",
+                "Can assign variant attributes to category",
+            ),
         ]
         constraints = [
             models.UniqueConstraint(

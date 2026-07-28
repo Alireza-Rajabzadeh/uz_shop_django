@@ -8,6 +8,7 @@ from domains.inventory.models import (
 from domains.inventory.enums.InventoryStrategyEnum import InventoryStrategyEnum
 from domains.inventory.enums.WarehouseStatusEnum import WarehouseStatusEnum
 from domains.inventory.enums.SerializedStockStatusEnum import SerializedStockStatusEnum
+from domains.location.models import City
 
 
 class InventorySeeder(BaseSeeder):
@@ -48,17 +49,21 @@ class InventorySeeder(BaseSeeder):
     def _seed_serialized_stock_statuses(self):
         for status in SerializedStockStatusEnum:
             SerializedStockStatus.objects.update_or_create(
-                id=status.value,
+                code=status.name.lower(),
                 defaults={"name": status.name.lower()},
             )
 
     def _seed_default_warehouse(self):
+        city = City.objects.order_by("id").first()
+        if city is None:
+            raise RuntimeError("Seed location data before creating the default warehouse.")
         available = WarehouseStatus.objects.get(id=WarehouseStatusEnum.AVAILABLE.value)
+        Warehouse.objects.filter(is_default=True).exclude(code="WH-00001").update(is_default=False)
         Warehouse.objects.update_or_create(
             code="WH-00001",
             defaults={
                 "name": "Warehouse Tehran",
-                "city_id": 1,
+                "city": city,
                 "address": "Tehran, Iran",
                 "lat": "35.689200",
                 "lng": "51.389000",

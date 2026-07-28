@@ -4,6 +4,13 @@ from django.db import models
 class Warehouse(models.Model):
     class Meta:
         db_table = "inventory_warehouse"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["is_default"],
+                condition=models.Q(is_default=True),
+                name="inventory_single_default_warehouse",
+            ),
+        ]
 
     code = models.CharField(max_length=20, unique=True)
     name = models.CharField(max_length=100)

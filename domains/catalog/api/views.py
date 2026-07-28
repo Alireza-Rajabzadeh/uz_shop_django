@@ -15,6 +15,10 @@ from .serializers import (
     CategoryDetailAssignmentWriteSerializer, CategoryDetailAssignmentOptionSerializer,
     ProductCategorySelectionSerializer, ProductCompleteCreateSerializer,
     ProductBasicUpdateSerializer, ProductVariantWriteSerializer,
+    ProductListQuerySerializer, ProductDetailReadSerializer,
+    CategoryVariantAttributeAssignmentWriteSerializer,
+    VariantAttributeSerializer, VariantAttributeWriteSerializer,
+    VariantOptionSerializer, VariantOptionWriteSerializer,
 )
 from domains.catalog.models import (
     Category,
@@ -22,13 +26,20 @@ from domains.catalog.models import (
     Product,
     ProductDetails,
     ProductVariants,
+    VariantAttribute,
+    VariantOption,
 )
-from domains.catalog.services import CategoryService, DetailService, ProductService
+from domains.catalog.services import (
+    CategoryService, DetailService, ProductService, VariantAttributeService,
+)
+from domains.inventory.services import InventoryService
 
 
 category_service = CategoryService()
 detail_service = DetailService()
 product_service = ProductService()
+variant_attribute_service = VariantAttributeService()
+inventory_service = InventoryService()
 
 
 # ─────────────────────── Categories ───────────────────────
@@ -217,6 +228,155 @@ class CategoryAssignDetails(APIView):
         )
 
 
+class CategoryAssignVariantAttributes(APIView):
+    permission_classes = [CustomActionPermission]
+    required_permission = "catalog.assign_variant_attributes_to_category"
+
+    def get_category(self, id):
+        try:
+            return category_service.get_category(id)
+        except Exception:
+            raise NotFound(_("Category not found."))
+
+    def get(self, request, id):
+        category = self.get_category(id)
+        assigned = list(category_service.get_assigned_variant_attributes(category))
+        assigned_ids = {attribute.id for attribute in assigned}
+        candidates = list(variant_attribute_service.list_attributes(
+            request.query_params.get("search")
+        ))
+        candidates.sort(key=lambda attribute: (attribute.id not in assigned_ids, attribute.name.casefold()))
+        return api_response(True, "", {
+            "category": {"id": category.id, "name": category.name},
+            "assignments": VariantAttributeSerializer(assigned, many=True).data,
+            "attributes": [
+                {**VariantAttributeSerializer(attribute).data, "assigned": attribute.id in assigned_ids}
+                for attribute in candidates
+            ],
+        })
+
+    def post(self, request, id):
+        category = self.get_category(id)
+        serializer = CategoryVariantAttributeAssignmentWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        assigned = category_service.assign_variant_attributes(
+            category, serializer.validated_data["attributes"]
+        )
+        return api_response(True, _("Category variant attributes updated."), {
+            "assignments": VariantAttributeSerializer(assigned, many=True).data,
+        })
+
+
+# ─────────────────────── Variant Attributes and Options ───────────────────────
+
+class VariantAttributeListCreate(APIView):
+    model = VariantAttribute
+    permission_classes = [CatalogModelPermissions]
+
+    def get(self, request):
+        attributes = variant_attribute_service.list_attributes(request.query_params.get("search"))
+        return api_response(True, "", VariantAttributeSerializer(attributes, many=True).data)
+
+    def post(self, request):
+        serializer = VariantAttributeWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            attribute = variant_attribute_service.create_attribute(**serializer.validated_data)
+        except VariantAttributeService.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
+        return api_response(
+            True, _("Variant attribute created."),
+            VariantAttributeSerializer(attribute).data, status_code=201,
+        )
+
+
+class VariantAttributeDetail(APIView):
+    model = VariantAttribute
+    permission_classes = [CatalogModelPermissions]
+
+    def get_object(self, id):
+        try:
+            return variant_attribute_service.get_attribute(id)
+        except VariantAttribute.DoesNotExist:
+            raise NotFound(_("Variant attribute not found."))
+
+    def get(self, request, id):
+        return api_response(True, "", VariantAttributeSerializer(self.get_object(id)).data)
+
+    def patch(self, request, id):
+        attribute = self.get_object(id)
+        serializer = VariantAttributeWriteSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        try:
+            attribute = variant_attribute_service.update_attribute(
+                attribute, name=serializer.validated_data.get("name", attribute.name)
+            )
+        except VariantAttributeService.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
+        return api_response(True, _("Variant attribute updated."), VariantAttributeSerializer(attribute).data)
+
+    def delete(self, request, id):
+        try:
+            variant_attribute_service.delete_attribute(self.get_object(id))
+        except VariantAttributeService.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
+        return api_response(True, _("Variant attribute deleted."), None)
+
+
+class VariantOptionListCreate(APIView):
+    model = VariantOption
+    permission_classes = [CatalogModelPermissions]
+
+    def get(self, request):
+        options = variant_attribute_service.list_options(
+            request.query_params.get("search"), request.query_params.get("attribute_id")
+        )
+        return api_response(True, "", VariantOptionSerializer(options, many=True).data)
+
+    def post(self, request):
+        serializer = VariantOptionWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            option = variant_attribute_service.create_option(**serializer.validated_data)
+        except VariantAttributeService.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
+        return api_response(
+            True, _("Variant option created."), VariantOptionSerializer(option).data,
+            status_code=201,
+        )
+
+
+class VariantOptionDetail(APIView):
+    model = VariantOption
+    permission_classes = [CatalogModelPermissions]
+
+    def get_object(self, id):
+        try:
+            return variant_attribute_service.get_option(id)
+        except VariantOption.DoesNotExist:
+            raise NotFound(_("Variant option not found."))
+
+    def get(self, request, id):
+        return api_response(True, "", VariantOptionSerializer(self.get_object(id)).data)
+
+    def patch(self, request, id):
+        option = self.get_object(id)
+        serializer = VariantOptionWriteSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        try:
+            option = variant_attribute_service.update_option(option, **serializer.validated_data)
+        except VariantAttributeService.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
+        return api_response(True, _("Variant option updated."), VariantOptionSerializer(option).data)
+
+    def delete(self, request, id):
+        try:
+            variant_attribute_service.delete_option(self.get_object(id))
+        except VariantAttributeService.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
+        return api_response(True, _("Variant option deleted."), None)
+
+
 # ─────────────────────── Category Details ───────────────────────
 
 def save_category_detail(serializer, instance=None):
@@ -330,6 +490,14 @@ class ProductFormOptions(APIView):
         })
 
 
+class ProductFilterOptions(APIView):
+    permission_classes = [CustomActionPermission]
+    required_permission = "catalog.view_product"
+
+    def get(self, request):
+        return api_response(True, "", product_service.get_filter_options())
+
+
 class ProductDetailDefinitions(APIView):
     permission_classes = [CustomActionPermission]
     required_permissions = ["catalog.add_product", "catalog.change_product"]
@@ -420,20 +588,9 @@ class ProductListCreate(APIView):
     permission_classes = [CatalogModelPermissions]
 
     def get(self, request):
-        filters = {}
-        name = request.query_params.get("name")
-        category_id = request.query_params.get("category_id")
-        status_id = request.query_params.get("status_id")
-        if name:
-            filters["name__icontains"] = name
-        if category_id:
-            filters["category_id"] = category_id
-        if status_id:
-            filters["status_id"] = status_id
-        products = product_service.search_products(
-            ordering=request.query_params.get("ordering"),
-            **filters,
-        )
+        query = ProductListQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        products = product_service.search_products(**query.validated_data)
         paginator = PageNumberPagination()
         page = paginator.paginate_queryset(products, request, view=self)
         serializer = ProductListSerializer(page, many=True)
@@ -453,13 +610,13 @@ class ProductDetail(APIView):
 
     def get_object(self, id):
         try:
-            return product_service.get_product(id)
+            return product_service.get_product_details(id)
         except Exception:
             raise NotFound(_("Product not found."))
 
     def get(self, request, id):
         product = self.get_object(id)
-        serializer = ProductSerializer(product)
+        serializer = ProductDetailReadSerializer(product)
         return api_response(True, "", serializer.data)
 
     def patch(self, request, id):
@@ -522,7 +679,9 @@ class ProductVariantListCreate(APIView):
             product = product_service.get_product(product_id)
         except Exception:
             raise NotFound(_("Product not found."))
-        variants = product_service.list_product_variants(product)
+        variants = product_service.list_product_variants(
+            product, search=request.query_params.get("search", "").strip() or None
+        )
         serializer = ProductVariantSerializer(variants, many=True)
         return api_response(True, "", serializer.data)
 
@@ -556,6 +715,10 @@ class ProductVariantFormOptions(APIView):
             product = product_service.get_product(product_id)
         except Exception:
             raise NotFound(_("Product not found."))
+        try:
+            warehouse = inventory_service.get_default_warehouse()
+        except InventoryService.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
         return api_response(True, "", {
             "product": {
                 "id": product.id,
@@ -563,8 +726,14 @@ class ProductVariantFormOptions(APIView):
                 "category": product.category_id,
                 "category_name": product.category.name,
             },
-            "inventory_strategy": {"code": "normal", "name": "Normal"},
-            "details": product_service.get_variant_form_options(product),
+            "inventory_strategies": [
+                {"id": strategy.id, "code": strategy.code, "name": strategy.name}
+                for strategy in inventory_service.get_strategies()
+            ],
+            "default_warehouse": inventory_service.serialize_warehouse(warehouse),
+            "attributes": product_service.get_variant_form_options(
+                product, request.query_params.get("search")
+            ),
         })
 
 
@@ -592,7 +761,7 @@ class VariantDetail(APIView):
         )
         serializer.is_valid(raise_exception=True)
         try:
-            product_service.update_variant(variant, **serializer.validated_data)
+            variant = product_service.update_variant(variant, **serializer.validated_data)
         except ProductService.ValidationError as exc:
             raise ValidationError(exc.errors) from exc
         result = ProductVariantSerializer(variant).data
@@ -600,7 +769,10 @@ class VariantDetail(APIView):
 
     def delete(self, request, id):
         variant = self.get_object(id)
-        product_service.delete_variant(variant)
+        try:
+            product_service.delete_variant(variant)
+        except ProductService.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
         return api_response(True, _("Variant deleted."), None)
 
 
@@ -616,6 +788,9 @@ class VariantList(APIView):
             filters["product_id"] = product_id
         if sku:
             filters["sku__icontains"] = sku
-        variants = product_service.search_variants(**filters)
+        variants = product_service.search_variants(
+            search=request.query_params.get("search", "").strip() or None,
+            **filters,
+        )
         serializer = ProductVariantSerializer(variants, many=True)
         return api_response(True, "", serializer.data)

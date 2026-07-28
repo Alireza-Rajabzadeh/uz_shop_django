@@ -5,6 +5,7 @@ from core.management.seeders.inventory import InventorySeeder
 from core.management.seeders.products import ProductSeeder
 from core.management.seeders.customers import CustomerSeeder
 from core.management.seeders.location import LocationSeeder
+from core.management.seeders.variant_attributes import VariantAttributeSeeder
 
 
 class Command(BaseCommand):
@@ -14,6 +15,7 @@ class Command(BaseCommand):
         seeders = [
             LocationSeeder(),
             CategorySeeder(),
+            VariantAttributeSeeder(),
             ProductSeeder(),
             InventorySeeder(),
             CustomerSeeder(),

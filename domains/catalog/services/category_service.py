@@ -7,7 +7,8 @@ from domains.catalog.models import (
     CategoryDetail,
     CategoryStatus,
     ProductDetails,
-    ProductVariantsDetails,
+    CategoryVariantAttribute,
+    VariantAttribute,
 )
 from domains.catalog.models.category_detail_relation import CategoryDetailRelation
 
@@ -127,10 +128,7 @@ class CategoryService(BaseService):
         product_detail_ids = ProductDetails.objects.filter(
             product__category=category
         ).values_list("detail_id", flat=True)
-        variant_detail_ids = ProductVariantsDetails.objects.filter(
-            variant__product__category=category
-        ).values_list("detail_id", flat=True)
-        return set(product_detail_ids).union(variant_detail_ids)
+        return set(product_detail_ids)
 
     @transaction.atomic
     def assign_multiple_detail_to_category(self, category, details):
@@ -150,7 +148,7 @@ class CategoryService(BaseService):
             )
             raise self.ValidationError({
                 "details": [
-                    _("Cannot remove details used by products or variants: {names}.").format(
+                    _("Cannot remove details used by products: {names}.").format(
                         names=", ".join(blocked_names)
                     )
                 ]
@@ -168,3 +166,25 @@ class CategoryService(BaseService):
         if to_add:
             CategoryDetailRelation.objects.bulk_create(to_add)
         return self.get_assigned_details(category)
+
+    def get_assigned_variant_attributes(self, category):
+        return VariantAttribute.objects.filter(
+            category_assignments__category=category
+        ).prefetch_related("options").order_by("name", "id")
+
+    @transaction.atomic
+    def assign_variant_attributes(self, category, attributes):
+        self.model.objects.select_for_update().get(pk=category.pk)
+        incoming_ids = {attribute.id for attribute in attributes}
+        CategoryVariantAttribute.objects.filter(category=category).exclude(
+            attribute_id__in=incoming_ids
+        ).delete()
+        existing_ids = set(CategoryVariantAttribute.objects.filter(
+            category=category
+        ).values_list("attribute_id", flat=True))
+        CategoryVariantAttribute.objects.bulk_create([
+            CategoryVariantAttribute(category=category, attribute=attribute)
+            for attribute in attributes
+            if attribute.id not in existing_ids
+        ])
+        return self.get_assigned_variant_attributes(category)

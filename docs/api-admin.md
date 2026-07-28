@@ -316,9 +316,10 @@ This is a **sync** operation. Pass the full list of detail assignments — any e
 
 ---
 
-## Category Details (Attributes)
+## Category Details (Descriptive Fields)
 
-These are the **attribute definitions** (e.g., "color", "size", "material").
+These definitions store descriptive product data. Sellable choices such as color and
+storage use variant attributes and options instead.
 
 ### List Category Details
 
@@ -616,6 +617,47 @@ Upserts — if a detail already exists for this product, its value is updated.
 
 ---
 
+## Variant Attributes and Options
+
+Variant attributes are global axes such as `Color` and `Storage`. Options belong to
+one attribute and are shared globally.
+
+```
+GET|POST          /catalog/variant-attributes
+GET|PATCH|DELETE  /catalog/variant-attributes/{id}
+GET|POST          /catalog/variant-options?search=black&attribute_id=1
+GET|PATCH|DELETE  /catalog/variant-options/{id}
+```
+
+Attribute write: `{ "name": "Color" }`
+
+Option write:
+
+```json
+{ "attribute": 1, "name": "Black", "sku_code": "BLK" }
+```
+
+`sku_code` is normalized to uppercase, accepts only ASCII letters and numbers,
+has a maximum length of 16, and is globally unique case-insensitively. Attribute
+names are normalized and globally unique; option names are normalized and unique
+within their attribute. Lists are plain arrays and accept `search`.
+
+Category suggestions are a full-replacement assignment and do not restrict which
+attributes a product variant may use:
+
+```
+GET|POST /catalog/categories/{id}/assign-variant-attributes
+```
+
+```json
+{ "attributes": [1, 2] }
+```
+
+Both methods require `catalog.assign_variant_attributes_to_category`. GET returns
+`assignments` plus all `attributes` with an `assigned` flag, with assigned rows first.
+
+---
+
 ## Product Variants
 
 ### Variant Form Options
@@ -627,7 +669,11 @@ Authorization: Bearer <token>
 
 **Required permission:** `catalog.view_productvariants`, `catalog.add_variant_to_product`, or `catalog.change_productvariants`
 
-Returns product context, the current normal creation strategy, and all detail definitions. Category-assigned details have `category_default: true` so clients can prioritize them without restricting selection.
+Returns product/category context, `inventory_strategies` containing both `normal`
+and `serialized`, `default_warehouse`, and all global attributes with nested
+options. The endpoint returns a setup validation error unless exactly one default
+warehouse exists. Category suggestions have `category_default: true`.
+An optional `search` query matches attribute names, option names, and option codes.
 
 ---
 
@@ -654,26 +700,79 @@ Authorization: Bearer <token>
 
 ```json
 {
-  "sku": "TSH-RED-L",
   "price": "29.99",
   "discount_type": null,
   "discount_value": null,
-  "details": [
-    { "detail_id": 1, "value": "Red" },
-    { "detail_id": 2, "value": "Large" }
+  "inventory_strategy_code": "normal",
+  "inventory": { "quantity": 10, "sellable": 8 },
+  "selections": [
+    { "attribute_id": 1, "option_id": 10 },
+    { "attribute_id": 2, "option_id": 21 }
   ]
 }
 ```
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `sku` | string | no | Stock keeping unit |
 | `price` | decimal | yes | |
 | `discount_type` | string | no | `percentage` or `fixed` |
 | `discount_value` | decimal | no | |
-| `details` | array | no | Selected detail/value pairs; details need not belong to the product category |
+| `inventory_strategy_code` | string | yes | `normal` or `serialized` |
+| `inventory` | object | for normal | Full default-warehouse snapshot: `quantity`, `sellable` |
+| `serial_items` | array | for serialized | Full serialized snapshot: `id?`, `serial_number`, `on_sale` |
+| `selections` | array | yes | At least one unique attribute/option pair |
 
-The backend assigns the `normal` strategy when creating a variant. Updating an existing variant preserves its current strategy.
+The option must belong to the submitted attribute. Category suggestions are not
+restrictions. The backend rejects duplicate combinations within one product and
+generates a globally unique read-only SKU using attribute-ID order:
+`CG{category_id}-PD{product_id}-{option_codes}`, for example
+`CG12-PD120-BLK-128GB`. Selection edits, option code edits, and complete product
+category changes regenerate affected SKUs. Initial inventory is written atomically
+with the variant. A serialized create uses this inventory shape instead:
+
+```json
+{
+  "inventory_strategy_code": "serialized",
+  "serial_items": [
+    { "serial_number": "IMEI 001", "on_sale": true },
+    { "serial_number": "IMEI 002", "on_sale": false }
+  ]
+}
+```
+
+Normal stock uses the single default warehouse and preserves the existing
+`reserved` value on update. It enforces
+`0 <= reserved <= sellable <= quantity`; availability is `sellable - reserved`.
+Serialized quantity is the number of serial rows. New rows use `in_stock`, the
+default warehouse, and `reserved: false`. Serial numbers have collapsed whitespace
+and are globally unique ignoring case.
+
+Variant reads expose:
+
+```json
+{
+  "sku": "CG12-PD120-BLK-128GB",
+  "total_item_count": 10,
+  "sellable_item_count": 8,
+  "available_item_count": 6,
+  "selections": [
+    {
+      "attribute_id": 1,
+      "attribute_name": "Color",
+      "option_id": 10,
+      "option_name": "Black",
+      "sku_code": "BLK"
+    }
+  ]
+}
+```
+
+Variant list/read responses expose only these three inventory counts, never full
+serial rows. For serialized variants, `sellable_item_count` counts all rows with
+`on_sale: true`; `available_item_count` counts rows whose status code is
+`in_stock`, whose `on_sale` is true, and which are not reserved. Warehouse status
+is not part of this rule because warehouse statuses do not currently have a stable
+code.
 
 ---
 
@@ -701,6 +800,50 @@ Authorization: Bearer <token>
 
 **Required permissions:** `view`, `change`, `delete_productvariants`.
 
+PATCH may include normal `inventory` or serialized `serial_items`. `serial_items`
+is an atomic full snapshot: omit `id` to create, include `id` to update/retain, and
+omit an existing editable row to delete it. Sold, reserved, or non-`in_stock` rows
+must remain present and unchanged. A strategy change requires the current strategy
+to have no stock; empty normal stock rows are cleaned up automatically. Submit the
+complete target-strategy snapshot with the change. Variant deletion is rejected
+for nonzero normal stock or any serialized rows.
+
+---
+
+## Variant Inventory Edit Detail
+
+```
+GET /inventory/variants/{variant_id}
+Authorization: Bearer <token>
+```
+
+**Required permission:** `catalog.view_productvariants`
+
+Returns `strategy`, the three summary counts, and exactly one populated detail
+field. Normal variants return:
+
+```json
+{
+  "variant_id": 42,
+  "strategy": { "id": 1, "code": "normal", "name": "Normal" },
+  "total_item_count": 10,
+  "sellable_item_count": 8,
+  "available_item_count": 6,
+  "inventory": {
+    "warehouse": { "id": 1, "code": "WH-00001", "name": "Main", "status": "available" },
+    "quantity": 10,
+    "sellable": 8,
+    "reserved": 2,
+    "available": 6
+  },
+  "serial_items": null
+}
+```
+
+Serialized variants return `inventory: null` and `serial_items` rows with `id`,
+`serial_number`, `on_sale`, `reserved`, `status: {code, name}`, `warehouse`, and
+`editable`.
+
 ---
 
 ## Permission Reference
@@ -714,6 +857,9 @@ Authorization: Bearer <token>
 | `catalog.change_category` | PATCH categories/{id} |
 | `catalog.delete_category` | DELETE categories/{id} |
 | `catalog.assign_details_to_category` | POST categories/{id}/assign-details |
+| `catalog.assign_variant_attributes_to_category` | GET/POST categories/{id}/assign-variant-attributes |
+| `catalog.view_variantattribute` / `add_...` / `change_...` / `delete_...` | Variant attribute CRUD |
+| `catalog.view_variantoption` / `add_...` / `change_...` / `delete_...` | Variant option CRUD |
 | `catalog.view_categorydetail` | GET category-details, category-details/{id} |
 | `catalog.add_categorydetail` | POST category-details |
 | `catalog.change_categorydetail` | PATCH category-details/{id} |
@@ -724,7 +870,7 @@ Authorization: Bearer <token>
 | `catalog.delete_product` | DELETE products/{id} |
 | `catalog.view_productdetails` | GET products/{id}/details |
 | `catalog.add_detail_to_product` | POST products/{id}/details |
-| `catalog.view_productvariants` | GET products/{id}/variants, GET products/{id}/variant-form-options, GET variants, GET variants/{id} |
+| `catalog.view_productvariants` | GET products/{id}/variants, GET products/{id}/variant-form-options, GET variants, GET variants/{id}, GET inventory/variants/{id} |
 | `catalog.add_variant_to_product` | POST products/{id}/variants, GET products/{id}/variant-form-options |
 | `catalog.change_productvariants` | PATCH variants/{id}, GET products/{id}/variant-form-options |
 | `catalog.delete_productvariants` | DELETE variants/{id} |

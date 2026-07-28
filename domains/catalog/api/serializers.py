@@ -2,8 +2,9 @@ from rest_framework import serializers
 from domains.catalog.models import (
     Category, CategoryStatus, CategoryDetail,
     CategoryDetailRelation, Product, ProductStatus,
-    ProductDetails, ProductVariants, ProductVariantsDetails,
+    ProductDetails, ProductVariants, VariantAttribute, VariantOption,
 )
+from domains.inventory.services import InventoryService
 
 
 class CategoryStatusSerializer(serializers.ModelSerializer):
@@ -120,6 +121,43 @@ class ProductStatusSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+class ProductListQuerySerializer(serializers.Serializer):
+    id = serializers.IntegerField(required=False, min_value=1)
+    name = serializers.CharField(required=False, allow_blank=False, trim_whitespace=True)
+    category_id = serializers.IntegerField(required=False, min_value=1)
+    status_id = serializers.IntegerField(required=False, min_value=1)
+    search = serializers.CharField(required=False, allow_blank=False, trim_whitespace=True)
+    ordering = serializers.CharField(required=False, allow_blank=False)
+    price_operator = serializers.ChoiceField(
+        choices=["equal", "less_than", "greater_than", "between"], required=False
+    )
+    price = serializers.DecimalField(
+        max_digits=15, decimal_places=2, min_value=0, required=False
+    )
+    price_min = serializers.DecimalField(
+        max_digits=15, decimal_places=2, min_value=0, required=False
+    )
+    price_max = serializers.DecimalField(
+        max_digits=15, decimal_places=2, min_value=0, required=False
+    )
+
+    def validate(self, attrs):
+        operator = attrs.get("price_operator")
+        supplied = {key for key in ("price", "price_min", "price_max") if key in attrs}
+        if not operator and supplied:
+            raise serializers.ValidationError({"price_operator": "Select a price operator."})
+        if not operator:
+            return attrs
+        expected = {"price_min", "price_max"} if operator == "between" else {"price"}
+        if supplied != expected:
+            raise serializers.ValidationError({
+                "price": "Provide both range values for between, or one price for other operators."
+            })
+        if operator == "between" and attrs["price_min"] > attrs["price_max"]:
+            raise serializers.ValidationError({"price_max": "Maximum price must not be below minimum price."})
+        return attrs
+
+
 class ProductDetailsSerializer(serializers.ModelSerializer):
     detail_name = serializers.CharField(source="detail.name", read_only=True)
     detail_type = serializers.CharField(source="detail.type", read_only=True)
@@ -129,6 +167,52 @@ class ProductDetailsSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+class VariantOptionSerializer(serializers.ModelSerializer):
+    attribute_name = serializers.CharField(source="attribute.name", read_only=True)
+
+    class Meta:
+        model = VariantOption
+        fields = ["id", "attribute", "attribute_name", "name", "sku_code"]
+
+
+class VariantAttributeSerializer(serializers.ModelSerializer):
+    options = VariantOptionSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = VariantAttribute
+        fields = ["id", "name", "options"]
+
+
+class VariantAttributeWriteSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=100)
+
+
+class VariantOptionWriteSerializer(serializers.Serializer):
+    attribute = serializers.PrimaryKeyRelatedField(queryset=VariantAttribute.objects.all())
+    name = serializers.CharField(max_length=100)
+    sku_code = serializers.CharField(max_length=16)
+
+
+class CategoryVariantAttributeAssignmentWriteSerializer(serializers.Serializer):
+    attributes = serializers.PrimaryKeyRelatedField(
+        queryset=VariantAttribute.objects.all(), many=True, allow_empty=True
+    )
+
+    def validate_attributes(self, attributes):
+        ids = [attribute.id for attribute in attributes]
+        if len(ids) != len(set(ids)):
+            raise serializers.ValidationError("Each variant attribute can only be assigned once.")
+        return attributes
+
+
+class ProductVariantSelectionSerializer(serializers.Serializer):
+    attribute_id = serializers.IntegerField(source="attribute.id")
+    attribute_name = serializers.CharField(source="attribute.name")
+    option_id = serializers.IntegerField(source="option.id")
+    option_name = serializers.CharField(source="option.name")
+    sku_code = serializers.CharField(source="option.sku_code")
+
+
 class ProductVariantSerializer(serializers.ModelSerializer):
     inventory_strategy_code = serializers.CharField(
         source="inventory_strategy.code", read_only=True
@@ -136,28 +220,40 @@ class ProductVariantSerializer(serializers.ModelSerializer):
     inventory_strategy_name = serializers.CharField(
         source="inventory_strategy.name", read_only=True
     )
-    details = serializers.SerializerMethodField()
+    selections = ProductVariantSelectionSerializer(many=True, read_only=True)
+    total_item_count = serializers.SerializerMethodField()
+    sellable_item_count = serializers.SerializerMethodField()
+    available_item_count = serializers.SerializerMethodField()
 
     class Meta:
         model = ProductVariants
         fields = [
             "id", "product", "sku", "price", "discount_type", "discount_value",
             "inventory_strategy", "inventory_strategy_code", "inventory_strategy_name",
-            "details",
+            "selections", "total_item_count", "sellable_item_count",
+            "available_item_count",
         ]
-        read_only_fields = ["product", "inventory_strategy"]
+        read_only_fields = ["product", "sku", "inventory_strategy"]
 
-    def get_details(self, obj):
-        return ProductVariantDetailsSerializer(obj.details.all(), many=True).data
+    def _inventory_summary(self, obj):
+        if hasattr(obj, "total_item_count"):
+            return {
+                "total_item_count": obj.total_item_count,
+                "sellable_item_count": obj.sellable_item_count,
+                "available_item_count": obj.available_item_count,
+            }
+        if not hasattr(obj, "_inventory_summary_cache"):
+            obj._inventory_summary_cache = InventoryService().get_summary(obj)
+        return obj._inventory_summary_cache
 
+    def get_total_item_count(self, obj):
+        return self._inventory_summary(obj)["total_item_count"]
 
-class ProductVariantDetailsSerializer(serializers.ModelSerializer):
-    detail_name = serializers.CharField(source="detail.name", read_only=True)
-    detail_type = serializers.CharField(source="detail.type", read_only=True)
+    def get_sellable_item_count(self, obj):
+        return self._inventory_summary(obj)["sellable_item_count"]
 
-    class Meta:
-        model = ProductVariantsDetails
-        fields = ["id", "detail", "detail_name", "detail_type", "value"]
+    def get_available_item_count(self, obj):
+        return self._inventory_summary(obj)["available_item_count"]
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -168,6 +264,24 @@ class ProductSerializer(serializers.ModelSerializer):
         model = Product
         fields = "__all__"
         read_only_fields = ["status"]
+
+
+class ProductDetailReadSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source="category.name", read_only=True)
+    status_name = serializers.CharField(source="status.name", read_only=True)
+    pictures = serializers.SerializerMethodField()
+    details = ProductDetailsSerializer(many=True, read_only=True)
+    variants = ProductVariantSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Product
+        fields = [
+            "id", "name", "description", "category", "category_name", "status",
+            "status_name", "pictures", "details", "variants",
+        ]
+
+    def get_pictures(self, obj):
+        return []
 
 
 class ProductBasicUpdateSerializer(serializers.Serializer):
@@ -215,8 +329,32 @@ class ProductDetailValueWriteSerializer(serializers.Serializer):
     value = serializers.CharField(max_length=250, allow_blank=True)
 
 
+class ProductVariantSelectionWriteSerializer(serializers.Serializer):
+    attribute_id = serializers.PrimaryKeyRelatedField(
+        queryset=VariantAttribute.objects.all(), source="attribute"
+    )
+    option_id = serializers.PrimaryKeyRelatedField(
+        queryset=VariantOption.objects.select_related("attribute"), source="option"
+    )
+
+
+class NormalInventoryWriteSerializer(serializers.Serializer):
+    quantity = serializers.IntegerField(min_value=0)
+    sellable = serializers.IntegerField(min_value=0)
+
+    def validate(self, attrs):
+        if attrs["sellable"] > attrs["quantity"]:
+            raise serializers.ValidationError("Sellable quantity cannot exceed physical quantity.")
+        return attrs
+
+
+class SerializedItemWriteSerializer(serializers.Serializer):
+    id = serializers.IntegerField(min_value=1, required=False)
+    serial_number = serializers.CharField(max_length=100, trim_whitespace=True)
+    on_sale = serializers.BooleanField()
+
+
 class ProductVariantWriteSerializer(serializers.Serializer):
-    sku = serializers.CharField(max_length=50, required=False, allow_blank=True)
     price = serializers.DecimalField(max_digits=15, decimal_places=2, min_value=0)
     discount_type = serializers.ChoiceField(
         choices=["percentage", "fixed"], required=False, allow_null=True
@@ -224,15 +362,51 @@ class ProductVariantWriteSerializer(serializers.Serializer):
     discount_value = serializers.DecimalField(
         max_digits=12, decimal_places=2, min_value=0, required=False, allow_null=True
     )
-    details = ProductDetailValueWriteSerializer(many=True, required=False, default=list)
-
-    def validate_details(self, details):
-        ids = [item["detail"].id for item in details]
-        if len(ids) != len(set(ids)):
-            raise serializers.ValidationError("Each variant detail can only be submitted once.")
-        return details
+    selections = ProductVariantSelectionWriteSerializer(many=True, required=False)
+    inventory_strategy_code = serializers.ChoiceField(
+        choices=["normal", "serialized"], required=False
+    )
+    inventory = NormalInventoryWriteSerializer(required=False)
+    serial_items = SerializedItemWriteSerializer(many=True, required=False)
 
     def validate(self, attrs):
+        if "sku" in self.initial_data:
+            raise serializers.ValidationError({"sku": "SKU is generated by the backend."})
+        current_code = (
+            self.instance.inventory_strategy.code if self.instance is not None else None
+        )
+        strategy_code = attrs.get("inventory_strategy_code", current_code)
+        if strategy_code is None:
+            raise serializers.ValidationError({
+                "inventory_strategy_code": "This field is required."
+            })
+        strategy_changed = current_code is not None and strategy_code != current_code
+        if self.instance is None or strategy_changed:
+            required_field = "inventory" if strategy_code == "normal" else "serial_items"
+            if required_field not in self.initial_data:
+                raise serializers.ValidationError({
+                    required_field: f"This field is required for {strategy_code} inventory."
+                })
+        if "inventory" in self.initial_data and strategy_code != "normal":
+            raise serializers.ValidationError({
+                "inventory": "Inventory quantity is only valid for normal strategy."
+            })
+        if "serial_items" in self.initial_data and strategy_code != "serialized":
+            raise serializers.ValidationError({
+                "serial_items": "Serial items are only valid for serialized strategy."
+            })
+        attrs["inventory_submitted"] = (
+            "inventory" in self.initial_data or "serial_items" in self.initial_data
+        )
+        return self._validate_pricing(attrs)
+
+    def validate_selections(self, selections):
+        ids = [item["attribute"].id for item in selections]
+        if len(ids) != len(set(ids)):
+            raise serializers.ValidationError("Each attribute can only be selected once.")
+        return selections
+
+    def _validate_pricing(self, attrs):
         discount_type = attrs.get(
             "discount_type", getattr(self.instance, "discount_type", None)
         )

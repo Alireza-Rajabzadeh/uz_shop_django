@@ -1,7 +1,7 @@
 from decimal import Decimal, InvalidOperation
 
-from django.db import transaction
-from django.db.models import Count
+from django.db import IntegrityError, transaction
+from django.db.models import Count, Exists, OuterRef, Prefetch, Q
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext as _
 
@@ -14,13 +14,16 @@ from domains.catalog.models import (
     ProductDetails,
     ProductStatus,
     ProductVariants,
-    ProductVariantsDetails,
+    ProductVariantSelection,
+    VariantAttribute,
 )
 from domains.inventory.models import InventoryStrategy
+from domains.inventory.services import InventoryService
 
 
 class ProductService(BaseService):
     model = Product
+    inventory_service = InventoryService()
 
     class ValidationError(Exception):
         def __init__(self, errors):
@@ -40,6 +43,59 @@ class ProductService(BaseService):
     def get_product(self, id):
         return self._get(id)
 
+    def get_product_details(self, id):
+        variants = self._variant_queryset()
+        return get_object_or_404(
+            self.model.objects.select_related("category", "status").prefetch_related(
+                Prefetch(
+                    "details",
+                    queryset=ProductDetails.objects.select_related("detail").order_by("detail__name", "id"),
+                ),
+                Prefetch("variants", queryset=variants),
+            ),
+            id=id,
+        )
+
+    def get_filter_options(self):
+        return {
+            "categories": self.get_form_options(),
+            "statuses": list(ProductStatus.objects.order_by("name").values("id", "name")),
+        }
+
+    @staticmethod
+    def _numeric_values(search):
+        integer = int(search) if search.isdigit() and int(search) > 0 else None
+        try:
+            decimal = Decimal(search)
+            if not decimal.is_finite() or decimal < 0:
+                decimal = None
+        except (InvalidOperation, ValueError):
+            decimal = None
+        return integer, decimal
+
+    def _variant_search_queryset(self, search):
+        variants = self.inventory_service.annotate_variant_summaries(ProductVariants.objects.all())
+        query = (
+            Q(sku__icontains=search)
+            | Q(discount_type__icontains=search)
+            | Q(inventory_strategy__code__icontains=search)
+            | Q(inventory_strategy__name__icontains=search)
+            | Q(selections__attribute__name__icontains=search)
+            | Q(selections__option__name__icontains=search)
+            | Q(selections__option__sku_code__icontains=search)
+        )
+        integer, decimal = self._numeric_values(search)
+        if integer is not None:
+            query |= (
+                Q(id=integer) | Q(product_id=integer) | Q(inventory_strategy_id=integer)
+                | Q(selections__attribute_id=integer) | Q(selections__option_id=integer)
+                | Q(total_item_count=integer) | Q(sellable_item_count=integer)
+                | Q(available_item_count=integer)
+            )
+        if decimal is not None:
+            query |= Q(price=decimal) | Q(discount_value=decimal)
+        return variants.filter(query)
+
     def search_products(self, ordering=None, **filters):
         ordering_fields = {
             "id": "id",
@@ -48,11 +104,43 @@ class ProductService(BaseService):
             "status_name": "status__name",
             "variant_count": "variant_count",
         }
-        queryset = (
-            self.model.objects.filter(**filters)
-            .select_related("category", "status")
-            .annotate(variant_count=Count("variants"))
-        )
+        name = filters.pop("name", None)
+        search = filters.pop("search", None)
+        price_operator = filters.pop("price_operator", None)
+        price = filters.pop("price", None)
+        price_min = filters.pop("price_min", None)
+        price_max = filters.pop("price_max", None)
+        queryset = self.model.objects.filter(**filters).select_related("category", "status")
+        if name:
+            queryset = queryset.filter(name__icontains=name)
+        if price_operator:
+            matching_prices = ProductVariants.objects.filter(product_id=OuterRef("pk"))
+            if price_operator == "equal":
+                matching_prices = matching_prices.filter(price=price)
+            elif price_operator == "less_than":
+                matching_prices = matching_prices.filter(price__lt=price)
+            elif price_operator == "greater_than":
+                matching_prices = matching_prices.filter(price__gt=price)
+            else:
+                matching_prices = matching_prices.filter(price__gte=price_min, price__lte=price_max)
+            queryset = queryset.filter(Exists(matching_prices))
+        if search:
+            base_query = (
+                Q(name__icontains=search) | Q(description__icontains=search)
+                | Q(category__name__icontains=search) | Q(status__name__icontains=search)
+            )
+            integer, _ = self._numeric_values(search)
+            if integer is not None:
+                base_query |= Q(id=integer) | Q(category_id=integer) | Q(status_id=integer)
+            matching_details = ProductDetails.objects.filter(product_id=OuterRef("pk")).filter(
+                Q(detail__name__icontains=search) | Q(detail__type__icontains=search)
+                | Q(value__icontains=search) | Q(extra_value__icontains=search)
+            )
+            matching_variants = self._variant_search_queryset(search).filter(product_id=OuterRef("pk"))
+            queryset = queryset.filter(
+                base_query | Exists(matching_details) | Exists(matching_variants)
+            )
+        queryset = queryset.annotate(variant_count=Count("variants", distinct=True))
         descending = ordering and ordering.startswith("-")
         requested_field = ordering.lstrip("-") if ordering else "id"
         order_field = ordering_fields.get(requested_field, "id")
@@ -118,11 +206,20 @@ class ProductService(BaseService):
         category = Category.objects.select_for_update().get(pk=category_ids[0].pk)
         self._validate_complete_product_details(category, details)
 
+        category_changed = product.category_id != category.id
         product.name = name.strip()
         product.category = category
         product.description = description or ""
         product.save(update_fields=["name", "category", "description"])
         self._replace_product_details(product, details)
+        if category_changed:
+            try:
+                with transaction.atomic():
+                    self.regenerate_product_variant_skus(product)
+            except IntegrityError as exc:
+                raise self.ValidationError({
+                    "category_ids": [_('Changing the category caused a generated SKU conflict.')]
+                }) from exc
         return product
 
     def _validate_complete_product_details(self, category, details):
@@ -230,79 +327,216 @@ class ProductService(BaseService):
     def list_product_details(self, product):
         return ProductDetails.objects.filter(product=product).select_related("detail")
 
-    def get_variant_form_options(self, product):
-        category_detail_ids = set(CategoryDetailRelation.objects.filter(
-            category=product.category
-        ).values_list("detail_id", flat=True))
-        details = CategoryDetail.objects.order_by(
-            "name"
-        )
-        return [{
-            "id": detail.id,
-            "name": detail.name,
-            "type": detail.type,
-            "required": detail.required,
-            "filterable": detail.filterable,
-            "options": [
-                option.strip() for option in detail.options.split(",") if option.strip()
-            ],
-            "category_default": detail.id in category_detail_ids,
-        } for detail in details]
+    def get_variant_form_options(self, product, search=None):
+        category_attribute_ids = set(product.category.variant_attribute_assignments.values_list(
+            "attribute_id", flat=True
+        ))
+        attributes = VariantAttribute.objects.prefetch_related("options").order_by("name", "id")
+        result = []
+        search = search.casefold() if search else None
+        for attribute in attributes:
+            options = list(attribute.options.all())
+            attribute_matches = search and search in attribute.name.casefold()
+            option_matches = search and any(
+                search in value.casefold()
+                for option in options
+                for value in (option.name, option.sku_code)
+            )
+            if search and not attribute_matches and not option_matches:
+                continue
+            result.append({
+                "id": attribute.id,
+                "name": attribute.name,
+                "category_default": attribute.id in category_attribute_ids,
+                "options": [
+                    {"id": option.id, "name": option.name, "sku_code": option.sku_code}
+                    for option in options
+                ],
+            })
+        return result
 
     @transaction.atomic
-    def add_variant_to_product(self, product, *, details=(), **variant_data):
-        self._validate_variant_details(details)
-        variant = ProductVariants.objects.create(
-            product=product,
-            inventory_strategy=InventoryStrategy.objects.get(code="normal"),
-            **variant_data,
-        )
-        self._replace_variant_details(variant, details)
+    def add_variant_to_product(
+        self,
+        product,
+        *,
+        selections=(),
+        inventory_strategy_code,
+        inventory=None,
+        serial_items=None,
+        inventory_submitted=True,
+        **variant_data,
+    ):
+        selections = self._validate_variant_selections(selections)
+        combination_key = self._build_combination_key(selections)
+        sku = self._build_sku(product, selections)
+        try:
+            with transaction.atomic():
+                variant = ProductVariants.objects.create(
+                    product=product,
+                    inventory_strategy=InventoryStrategy.objects.get(code=inventory_strategy_code),
+                    combination_key=combination_key,
+                    sku=sku,
+                    **variant_data,
+                )
+                self._replace_variant_selections(variant, selections)
+        except IntegrityError as exc:
+            raise self.ValidationError({
+                "selections": [_('This option combination or generated SKU already exists.')]
+            }) from exc
+        try:
+            self.inventory_service.apply_variant_inventory(
+                variant,
+                strategy_code=inventory_strategy_code,
+                inventory=inventory,
+                serial_items=serial_items,
+                inventory_submitted=inventory_submitted,
+            )
+        except InventoryService.ValidationError as exc:
+            raise self.ValidationError(exc.errors) from exc
         return variant
 
-    def list_product_variants(self, product):
-        return ProductVariants.objects.filter(product=product).select_related(
+    def _variant_queryset(self):
+        queryset = ProductVariants.objects.select_related(
             "inventory_strategy"
-        ).prefetch_related("details__detail").order_by("id")
+        ).prefetch_related(
+            "selections__attribute", "selections__option",
+            "warehouse_stocks", "serialized_stocks__status",
+        )
+        return self.inventory_service.annotate_variant_summaries(queryset).order_by("id")
+
+    def list_product_variants(self, product, search=None):
+        queryset = self._variant_queryset().filter(product=product)
+        if search:
+            matching_ids = self._variant_search_queryset(search).values("id")
+            queryset = queryset.filter(id__in=matching_ids)
+        return queryset
 
     def get_variant(self, id):
-        return get_object_or_404(ProductVariants, id=id)
-
-    @transaction.atomic
-    def update_variant(self, instance, *, details=None, **data):
-        if details is not None:
-            self._validate_variant_details(details)
-        for attr, value in data.items():
-            setattr(instance, attr, value)
-        instance.save()
-        if details is not None:
-            self._replace_variant_details(instance, details)
-        return instance
-
-    def _validate_variant_details(self, details):
-        definitions = {item["detail"].id: item["detail"] for item in details}
-        supplied = {item["detail"].id: item for item in details}
-        self._validate_detail_values(
-            definitions=definitions,
-            supplied=supplied,
-            items=details,
+        return get_object_or_404(
+            ProductVariants.objects.select_related("product", "inventory_strategy").prefetch_related(
+                "selections__attribute", "selections__option",
+                "warehouse_stocks", "serialized_stocks__status",
+            ),
+            id=id,
         )
 
-    def _replace_variant_details(self, variant, details):
-        variant.details.all().delete()
-        ProductVariantsDetails.objects.bulk_create([
-            ProductVariantsDetails(
-                variant=variant,
-                detail=item["detail"],
-                value=item["value"],
+    @transaction.atomic
+    def update_variant(
+        self,
+        instance,
+        *,
+        selections=None,
+        inventory_strategy_code=None,
+        inventory=None,
+        serial_items=None,
+        inventory_submitted=False,
+        **data,
+    ):
+        instance = ProductVariants.objects.select_for_update().select_related("product").get(
+            pk=instance.pk
+        )
+        normalized = None
+        if selections is not None:
+            normalized = self._validate_variant_selections(selections)
+            instance.combination_key = self._build_combination_key(normalized)
+            instance.sku = self._build_sku(instance.product, normalized)
+        for attr, value in data.items():
+            setattr(instance, attr, value)
+        try:
+            with transaction.atomic():
+                instance.save()
+                if normalized is not None:
+                    self._replace_variant_selections(instance, normalized)
+        except IntegrityError as exc:
+            raise self.ValidationError({
+                "selections": [_('This option combination or generated SKU already exists.')]
+            }) from exc
+        try:
+            self.inventory_service.apply_variant_inventory(
+                instance,
+                strategy_code=inventory_strategy_code or instance.inventory_strategy.code,
+                inventory=inventory,
+                serial_items=serial_items,
+                inventory_submitted=inventory_submitted,
             )
-            for item in details
+        except InventoryService.ValidationError as exc:
+            raise self.ValidationError(exc.errors) from exc
+        return instance
+
+    def _validate_variant_selections(self, selections):
+        if not selections:
+            raise self.ValidationError({
+                "selections": [_('At least one variant selection is required.')]
+            })
+        attribute_ids = [item["attribute"].id for item in selections]
+        if len(attribute_ids) != len(set(attribute_ids)):
+            raise self.ValidationError({
+                "selections": [_('Each attribute can only be selected once.')]
+            })
+        for item in selections:
+            if item["option"].attribute_id != item["attribute"].id:
+                raise self.ValidationError({
+                    "selections": [_('Each option must belong to its submitted attribute.')]
+                })
+        return sorted(selections, key=lambda item: item["attribute"].id)
+
+    @staticmethod
+    def _build_combination_key(selections):
+        return "|".join(
+            f'{item["attribute"].id}:{item["option"].id}' for item in selections
+        )
+
+    @staticmethod
+    def _build_sku(product, selections):
+        suffix = "-".join(item["option"].sku_code for item in selections)
+        return f"CG{product.category_id}-PD{product.id}-{suffix}"
+
+    def _replace_variant_selections(self, variant, selections):
+        variant.selections.all().delete()
+        ProductVariantSelection.objects.bulk_create([
+            ProductVariantSelection(
+                variant=variant,
+                attribute=item["attribute"],
+                option=item["option"],
+            )
+            for item in selections
         ])
 
+    def regenerate_variants_for_option(self, option):
+        variants = ProductVariants.objects.select_for_update().filter(
+            selections__option=option
+        ).select_related("product").prefetch_related(
+            "selections__attribute", "selections__option"
+        )
+        self._regenerate_variant_skus(variants)
+
+    def regenerate_product_variant_skus(self, product):
+        variants = ProductVariants.objects.select_for_update().filter(
+            product=product
+        ).select_related("product").prefetch_related(
+            "selections__attribute", "selections__option"
+        )
+        self._regenerate_variant_skus(variants)
+
+    def _regenerate_variant_skus(self, variants):
+        for variant in variants:
+            selections = sorted(
+                ({"attribute": row.attribute, "option": row.option} for row in variant.selections.all()),
+                key=lambda item: item["attribute"].id,
+            )
+            variant.sku = self._build_sku(variant.product, selections)
+            variant.save(update_fields=["sku"])
+
     def delete_variant(self, instance):
+        try:
+            self.inventory_service.validate_variant_deletion(instance)
+        except InventoryService.ValidationError as exc:
+            raise self.ValidationError(exc.errors) from exc
         instance.delete()
 
-    def search_variants(self, **filters):
-        return ProductVariants.objects.filter(**filters).select_related(
-            "inventory_strategy"
-        ).prefetch_related("details__detail")
+    def search_variants(self, search=None, **filters):
+        queryset = self._variant_queryset().filter(**filters)
+        if search:
+            queryset = queryset.filter(id__in=self._variant_search_queryset(search).values("id"))
+        return queryset
