@@ -1,9 +1,17 @@
 from django.db import models
+from django.db.models import F
+from django.db.models.functions import Lower, Trim
 
 
 class State(models.Model):
     class Meta:
         db_table = "location_state"
+        constraints = [
+            models.UniqueConstraint(
+                F("country"), Lower(Trim("name")),
+                name="location_state_country_normalized_name_unique",
+            ),
+        ]
 
     country = models.ForeignKey(
         "Country",

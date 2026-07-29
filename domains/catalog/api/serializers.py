@@ -2,8 +2,10 @@ from rest_framework import serializers
 from domains.catalog.models import (
     Category, CategoryStatus, CategoryDetail,
     CategoryDetailRelation, Product, ProductStatus,
-    ProductDetails, ProductVariants, VariantAttribute, VariantOption,
+    ProductDetails, ProductFile, ProductVariants, VariantAttribute, VariantOption,
 )
+from domains.files.models import File
+from domains.files.services import FileService
 from domains.inventory.services import InventoryService
 
 
@@ -266,6 +268,57 @@ class ProductSerializer(serializers.ModelSerializer):
         read_only_fields = ["status"]
 
 
+class ProductFileReadSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+    original_name = serializers.CharField(source="file.original_name", read_only=True)
+    file_type = serializers.CharField(source="file.file_type", read_only=True)
+    content_type = serializers.CharField(source="file.content_type", read_only=True)
+    extension = serializers.CharField(source="file.extension", read_only=True)
+    size = serializers.IntegerField(source="file.size", read_only=True)
+    checksum = serializers.CharField(source="file.checksum", read_only=True)
+    metadata = serializers.JSONField(source="file.metadata", read_only=True)
+
+    class Meta:
+        model = ProductFile
+        fields = [
+            "id", "file", "url", "original_name", "file_type", "content_type",
+            "extension", "size", "checksum", "metadata", "role", "position",
+            "is_primary", "alt_text", "created_at", "updated_at",
+        ]
+
+    def get_url(self, obj):
+        try:
+            return FileService().url(obj.file)
+        except FileService.Error:
+            return None
+
+
+class ProductFileWriteSerializer(serializers.Serializer):
+    file = serializers.PrimaryKeyRelatedField(
+        queryset=File.objects.select_related("status")
+    )
+    role = serializers.ChoiceField(choices=ProductFile.Role.choices)
+    position = serializers.IntegerField(min_value=0, default=0)
+    is_primary = serializers.BooleanField(default=False)
+    alt_text = serializers.CharField(max_length=255, allow_blank=True, default="")
+
+
+class ProductFileUpdateSerializer(serializers.Serializer):
+    role = serializers.ChoiceField(choices=ProductFile.Role.choices, required=False)
+    position = serializers.IntegerField(min_value=0, required=False)
+    is_primary = serializers.BooleanField(required=False)
+    alt_text = serializers.CharField(
+        max_length=255, allow_blank=True, required=False
+    )
+
+
+class ProductFileReorderSerializer(serializers.Serializer):
+    files = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=True,
+    )
+
+
 class ProductDetailReadSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source="category.name", read_only=True)
     status_name = serializers.CharField(source="status.name", read_only=True)
@@ -281,7 +334,12 @@ class ProductDetailReadSerializer(serializers.ModelSerializer):
         ]
 
     def get_pictures(self, obj):
-        return []
+        relations = getattr(obj, "ordered_files", None)
+        if relations is None:
+            relations = obj.product_files.select_related(
+                "file", "file__status"
+            ).order_by("position", "id")
+        return ProductFileReadSerializer(relations, many=True).data
 
 
 class ProductBasicUpdateSerializer(serializers.Serializer):
@@ -297,12 +355,22 @@ class ProductListSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source="category.name", read_only=True)
     status_name = serializers.CharField(source="status.name", read_only=True)
     variant_count = serializers.IntegerField(read_only=True)
+    thumbnail_url = serializers.SerializerMethodField()
+
+    def get_thumbnail_url(self, obj):
+        media = getattr(obj, "list_media", [])
+        if not media:
+            return None
+        try:
+            return FileService().url(media[0].file)
+        except FileService.Error:
+            return None
 
     class Meta:
         model = Product
         fields = [
             "id", "name", "category", "category_name", "status", "status_name",
-            "description", "variant_count",
+            "description", "variant_count", "thumbnail_url",
         ]
 
 

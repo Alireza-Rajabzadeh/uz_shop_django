@@ -1,4 +1,4 @@
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Permission, User
 from rest_framework.test import APITestCase
 
 from domains.catalog.models import (
@@ -27,17 +27,17 @@ class VariantInventoryAPITests(APITestCase):
         self.client.force_authenticate(self.user)
         country = Country.objects.create(name="Inventory Country", code="IC", phone_code="+1")
         state = State.objects.create(name="Inventory State", country=country)
-        city = City.objects.create(name="Inventory City", state=state)
-        warehouse_status = WarehouseStatus.objects.create(name="available-for-tests")
+        self.city = City.objects.create(name="Inventory City", state=state)
+        self.warehouse_status = WarehouseStatus.objects.create(name="available-for-tests")
         self.warehouse = Warehouse.objects.create(
             code="WH-TEST",
             name="Default Test Warehouse",
-            city=city,
+            city=self.city,
             address="Test address",
             lat="0",
             lng="0",
             is_default=True,
-            status=warehouse_status,
+            status=self.warehouse_status,
         )
         self.in_stock, _ = SerializedStockStatus.objects.update_or_create(
             code="in_stock", defaults={"name": "in_stock"}
@@ -198,6 +198,23 @@ class VariantInventoryAPITests(APITestCase):
             {"SN-UPDATED", "SN-NEW"},
         )
 
+    def test_serialized_snapshot_can_swap_existing_serial_numbers(self):
+        self.create_variant(serialized=True)
+        variant = ProductVariants.objects.get()
+        first, second = list(variant.serialized_stocks.order_by("id"))
+        response = self.client.patch(
+            f"/api/inventory/variants/{variant.id}",
+            {"serial_items": [
+                {"id": first.id, "serial_number": second.serial_number, "on_sale": first.sellable},
+                {"id": second.id, "serial_number": first.serial_number, "on_sale": second.sellable},
+            ]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual((first.serial_number, second.serial_number), ("SN-002", "SN 001"))
+
     def test_protected_serial_rows_cannot_be_edited_or_deleted(self):
         self.create_variant(serialized=True)
         variant = ProductVariants.objects.get()
@@ -266,3 +283,121 @@ class VariantInventoryAPITests(APITestCase):
             {"normal", "serialized"},
         )
         self.assertEqual(response.data["data"]["default_warehouse"]["id"], self.warehouse.id)
+
+    def test_inventory_overview_filters_and_stock_only_update(self):
+        self.assertEqual(self.create_variant().status_code, 201)
+        variant = ProductVariants.objects.get()
+        stock = WarehouseStock.objects.get(variant=variant)
+        stock.reserved = 2
+        stock.min_stock = 7
+        stock.save(update_fields=["reserved", "min_stock"])
+
+        listed = self.client.get(
+            "/api/inventory/variants",
+            {"search": "Inventory Product", "stock_state": "low_stock", "has_reserved": "true"},
+        )
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual(listed.data["data"]["count"], 1)
+        row = listed.data["data"]["results"][0]
+        self.assertEqual((row["total"], row["reserved"], row["available"]), (10, 2, 6))
+        self.assertTrue(row["low_stock"])
+
+        rejected = self.client.patch(
+            f"/api/inventory/variants/{variant.id}",
+            {"price": "1.00", "inventory": {"quantity": 12, "sellable": 9, "min_stock": 4}},
+            format="json",
+        )
+        self.assertEqual(rejected.status_code, 400)
+        updated = self.client.patch(
+            f"/api/inventory/variants/{variant.id}",
+            {"inventory": {"quantity": 12, "sellable": 9, "min_stock": 4}},
+            format="json",
+        )
+        self.assertEqual(updated.status_code, 200)
+        stock.refresh_from_db()
+        self.assertEqual((stock.quantity, stock.sellable, stock.reserved, stock.min_stock), (12, 9, 2, 4))
+        self.assertEqual(updated.data["data"]["sku"], variant.sku)
+        self.assertEqual(updated.data["data"]["product"]["id"], self.product.id)
+
+    def test_inventory_custom_permissions_are_enforced(self):
+        self.assertEqual(self.create_variant().status_code, 201)
+        variant = ProductVariants.objects.get()
+        staff = User.objects.create_user(username="inventory-staff", is_staff=True)
+        self.client.force_authenticate(staff)
+        self.assertEqual(self.client.get("/api/inventory/variants").status_code, 403)
+        staff.user_permissions.add(Permission.objects.get(codename="view_inventory"))
+        staff = User.objects.get(pk=staff.pk)
+        self.client.force_authenticate(staff)
+        self.assertEqual(self.client.get("/api/inventory/variants").status_code, 200)
+        self.assertEqual(
+            self.client.patch(
+                f"/api/inventory/variants/{variant.id}",
+                {"inventory": {"quantity": 10, "sellable": 8, "min_stock": 0}},
+                format="json",
+            ).status_code,
+            403,
+        )
+        staff.user_permissions.add(Permission.objects.get(codename="adjust_stock"))
+        staff = User.objects.get(pk=staff.pk)
+        self.client.force_authenticate(staff)
+        self.assertEqual(
+            self.client.patch(
+                f"/api/inventory/variants/{variant.id}",
+                {"inventory": {"quantity": 10, "sellable": 8, "min_stock": 0}},
+                format="json",
+            ).status_code,
+            200,
+        )
+
+        adjust_only = User.objects.create_user(username="inventory-adjuster", is_staff=True)
+        adjust_only.user_permissions.add(Permission.objects.get(codename="adjust_stock"))
+        self.client.force_authenticate(User.objects.get(pk=adjust_only.pk))
+        self.assertEqual(
+            self.client.patch(
+                f"/api/inventory/variants/{variant.id}",
+                {"inventory": {"quantity": 10, "sellable": 8, "min_stock": 0}},
+                format="json",
+            ).status_code,
+            403,
+        )
+
+    def test_warehouse_crud_default_rules_and_protected_stock(self):
+        payload = {
+            "name": "Second Warehouse",
+            "city": self.city.id,
+            "address": "Second address",
+            "lat": "35.700000",
+            "lng": "51.400000",
+            "phone_numbers": ["02100000000"],
+            "postal_code": "12345",
+            "status": self.warehouse_status.id,
+        }
+        created = self.client.post("/api/inventory/warehouses", payload, format="json")
+        self.assertEqual(created.status_code, 201)
+        second_id = created.data["data"]["id"]
+        self.assertFalse(created.data["data"]["is_default"])
+        self.assertTrue(created.data["data"]["code"].startswith("WH-"))
+        self.assertEqual(self.client.delete(f"/api/inventory/warehouses/{self.warehouse.id}").status_code, 400)
+
+        switched = self.client.patch(
+            f"/api/inventory/warehouses/{second_id}", {"is_default": True}, format="json"
+        )
+        self.assertEqual(switched.status_code, 200)
+        self.warehouse.refresh_from_db()
+        self.assertFalse(self.warehouse.is_default)
+
+        self.assertEqual(self.create_variant().status_code, 201)
+        blocked_switch = self.client.patch(
+            f"/api/inventory/warehouses/{self.warehouse.id}",
+            {"is_default": True},
+            format="json",
+        )
+        self.assertEqual(blocked_switch.status_code, 400)
+        protected = self.client.delete(f"/api/inventory/warehouses/{second_id}")
+        self.assertEqual(protected.status_code, 400)
+        self.assertIn("default", str(protected.data).lower())
+
+    def test_only_default_warehouse_cannot_be_deleted(self):
+        response = self.client.delete(f"/api/inventory/warehouses/{self.warehouse.id}")
+        self.assertEqual(response.status_code, 400)
+        self.assertTrue(Warehouse.objects.filter(pk=self.warehouse.id, is_default=True).exists())

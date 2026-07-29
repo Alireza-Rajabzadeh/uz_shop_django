@@ -3,6 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.pagination import PageNumberPagination
+from core.permissions import AdminModelPermissions
 from core.responses import api_response
 from .permissions import CatalogModelPermissions, CustomActionPermission, MethodPermission
 from .serializers import (
@@ -16,6 +17,8 @@ from .serializers import (
     ProductCategorySelectionSerializer, ProductCompleteCreateSerializer,
     ProductBasicUpdateSerializer, ProductVariantWriteSerializer,
     ProductListQuerySerializer, ProductDetailReadSerializer,
+    ProductFileReadSerializer, ProductFileUpdateSerializer,
+    ProductFileReorderSerializer, ProductFileWriteSerializer,
     CategoryVariantAttributeAssignmentWriteSerializer,
     VariantAttributeSerializer, VariantAttributeWriteSerializer,
     VariantOptionSerializer, VariantOptionWriteSerializer,
@@ -25,19 +28,23 @@ from domains.catalog.models import (
     CategoryDetail as CategoryDetailModel,
     Product,
     ProductDetails,
+    ProductFile,
     ProductVariants,
     VariantAttribute,
     VariantOption,
 )
 from domains.catalog.services import (
-    CategoryService, DetailService, ProductService, VariantAttributeService,
+    CategoryService, DetailService, ProductFileService, ProductService,
+    VariantAttributeService,
 )
 from domains.inventory.services import InventoryService
+from domains.users.auth import AdminJWTAuthentication
 
 
 category_service = CategoryService()
 detail_service = DetailService()
 product_service = ProductService()
+product_file_service = ProductFileService()
 variant_attribute_service = VariantAttributeService()
 inventory_service = InventoryService()
 
@@ -631,6 +638,101 @@ class ProductDetail(APIView):
         product = self.get_object(id)
         product_service.delete_product(product)
         return api_response(True, _("Product deleted."), None)
+
+
+class AdminProductFileAPIView(APIView):
+    model = ProductFile
+    authentication_classes = [AdminJWTAuthentication]
+    permission_classes = [AdminModelPermissions]
+
+    @staticmethod
+    def get_product(product_id):
+        product = Product.objects.filter(pk=product_id).first()
+        if product is None:
+            raise NotFound(_("Product not found."))
+        return product
+
+
+class ProductFileListCreate(AdminProductFileAPIView):
+    def get(self, request, product_id):
+        product = self.get_product(product_id)
+        relations = product_file_service.list_for_product(product)
+        return api_response(
+            True, "", ProductFileReadSerializer(relations, many=True).data
+        )
+
+    def post(self, request, product_id):
+        product = self.get_product(product_id)
+        serializer = ProductFileWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            relation = product_file_service.attach(
+                product, **serializer.validated_data
+            )
+        except ProductFileService.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
+        return api_response(
+            True,
+            _("File attached to product."),
+            ProductFileReadSerializer(relation).data,
+            status_code=201,
+        )
+
+
+class ProductFileDetail(AdminProductFileAPIView):
+    def get_object(self, product_id, relation_id):
+        product = self.get_product(product_id)
+        relation = product_file_service.get_for_product(product, relation_id)
+        if relation is None:
+            raise NotFound(_("Product file not found."))
+        return relation
+
+    def get(self, request, product_id, relation_id):
+        return api_response(
+            True,
+            "",
+            ProductFileReadSerializer(
+                self.get_object(product_id, relation_id)
+            ).data,
+        )
+
+    def patch(self, request, product_id, relation_id):
+        serializer = ProductFileUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            relation = product_file_service.update(
+                self.get_object(product_id, relation_id),
+                **serializer.validated_data,
+            )
+        except ProductFileService.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
+        return api_response(
+            True,
+            _("Product file updated."),
+            ProductFileReadSerializer(relation).data,
+        )
+
+    def delete(self, request, product_id, relation_id):
+        product_file_service.delete(self.get_object(product_id, relation_id))
+        return api_response(True, _("File detached from product."), None)
+
+
+class ProductFileReorder(AdminProductFileAPIView):
+    def patch(self, request, product_id):
+        product = self.get_product(product_id)
+        serializer = ProductFileReorderSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            relations = product_file_service.reorder(
+                product, serializer.validated_data["files"]
+            )
+        except ProductFileService.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
+        return api_response(
+            True,
+            _("Product files reordered."),
+            ProductFileReadSerializer(relations, many=True).data,
+        )
 
 
 # ─────────────────────── Product Details ───────────────────────

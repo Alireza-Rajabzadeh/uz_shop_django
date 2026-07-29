@@ -3,3 +3,4 @@ from .detail_service import DetailService
 from .product_service import ProductService
 from .variant_service import VariantService
 from .variant_attribute_service import VariantAttributeService
+from .product_file_service import ProductFileService

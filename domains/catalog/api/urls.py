@@ -6,6 +6,7 @@ from .views import (
     ProductListCreate, ProductDetail,
     ProductFormOptions, ProductFilterOptions, ProductDetailDefinitions, ProductCompleteCreate,
     ProductCompleteUpdate,
+    ProductFileDetail, ProductFileListCreate, ProductFileReorder,
     ProductDetailListCreate,
     ProductVariantListCreate, ProductVariantFormOptions, VariantDetail, VariantList,
     CategoryAssignVariantAttributes, VariantAttributeListCreate,
@@ -44,6 +45,15 @@ urlpatterns = [
     path("products/<int:product_id>/details", ProductDetailListCreate.as_view()),
     path("products/<int:product_id>/variants", ProductVariantListCreate.as_view()),
     path("products/<int:product_id>/variant-form-options", ProductVariantFormOptions.as_view()),
+    path("products/<int:product_id>/files", ProductFileListCreate.as_view()),
+    path(
+        "products/<int:product_id>/files/reorder",
+        ProductFileReorder.as_view(),
+    ),
+    path(
+        "products/<int:product_id>/files/<int:relation_id>",
+        ProductFileDetail.as_view(),
+    ),
 
     # Variants (standalone)
     path("variants", VariantList.as_view()),

@@ -44,6 +44,7 @@ Run these commands from `back/` unless stated otherwise.
 ### Domains
 
 - `catalog/` - product catalog concerns
+- `files/` - provider-neutral stored-file lifecycle and admin APIs
 - `customer/` - customer accounts and customer JWT authentication
 - `inventory/` - stock and inventory concerns
 - `location/` - location data and related logic
@@ -106,6 +107,9 @@ Root routes currently include:
 - `/api/users/`
 - `/api/customer/`
 - `/api/catalog/`
+- `/api/inventory/`
+- `/api/location/`
+- `/api/files/`
 
 Use `core.responses.api_response` so API responses retain this envelope:
 
@@ -221,6 +225,24 @@ Product creation validates that:
 
 Complete product updates use the same aggregate payload, replace category-derived detail values atomically, and preserve product status. Generic `PATCH /api/catalog/products/{id}` remains a partial basic-field update and must not delete omitted details.
 
+### Files And Product Media
+
+The Files domain owns storage lifecycle; catalog owns how files are attached to products.
+
+- File list/upload: `GET|POST /api/files/`
+- Status options: `GET /api/files/statuses`
+- Orphan detection: `GET /api/files/orphans`
+- File detail/metadata/delete: `GET|PATCH|DELETE /api/files/{id}`
+- Verify stored content: `POST /api/files/{id}/verify`
+- Product attachments: `GET|POST /api/catalog/products/{id}/files`
+- Product attachment detail: `GET|PATCH|DELETE /api/catalog/products/{id}/files/{relation_id}`
+
+`File.object_key` is provider-neutral and never contains product or category IDs. Database rows store no URLs, bucket names, endpoints, or credentials. Generate URLs at response time through `FileService.url()` and the configured Django storage alias.
+
+Files move through `pending`, `available`, `failed`, and `deleted`. Only available files may be attached to products. A `ProductFile` row is active while it exists; detaching physically deletes only that relationship. Deleting a File detaches all product relationships, removes the stored object, and retains the File row with deleted status and timestamp.
+
+A file is orphaned when it is available and has no `ProductFile` rows. Files can be shared by multiple products. Product attachment ordering uses `position` then ID, and each product has at most one primary attachment.
+
 ### Product Variant Workflow
 
 - Global `VariantAttribute` and `VariantOption` records define selectable axes and values independently from descriptive `CategoryDetail` records.
@@ -242,6 +264,27 @@ Complete product updates use the same aggregate payload, replace category-derive
 - Full inventory edit state is read from `GET /api/inventory/variants/{id}`; product-variant lists intentionally omit serial rows.
 - Deleting a variant cascades to its owned `ProductVariantSelection` rows.
 - Variants with nonzero normal stock or any serialized rows cannot be deleted.
+
+### Inventory Management
+
+- Inventory overview: `GET /api/inventory/variants`
+- Stock detail/update: `GET|PATCH /api/inventory/variants/{id}`
+- Form options: `GET /api/inventory/strategies` and `GET /api/inventory/serialized-statuses`
+- Warehouse CRUD: `GET|POST /api/inventory/warehouses` and `GET|PATCH|DELETE /api/inventory/warehouses/{id}`
+- Warehouse statuses: `GET /api/inventory/warehouse-statuses`
+- Overview/detail reads require `inventory.view_inventory`; stock updates additionally require `inventory.adjust_stock`.
+- The application supports one default warehouse. The default cannot be deleted, and it cannot be switched while it contains normal or serialized stock.
+- Normal stock updates preserve reservations and enforce `0 <= reserved <= sellable <= quantity`. Serialized updates are full snapshots and support collision-safe swaps of editable serial numbers.
+
+### Location Management
+
+- Country CRUD: `GET|POST /api/location/countries` and `GET|PATCH|DELETE /api/location/countries/{id}`
+- State CRUD: `GET|POST /api/location/states` and `GET|PATCH|DELETE /api/location/states/{id}`
+- City CRUD: `GET|POST /api/location/cities` and `GET|PATCH|DELETE /api/location/cities/{id}`
+- Form options: `GET /api/location/options/countries`, `/states?country_id=...`, and `/cities?state_id=...`
+- CRUD uses native `location.*` model permissions. Option endpoints accept the relevant customer-address, warehouse, or Location form permissions.
+- Location names and country codes are normalized by services. Deletion is physical and blocked while dependent hierarchy rows, customer addresses, or warehouses exist.
+- The legacy customer location-option URLs remain aliases for customer address forms.
 
 Descriptions currently store Markdown/plain text, not trusted HTML. Do not render them as HTML without adding server-side sanitization.
 

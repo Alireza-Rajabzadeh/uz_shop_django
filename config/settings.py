@@ -13,6 +13,9 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import os
 from datetime import timedelta
 from pathlib import Path
+from urllib.parse import urlsplit
+
+from django.core.exceptions import ImproperlyConfigured
 from django.utils.translation import gettext_lazy as _
 from dotenv import load_dotenv
 
@@ -26,6 +29,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 load_dotenv(BASE_DIR / ".env")
+
+
+def env_bool(name, default):
+    value = os.getenv(name)
+    if value is None:
+        return default
+    if value.lower() in {"true", "1", "yes"}:
+        return True
+    if value.lower() in {"false", "0", "no"}:
+        return False
+    raise ImproperlyConfigured(f"{name} must be a boolean value")
 
 
 SECRET_KEY = "django-insecure-!=d12q8564!7u^hd1%lbg6x0+xa!)kup$r(z3@f!w9&0@qlrn4"
@@ -47,6 +61,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    "domains.files.apps.FilesConfig",
     "domains.catalog.apps.CatalogConfig",
     "domains.inventory.apps.InventoryConfig",
     "domains.location.apps.LocationConfig",
@@ -140,6 +155,57 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+MEDIA_URL = "media/"
+MEDIA_ROOT = BASE_DIR / "media"
+FILE_STORAGE_ALIASES = [
+    alias.strip()
+    for alias in os.getenv("FILE_STORAGE_ALIASES", "default").split(",")
+    if alias.strip()
+]
+FILE_MAX_UPLOAD_SIZE = 20 * 1024 * 1024
+
+STORAGE_BACKEND = os.getenv(
+    "STORAGE_BACKEND", "django.core.files.storage.FileSystemStorage"
+)
+STORAGES = {
+    "default": {"BACKEND": STORAGE_BACKEND},
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
+    },
+}
+
+if STORAGE_BACKEND == "storages.backends.s3.S3Storage":
+    storage_public_url = os.getenv("STORAGE_PUBLIC_URL", "")
+    parsed_public_url = urlsplit(storage_public_url)
+    if parsed_public_url.scheme not in {"http", "https"} or not parsed_public_url.netloc:
+        raise ImproperlyConfigured(
+            "STORAGE_PUBLIC_URL must be an absolute HTTP or HTTPS URL"
+        )
+
+    storage_options = {
+        "access_key": os.getenv("STORAGE_ACCESS_KEY_ID"),
+        "secret_key": os.getenv("STORAGE_SECRET_ACCESS_KEY"),
+        "bucket_name": os.getenv("STORAGE_BUCKET_NAME"),
+        "endpoint_url": os.getenv("STORAGE_ENDPOINT_URL"),
+        "region_name": os.getenv("STORAGE_REGION_NAME"),
+        "addressing_style": os.getenv("STORAGE_ADDRESSING_STYLE"),
+        "signature_version": "s3v4",
+        "default_acl": None,
+        "querystring_auth": env_bool("STORAGE_QUERYSTRING_AUTH", False),
+        "file_overwrite": env_bool("STORAGE_FILE_OVERWRITE", False),
+        "custom_domain": (
+            f"{parsed_public_url.netloc}{parsed_public_url.path.rstrip('/')}"
+        ),
+        "url_protocol": f"{parsed_public_url.scheme}:",
+    }
+    if not storage_options["bucket_name"]:
+        raise ImproperlyConfigured("STORAGE_BUCKET_NAME is required for S3 storage")
+
+    STORAGES["default"]["OPTIONS"] = {
+        key: value for key, value in storage_options.items() if value is not None
+    }
+    MEDIA_URL = f"{storage_public_url.rstrip('/')}/"
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 

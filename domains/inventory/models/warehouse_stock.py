@@ -4,6 +4,10 @@ from django.db import models
 class WarehouseStock(models.Model):
     class Meta:
         db_table = "inventory_warehouse_stock"
+        permissions = [
+            ("view_inventory", "Can view inventory"),
+            ("adjust_stock", "Can adjust stock"),
+        ]
         unique_together = ("variant", "warehouse")
         constraints = [
             models.CheckConstraint(

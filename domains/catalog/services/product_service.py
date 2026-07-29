@@ -12,6 +12,7 @@ from domains.catalog.models import (
     CategoryDetailRelation,
     Product,
     ProductDetails,
+    ProductFile,
     ProductStatus,
     ProductVariants,
     ProductVariantSelection,
@@ -52,6 +53,13 @@ class ProductService(BaseService):
                     queryset=ProductDetails.objects.select_related("detail").order_by("detail__name", "id"),
                 ),
                 Prefetch("variants", queryset=variants),
+                Prefetch(
+                    "product_files",
+                    queryset=ProductFile.objects.select_related(
+                        "file", "file__status"
+                    ).order_by("position", "id"),
+                    to_attr="ordered_files",
+                ),
             ),
             id=id,
         )
@@ -110,7 +118,18 @@ class ProductService(BaseService):
         price = filters.pop("price", None)
         price_min = filters.pop("price_min", None)
         price_max = filters.pop("price_max", None)
-        queryset = self.model.objects.filter(**filters).select_related("category", "status")
+        list_media = ProductFile.objects.filter(
+            file__file_type="image",
+            file__status__name="available",
+            file__deleted_at__isnull=True,
+        ).select_related("file", "file__status").order_by("-is_primary", "position", "id")
+        queryset = (
+            self.model.objects.filter(**filters)
+            .select_related("category", "status")
+            .prefetch_related(
+                Prefetch("product_files", queryset=list_media, to_attr="list_media")
+            )
+        )
         if name:
             queryset = queryset.filter(name__icontains=name)
         if price_operator:

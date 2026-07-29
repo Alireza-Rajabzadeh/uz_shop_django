@@ -1,4 +1,7 @@
+import uuid
+
 from django.db import IntegrityError, transaction
+from django.db.models.deletion import ProtectedError
 from django.db.models import Case, Count, F, IntegerField, OuterRef, Q, Subquery, Sum, When
 from django.db.models.functions import Coalesce
 from django.utils.translation import gettext as _
@@ -8,6 +11,7 @@ from domains.inventory.models import (
     SerializedStock,
     SerializedStockStatus,
     Warehouse,
+    WarehouseStatus,
     WarehouseStock,
 )
 
@@ -22,6 +26,202 @@ class InventoryService:
         return InventoryStrategy.objects.filter(
             code__in=("normal", "serialized")
         ).order_by("id")
+
+    def search_variants(
+        self,
+        *,
+        search=None,
+        product=None,
+        category=None,
+        strategy_code=None,
+        stock_state=None,
+        has_reserved=None,
+        ordering=None,
+    ):
+        from domains.catalog.models import ProductVariants
+
+        queryset = ProductVariants.objects.select_related(
+            "product__category", "inventory_strategy"
+        ).prefetch_related("selections__attribute", "selections__option")
+        queryset = self.annotate_variant_summaries(queryset)
+        reserved_normal = WarehouseStock.objects.filter(
+            variant_id=OuterRef("pk")
+        ).values("variant_id")
+        reserved_serialized = SerializedStock.objects.filter(
+            variant_id=OuterRef("pk"), reserved=True
+        ).values("variant_id")
+        default_stock = WarehouseStock.objects.filter(
+            variant_id=OuterRef("pk"), warehouse__is_default=True
+        )
+        queryset = queryset.annotate(
+            normal_reserved=Coalesce(
+                Subquery(reserved_normal.annotate(value=Sum("reserved")).values("value")[:1]),
+                0,
+                output_field=IntegerField(),
+            ),
+            serialized_reserved=Coalesce(
+                Subquery(reserved_serialized.annotate(value=Count("id")).values("value")[:1]),
+                0,
+                output_field=IntegerField(),
+            ),
+            min_stock=Coalesce(
+                Subquery(default_stock.values("min_stock")[:1]),
+                0,
+                output_field=IntegerField(),
+            ),
+        ).annotate(
+            reserved_item_count=Case(
+                When(inventory_strategy__code="normal", then=F("normal_reserved")),
+                default=F("serialized_reserved"),
+                output_field=IntegerField(),
+            )
+        )
+        if search:
+            queryset = queryset.filter(Q(sku__icontains=search) | Q(product__name__icontains=search))
+        if product is not None:
+            queryset = queryset.filter(product_id=product)
+        if category is not None:
+            queryset = queryset.filter(product__category_id=category)
+        if strategy_code:
+            queryset = queryset.filter(inventory_strategy__code=strategy_code)
+        if has_reserved is not None:
+            queryset = (
+                queryset.filter(reserved_item_count__gt=0)
+                if has_reserved
+                else queryset.filter(reserved_item_count=0)
+            )
+        if stock_state == "in_stock":
+            queryset = queryset.filter(available_item_count__gt=0)
+        elif stock_state == "out_of_stock":
+            queryset = queryset.filter(available_item_count=0)
+        elif stock_state == "low_stock":
+            queryset = queryset.filter(available_item_count__gt=0, min_stock__gt=0)
+            queryset = queryset.filter(available_item_count__lte=F("min_stock"))
+        ordering_map = {
+            "id": "id",
+            "sku": "sku",
+            "product_name": "product__name",
+            "category_name": "product__category__name",
+            "strategy": "inventory_strategy__code",
+            "total": "total_item_count",
+            "sellable": "sellable_item_count",
+            "reserved": "reserved_item_count",
+            "available": "available_item_count",
+            "min_stock": "min_stock",
+        }
+        requested = (ordering or "sku").strip()
+        descending = requested.startswith("-")
+        field = ordering_map.get(requested.lstrip("-"), "sku")
+        return queryset.order_by(f"-{field}" if descending else field, "id")
+
+    def serialize_variant_overview(self, variant, default_warehouse):
+        return {
+            "variant": variant.id,
+            "sku": variant.sku,
+            "product_id": variant.product_id,
+            "product_name": variant.product.name,
+            "category_id": variant.product.category_id,
+            "category_name": variant.product.category.name,
+            "strategy": {
+                "id": variant.inventory_strategy_id,
+                "code": variant.inventory_strategy.code,
+                "name": variant.inventory_strategy.name,
+            },
+            "total": variant.total_item_count,
+            "sellable": variant.sellable_item_count,
+            "reserved": variant.reserved_item_count,
+            "available": variant.available_item_count,
+            "min_stock": variant.min_stock,
+            "low_stock": bool(
+                variant.min_stock > 0
+                and 0 < variant.available_item_count <= variant.min_stock
+            ),
+            "default_warehouse": self.serialize_warehouse(default_warehouse),
+        }
+
+    def search_warehouses(self, *, search=None, status=None, city=None, ordering=None):
+        queryset = Warehouse.objects.select_related("status", "city__state__country")
+        if search:
+            queryset = queryset.filter(Q(name__icontains=search) | Q(code__icontains=search))
+        if status is not None:
+            queryset = queryset.filter(status_id=status)
+        if city is not None:
+            queryset = queryset.filter(city_id=city)
+        ordering_map = {
+            "id": "id",
+            "code": "code",
+            "name": "name",
+            "city_name": "city__name",
+            "status_name": "status__name",
+            "is_default": "is_default",
+        }
+        requested = (ordering or "-is_default").strip()
+        descending = requested.startswith("-")
+        field = ordering_map.get(requested.lstrip("-"), "is_default")
+        return queryset.order_by(f"-{field}" if descending else field, "id")
+
+    def get_warehouse(self, warehouse_id, *, lock=False):
+        queryset = Warehouse.objects.select_related("status", "city__state__country")
+        if lock:
+            queryset = queryset.select_for_update()
+        return queryset.filter(pk=warehouse_id).first()
+
+    @transaction.atomic
+    def create_warehouse(self, **values):
+        # A status row provides a stable lock even while the warehouse table is empty.
+        list(WarehouseStatus.objects.select_for_update().order_by().values_list("id", flat=True))
+        list(Warehouse.objects.select_for_update().order_by().values_list("id", flat=True))
+        values["is_default"] = not Warehouse.objects.exists() or values.get("is_default", False)
+        if values["is_default"]:
+            Warehouse.objects.filter(is_default=True).update(is_default=False)
+        warehouse = Warehouse.objects.create(code=f"NEW-{uuid.uuid4().hex[:12]}", **values)
+        warehouse.code = f"WH-{warehouse.id:05d}"
+        try:
+            warehouse.save(update_fields=["code"])
+        except IntegrityError as exc:
+            raise self.ValidationError({"code": [_('Could not generate a unique warehouse code.')]}) from exc
+        return self.get_warehouse(warehouse.id)
+
+    @transaction.atomic
+    def update_warehouse(self, warehouse, **values):
+        list(Warehouse.objects.select_for_update().order_by().values_list("id", flat=True))
+        warehouse = self.get_warehouse(warehouse.id, lock=True)
+        make_default = values.get("is_default") is True
+        if values.get("is_default") is False and warehouse.is_default:
+            if Warehouse.objects.exclude(pk=warehouse.pk).exists():
+                raise self.ValidationError({
+                    "is_default": [_('Switch another warehouse to default instead.')]
+                })
+            values["is_default"] = True
+        if make_default:
+            current_default = Warehouse.objects.filter(is_default=True).exclude(pk=warehouse.pk).first()
+            if current_default and (
+                current_default.stocks.filter(quantity__gt=0).exists()
+                or current_default.serialized_stocks.exists()
+            ):
+                raise self.ValidationError({
+                    "is_default": [_('The default warehouse cannot be changed while it contains stock.')]
+                })
+            Warehouse.objects.exclude(pk=warehouse.pk).filter(is_default=True).update(is_default=False)
+        for field, value in values.items():
+            setattr(warehouse, field, value)
+        warehouse.save()
+        return self.get_warehouse(warehouse.id)
+
+    @transaction.atomic
+    def delete_warehouse(self, warehouse):
+        list(Warehouse.objects.select_for_update().order_by().values_list("id", flat=True))
+        warehouse = self.get_warehouse(warehouse.id, lock=True)
+        if warehouse.is_default:
+            raise self.ValidationError({
+                "is_default": [_('The default warehouse cannot be deleted. Switch another warehouse to default first.')]
+            })
+        try:
+            warehouse.delete()
+        except ProtectedError as exc:
+            raise self.ValidationError({
+                "warehouse": [_('This warehouse cannot be deleted while it contains stock.')]
+            }) from exc
 
     def annotate_variant_summaries(self, queryset):
         normal = WarehouseStock.objects.filter(variant_id=OuterRef("pk")).values("variant_id")
@@ -151,6 +351,7 @@ class InventoryService:
         reserved = stock.reserved if stock else 0
         quantity = inventory["quantity"]
         sellable = inventory["sellable"]
+        min_stock = inventory.get("min_stock", stock.min_stock if stock else 0)
         if reserved > sellable or sellable > quantity:
             raise self.ValidationError({
                 "inventory": [_('Inventory must satisfy 0 <= reserved <= sellable <= quantity.')]
@@ -158,7 +359,12 @@ class InventoryService:
         WarehouseStock.objects.update_or_create(
             variant=variant,
             warehouse=warehouse,
-            defaults={"quantity": quantity, "sellable": sellable, "reserved": reserved},
+            defaults={
+                "quantity": quantity,
+                "sellable": sellable,
+                "reserved": reserved,
+                "min_stock": min_stock,
+            },
         )
 
     def _apply_serialized_snapshot(self, variant, warehouse, serial_items):
@@ -206,6 +412,26 @@ class InventoryService:
             with transaction.atomic():
                 for row in omitted:
                     row.delete()
+                changed_existing = []
+                for item, serial_number in zip(serial_items, normalized_serials):
+                    row_id = item.get("id")
+                    if row_id is None:
+                        continue
+                    row = existing[row_id]
+                    changed = row.serial_number != serial_number or row.sellable != item["on_sale"]
+                    if changed and not self._is_editable(row):
+                        raise self.ValidationError({
+                            "serial_items": [_('Sold, reserved, or historical serialized rows cannot be edited.')]
+                        })
+                    if changed:
+                        changed_existing.append((row, serial_number, item["on_sale"]))
+
+                # Release current unique serial values before applying a valid swapped snapshot.
+                for changed in changed_existing:
+                    row = changed[0]
+                    row.serial_number = f"__inventory_tmp_{row.id}_{uuid.uuid4().hex}"
+                    row.save(update_fields=["serial_number"])
+
                 for item, serial_number in zip(serial_items, normalized_serials):
                     row_id = item.get("id")
                     if row_id is None:
@@ -220,10 +446,6 @@ class InventoryService:
                         continue
                     row = existing[row_id]
                     changed = row.serial_number != serial_number or row.sellable != item["on_sale"]
-                    if changed and not self._is_editable(row):
-                        raise self.ValidationError({
-                            "serial_items": [_('Sold, reserved, or historical serialized rows cannot be edited.')]
-                        })
                     if changed:
                         row.serial_number = serial_number
                         row.sellable = item["on_sale"]
@@ -266,11 +488,29 @@ class InventoryService:
             "code": variant.inventory_strategy.code,
             "name": variant.inventory_strategy.name,
         }
+        context = {
+            "sku": variant.sku,
+            "product": {"id": variant.product_id, "name": variant.product.name},
+            "category": {
+                "id": variant.product.category_id,
+                "name": variant.product.category.name,
+            },
+            "selections": [
+                {
+                    "attribute_id": selection.attribute_id,
+                    "attribute_name": selection.attribute.name,
+                    "option_id": selection.option_id,
+                    "option_name": selection.option.name,
+                }
+                for selection in variant.selections.all()
+            ],
+        }
         if variant.inventory_strategy.code == "normal":
             warehouse = self.get_default_warehouse()
             stock = variant.warehouse_stocks.filter(warehouse=warehouse).first()
             return {
                 "variant_id": variant.id,
+                **context,
                 "strategy": strategy,
                 **summary,
                 "inventory": {
@@ -279,12 +519,14 @@ class InventoryService:
                     "sellable": stock.sellable if stock else 0,
                     "reserved": stock.reserved if stock else 0,
                     "available": stock.available if stock else 0,
+                    "min_stock": stock.min_stock if stock else 0,
                 },
                 "serial_items": None,
             }
         rows = variant.serialized_stocks.select_related("status", "warehouse").order_by("id")
         return {
             "variant_id": variant.id,
+            **context,
             "strategy": strategy,
             **summary,
             "inventory": None,
@@ -301,6 +543,23 @@ class InventoryService:
                 for row in rows
             ],
         }
+
+    @transaction.atomic
+    def adjust_variant_stock(self, variant, *, inventory=None, serial_items=None):
+        variant = type(variant).objects.select_for_update().select_related(
+            "inventory_strategy", "product__category"
+        ).prefetch_related("selections__attribute", "selections__option").get(pk=variant.pk)
+        strategy_code = variant.inventory_strategy.code
+        self.apply_variant_inventory(
+            variant,
+            strategy_code=strategy_code,
+            inventory=inventory,
+            serial_items=serial_items,
+            inventory_submitted=True,
+        )
+        return type(variant).objects.select_related(
+            "inventory_strategy", "product__category"
+        ).prefetch_related("selections__attribute", "selections__option").get(pk=variant.pk)
 
     @staticmethod
     def serialize_warehouse(warehouse):

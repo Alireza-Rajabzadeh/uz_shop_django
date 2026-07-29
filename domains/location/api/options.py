@@ -1,9 +1,8 @@
 from rest_framework import serializers
+from rest_framework.permissions import BasePermission
 from rest_framework.views import APIView
 
-from core.permissions import AdminModelPermissions
 from core.responses import api_response
-from domains.customer.models import CustomerAddress
 from domains.location.models import City, Country, State
 from domains.users.auth import AdminJWTAuthentication
 
@@ -37,36 +36,51 @@ class StateFilterSerializer(serializers.Serializer):
     state_id = serializers.IntegerField(min_value=1)
 
 
+class LocationOptionPermissions(BasePermission):
+    permissions = (
+        "customer.view_customeraddress",
+        "inventory.view_warehouse",
+        "inventory.add_warehouse",
+        "inventory.change_warehouse",
+        "location.view_country",
+        "location.view_state",
+        "location.view_city",
+        "location.add_state",
+        "location.change_state",
+        "location.add_city",
+        "location.change_city",
+    )
+
+    def has_permission(self, request, view):
+        return any(request.user.has_perm(permission) for permission in self.permissions)
+
+
 class AdminLocationOptionView(APIView):
     authentication_classes = [AdminJWTAuthentication]
-    permission_classes = [AdminModelPermissions]
+    permission_classes = [LocationOptionPermissions]
 
 
 class CountryOptions(AdminLocationOptionView):
-    model = CustomerAddress
-
     def get(self, request):
         countries = Country.objects.order_by("fa_title", "name")
-        return api_response(True, "", CountryOptionSerializer(countries, many=True).data)
+        return api_response(data=CountryOptionSerializer(countries, many=True).data)
 
 
 class StateOptions(AdminLocationOptionView):
-    model = CustomerAddress
-
     def get(self, request):
         query = CountryFilterSerializer(data=request.query_params)
         query.is_valid(raise_exception=True)
-        country_id = query.validated_data["country_id"]
-        states = State.objects.filter(country_id=country_id).order_by("fa_title", "name")
-        return api_response(True, "", StateOptionSerializer(states, many=True).data)
+        states = State.objects.filter(
+            country_id=query.validated_data["country_id"]
+        ).order_by("fa_title", "name")
+        return api_response(data=StateOptionSerializer(states, many=True).data)
 
 
 class CityOptions(AdminLocationOptionView):
-    model = CustomerAddress
-
     def get(self, request):
         query = StateFilterSerializer(data=request.query_params)
         query.is_valid(raise_exception=True)
-        state_id = query.validated_data["state_id"]
-        cities = City.objects.filter(state_id=state_id).order_by("fa_title", "name")
-        return api_response(True, "", CityOptionSerializer(cities, many=True).data)
+        cities = City.objects.filter(
+            state_id=query.validated_data["state_id"]
+        ).order_by("fa_title", "name")
+        return api_response(data=CityOptionSerializer(cities, many=True).data)

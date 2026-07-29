@@ -1,10 +1,18 @@
 from django.db import models
+from django.db.models import F
+from django.db.models.functions import Lower, Trim
 
 
 class City(models.Model):
     class Meta:
         db_table = "location_city"
         verbose_name_plural = "cities"
+        constraints = [
+            models.UniqueConstraint(
+                F("state"), Lower(Trim("name")),
+                name="location_city_state_normalized_name_unique",
+            ),
+        ]
 
     state = models.ForeignKey(
         "State",

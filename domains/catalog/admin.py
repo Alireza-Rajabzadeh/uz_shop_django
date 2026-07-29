@@ -4,6 +4,7 @@ from .models.category import Category, CategoryStatus
 from .models.category_detail import CategoryDetail
 from .models.category_detail_relation import CategoryDetailRelation
 from .models.product import Product, ProductStatus
+from .models.product_file import ProductFile
 from .models.product_details import ProductDetails
 from .models.product_variants import ProductVariants
 from .models.product_variant_selection import ProductVariantSelection
@@ -83,6 +84,26 @@ class ProductDetailAdmin(ModelAdmin):
     list_display = ["product", "detail", "value"]
     list_filter = ["product"]
     autocomplete_fields = ["product", "detail"]
+
+
+@admin.register(ProductFile)
+class ProductFileAdmin(ModelAdmin):
+    list_display = ["product", "file", "role", "position", "is_primary"]
+    list_filter = ["role", "is_primary"]
+    search_fields = ["product__name", "file__original_name"]
+    readonly_fields = [
+        "product", "file", "role", "position", "is_primary", "alt_text",
+        "created_at", "updated_at",
+    ]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 class ProductVariantSelectionInline(admin.TabularInline):
