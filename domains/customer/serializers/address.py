@@ -36,3 +36,14 @@ class CustomerAddressSerializer(serializers.ModelSerializer):
             "created_at", "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
+
+    def validate(self, attrs):
+        country = attrs.get("country", getattr(self.instance, "country", None))
+        state = attrs.get("state", getattr(self.instance, "state", None))
+        city = attrs.get("city", getattr(self.instance, "city", None))
+
+        if country and state and state.country_id != country.id:
+            raise serializers.ValidationError({"state": "State does not belong to country."})
+        if state and city and city.state_id != state.id:
+            raise serializers.ValidationError({"city": "City does not belong to state."})
+        return attrs

@@ -291,6 +291,8 @@ It also creates `Test Detail 001` through `Test Detail 100` across text, number,
 
 The product seeder creates active/inactive/pending product statuses and idempotently creates `Test Product 001` through `Test Product 100`. A fixed random seed distributes products across the temporary categories, and statuses are distributed evenly. These products are temporary admin-panel fixtures and do not include variants or stock.
 
+The customer seeder idempotently creates 100 temporary customers named `Test Customer 001` through `Test Customer 100`. Fixture emails use `test.customer.NNN@uzshop.local`, phones use the reserved development range `09990000001` through `09990000100`, and statuses are distributed evenly across active, inactive, pending, and banned. Profiles include varied birth dates, genders, verification timestamps, notification preferences, and one to three location-valid addresses with exactly one default. The shared development-only customer password is `Customer123!`. These records are for local testing only; the seeder does not modify customers outside the fixture phone namespace.
+
 ## TODO / Warnings
 
 These are known repository issues. Do not silently work around or fix them during unrelated tasks:

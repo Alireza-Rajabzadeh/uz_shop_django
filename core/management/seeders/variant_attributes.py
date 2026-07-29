@@ -1,3 +1,5 @@
+from django.db.models.functions import Lower, Trim
+
 from core.management.seeders.base import BaseSeeder
 from domains.catalog.models import (
     Category,
@@ -17,13 +19,26 @@ class VariantAttributeSeeder(BaseSeeder):
     def run(self):
         attributes = {}
         for name, options in self.DATA.items():
-            attribute, _ = VariantAttribute.objects.update_or_create(name=name)
+            attribute = VariantAttribute.objects.annotate(
+                normalized_name=Lower(Trim("name"))
+            ).filter(normalized_name=name.strip().lower()).first()
+            if attribute is None:
+                attribute = VariantAttribute.objects.create(name=name)
+            elif attribute.name != name:
+                attribute.name = name
+                attribute.save(update_fields=["name"])
             attributes[name] = attribute
             for option_name, sku_code in options:
-                VariantOption.objects.update_or_create(
-                    sku_code=sku_code,
-                    defaults={"attribute": attribute, "name": option_name},
-                )
+                option = VariantOption.objects.filter(sku_code__iexact=sku_code).first()
+                if option is None:
+                    VariantOption.objects.create(
+                        attribute=attribute, name=option_name, sku_code=sku_code
+                    )
+                else:
+                    option.attribute = attribute
+                    option.name = option_name
+                    option.sku_code = sku_code
+                    option.save(update_fields=["attribute", "name", "sku_code"])
 
         categories = list(Category.objects.filter(
             name__startswith="Test Category"

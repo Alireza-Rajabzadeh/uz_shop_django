@@ -5,6 +5,13 @@ class CustomerAddress(models.Model):
     class Meta:
         db_table = "customer_address"
         verbose_name_plural = "customer addresses"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["customer"],
+                condition=models.Q(is_default=True),
+                name="customer_one_default_address",
+            ),
+        ]
 
     customer = models.ForeignKey(
         "Customer",
@@ -36,13 +43,6 @@ class CustomerAddress(models.Model):
     is_default = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
-    def save(self, *args, **kwargs):
-        if self.is_default:
-            CustomerAddress.objects.filter(customer=self.customer, is_default=True).exclude(
-                id=self.id
-            ).update(is_default=False)
-        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.title}: {self.address_line1}, {self.city.name}"

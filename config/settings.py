@@ -161,6 +161,7 @@ REST_FRAMEWORK = {
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(days=7),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=30),
+    "CHECK_REVOKE_TOKEN": True,
 }
 
 LANGUAGES = [("en", _("English")), ("fa", _("Persian"))]

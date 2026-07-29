@@ -87,8 +87,8 @@ class CustomerAddressDetail(APIView):
 
     def _get_address(self, customer, address_id):
         service = CustomerAddressService()
-        address = service.get_or_none(address_id)
-        if address is None or address.customer_id != customer.id:
+        address = service.get_for_customer(customer, address_id)
+        if address is None:
             raise NotFound(_("Address not found."))
         return address
 
