@@ -3,11 +3,20 @@ from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.exceptions import NotFound
 from core.responses import api_response
+from domains.location.models import City, Country, State
+from domains.location.api.options import (
+    CountryOptionSerializer,
+    StateOptionSerializer,
+    CityOptionSerializer,
+    CountryFilterSerializer,
+    StateFilterSerializer,
+)
 from .serializers import (
     CustomerRegisterSerializer,
     CustomerLoginSerializer,
     CustomerProfileSerializer,
     CustomerUpdateSerializer,
+    CustomerPasswordChangeSerializer,
     CustomerAddressSerializer,
     CustomerPreferenceSerializer,
 )
@@ -129,3 +138,52 @@ class CustomerPreferenceView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return api_response(True, _("Preferences updated."), serializer.data)
+
+
+class CustomerChangePassword(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = CustomerPasswordChangeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        service = CustomerAuthService()
+        service.change_password(
+            request.user,
+            serializer.validated_data["current_password"],
+            serializer.validated_data["new_password"],
+        )
+
+        return api_response(True, _("Password changed."))
+
+
+class CustomerCountryOptions(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        countries = Country.objects.order_by("fa_title", "name")
+        return api_response(data=CountryOptionSerializer(countries, many=True).data)
+
+
+class CustomerStateOptions(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        query = CountryFilterSerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        states = State.objects.filter(
+            country_id=query.validated_data["country_id"]
+        ).order_by("fa_title", "name")
+        return api_response(data=StateOptionSerializer(states, many=True).data)
+
+
+class CustomerCityOptions(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        query = StateFilterSerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        cities = City.objects.filter(
+            state_id=query.validated_data["state_id"]
+        ).order_by("fa_title", "name")
+        return api_response(data=CityOptionSerializer(cities, many=True).data)

@@ -57,6 +57,25 @@ class CustomerUpdateSerializer(serializers.ModelSerializer):
         ]
 
 
+class CustomerPasswordChangeSerializer(serializers.Serializer):
+    current_password = serializers.CharField(
+        allow_blank=False, trim_whitespace=False, write_only=True
+    )
+    new_password = serializers.CharField(
+        allow_blank=False, trim_whitespace=False, write_only=True, min_length=6
+    )
+    new_password_confirmation = serializers.CharField(
+        allow_blank=False, trim_whitespace=False, write_only=True
+    )
+
+    def validate(self, attrs):
+        if attrs["new_password"] != attrs["new_password_confirmation"]:
+            raise serializers.ValidationError({
+                "new_password_confirmation": _("Password confirmation does not match.")
+            })
+        return attrs
+
+
 class CustomerPreferenceSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomerPreference

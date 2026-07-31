@@ -3,9 +3,13 @@ from .views import (
     CustomerRegister,
     CustomerLogin,
     CustomerMe,
+    CustomerChangePassword,
     CustomerAddressListCreate,
     CustomerAddressDetail,
     CustomerPreferenceView,
+    CustomerCountryOptions,
+    CustomerStateOptions,
+    CustomerCityOptions,
 )
 from .admin_views import (
     AdminCustomerAddressDetail,
@@ -14,12 +18,12 @@ from .admin_views import (
     AdminCustomerList,
     AdminCustomerStatusList,
 )
-from domains.location.api import CityOptions, CountryOptions, StateOptions
 
 urlpatterns = [
     path("register", CustomerRegister.as_view()),
     path("login", CustomerLogin.as_view()),
     path("me", CustomerMe.as_view()),
+    path("me/password", CustomerChangePassword.as_view()),
     path("addresses", CustomerAddressListCreate.as_view()),
     path("addresses/<int:address_id>", CustomerAddressDetail.as_view()),
     path("preferences", CustomerPreferenceView.as_view()),
@@ -34,7 +38,7 @@ urlpatterns = [
         "customers/<int:customer_id>/addresses/<int:address_id>",
         AdminCustomerAddressDetail.as_view(),
     ),
-    path("location-options/countries", CountryOptions.as_view()),
-    path("location-options/states", StateOptions.as_view()),
-    path("location-options/cities", CityOptions.as_view()),
+    path("location-options/countries", CustomerCountryOptions.as_view()),
+    path("location-options/states", CustomerStateOptions.as_view()),
+    path("location-options/cities", CustomerCityOptions.as_view()),
 ]

@@ -1,3 +1,5 @@
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils import timezone
 from django.utils.translation import gettext as _
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
@@ -42,6 +44,20 @@ class CustomerAuthService:
         customer.save()
         return self.get_profile(customer)
 
+    def change_password(self, customer, current_password, new_password):
+        if not customer.check_password(current_password):
+            raise ValidationError({
+                "current_password": _("The current password is incorrect.")
+            })
+
+        try:
+            validate_password(new_password, user=customer)
+        except DjangoValidationError as exc:
+            raise ValidationError({"new_password": exc.messages}) from exc
+
+        customer.set_password(new_password)
+        customer.save(update_fields=["password"])
+
     def get_profile(self, customer):
         return {
             "id": customer.id,
@@ -50,7 +66,7 @@ class CustomerAuthService:
             "last_name": customer.last_name,
             "email": customer.email,
             "phone": customer.phone,
-            "status": customer.status.title,
+            "status_title": customer.status.title,
             "date_of_birth": customer.date_of_birth.isoformat() if customer.date_of_birth else None,
             "gender": customer.gender,
             "email_verified_at": customer.email_verified_at.isoformat() if customer.email_verified_at else None,
