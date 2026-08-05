@@ -53,6 +53,48 @@ msgstr "Invalid phone number or password."
 msgid "Account is inactive."
 msgstr "Account is inactive."
 
+msgid "Please wait before requesting another code."
+msgstr "Please wait before requesting another code."
+
+#, python-format
+msgid "Your UzShop login confirmation code is %(code)s. It expires in %(minutes)s minutes."
+msgstr "Your UzShop login confirmation code is %(code)s. It expires in %(minutes)s minutes."
+
+msgid "The confirmation code could not be sent."
+msgstr "The confirmation code could not be sent."
+
+msgid "The confirmation code is invalid or expired."
+msgstr "The confirmation code is invalid or expired."
+
+msgid "The confirmation request is no longer valid."
+msgstr "The confirmation request is no longer valid."
+
+msgid "Confirmation code sent."
+msgstr "Confirmation code sent."
+
+msgid "Enter a valid mobile number."
+msgstr "Enter a valid mobile number."
+
+#, python-format
+msgid "Your UzShop password reset code is %(code)s. It expires in %(minutes)s minutes."
+msgstr "Your UzShop password reset code is %(code)s. It expires in %(minutes)s minutes."
+
+msgid "If an eligible account exists, a confirmation code has been sent."
+msgstr "If an eligible account exists, a confirmation code has been sent."
+
+msgid "Password reset successful."
+msgstr "Password reset successful."
+
+msgid "Phone number is already verified."
+msgstr "Phone number is already verified."
+
+#, python-format
+msgid "Your UzShop phone verification code is %(code)s. It expires in %(minutes)s minutes."
+msgstr "Your UzShop phone verification code is %(code)s. It expires in %(minutes)s minutes."
+
+msgid "Phone number verified."
+msgstr "Phone number verified."
+
 #: backend/domains/customer/views.py:28
 msgid "Registration successful."
 msgstr "Registration successful."

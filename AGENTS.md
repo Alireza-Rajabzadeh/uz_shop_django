@@ -1,117 +1,113 @@
-# UzShop Backend - AGENTS.md
+# UzShop Backend
 
-## Project
+## Purpose
 
-UzShop's Django REST API backend. It serves the separate Next.js admin panel and is organized into business domains with a service layer for business logic.
+Django REST API for UzShop's admin and customer applications. Business code is organized by domain, with services handling workflows and shared infrastructure under `core/`.
 
-## Tech Stack
+This directory is a Git submodule and a separate repository. Commit backend changes here before updating the parent repository's submodule pointer. Preserve unrelated changes in a dirty worktree.
+
+## Stack
 
 - Python 3.12
-- Django 5.2
-- Django REST Framework
-- SimpleJWT authentication
+- Django 5.2 and Django REST Framework
+- SimpleJWT with separate customer and admin principals
 - PostgreSQL
-- Redis and MongoDB infrastructure
-- Gunicorn for production serving
-- django-unfold for the Django admin
+- Redis for Celery and confirmed requests
+- Celery workers for notification delivery
+- django-storages and boto3 for optional S3-compatible file storage
+- Gunicorn and django-unfold
 
 ## Commands
 
-Run these commands from `back/` unless stated otherwise.
+Run directly from `back/`:
 
-| Command | What it does |
+| Command | Purpose |
 |---|---|
 | `pip install -r requirements.txt` | Install dependencies |
-| `python manage.py runserver` | Start the development server |
-| `python manage.py migrate` | Apply database migrations |
-| `python manage.py makemigrations` | Create migrations after model changes |
-| `python manage.py seed` | Seed reference data and temporary catalog development fixtures |
-| `python manage.py test` | Run Django tests |
-| `python manage.py test domains.catalog.tests` | Run the focused catalog API tests |
-| `python manage.py makemessages -l fa -l en` | Update translation message files |
+| `python manage.py runserver` | Start Django locally |
+| `python manage.py check` | Run system checks |
+| `python manage.py migrate` | Apply migrations |
+| `python manage.py makemigrations` | Generate migrations |
+| `python manage.py seed` | Seed development/reference data |
+| `python manage.py test` | Run all tests |
+| `python manage.py test domains.customer.tests` | Run a focused suite |
+| `python manage.py makemessages -l fa -l en` | Update translations |
 | `python manage.py compilemessages` | Compile translations |
 
-## Architecture
+From the workspace root, prefer the running stack when dependencies are needed:
 
-### Key Directories
-
-- `config/` - Django settings, root URLs, ASGI, and WSGI entry points
-- `core/` - shared middleware, API responses, exceptions, constants, services, and utilities
-- `domains/` - business domains and their application code
-- `locale/` - Persian and English translations
-- `docs/` - API documentation
-
-### Domains
-
-- `catalog/` - product catalog concerns
-- `files/` - provider-neutral stored-file lifecycle and admin APIs
-- `customer/` - customer accounts and customer JWT authentication
-- `inventory/` - stock and inventory concerns
-- `location/` - location data and related logic
-- `users/` - administrative users and permissions
-
-Keep domain-specific code inside its domain. Put genuinely shared infrastructure in `core/`; do not move business logic into `core/` merely because multiple callers use it.
-
-## Domain Layer Rules
-
-Use this dependency flow:
-
-```text
-Request -> View -> Serializer -> Domain Service -> Model/Infrastructure
+```bash
+docker compose exec -T django python manage.py check
+docker compose exec -T django python manage.py migrate
+docker compose exec -T django python manage.py test
 ```
 
-### Views
+Gunicorn does not reload bind-mounted code. Restart the `django` service before testing backend changes through Nginx or a frontend.
 
-Views manage the HTTP boundary only:
+## Structure
 
-- Authenticate the caller and enforce permissions.
-- Parse request data and invoke serializer validation.
-- Call the appropriate domain service with validated plain values.
-- Serialize the result and return the standard API response.
+```text
+config/                 Settings, root URLs, Celery, ASGI, WSGI
+core/                   Shared responses, exceptions, services, utilities
+domains/catalog/        Categories, products, variants, and media relations
+domains/customer/       Customer auth, profiles, preferences, and addresses
+domains/files/          Provider-neutral stored-file lifecycle
+domains/inventory/      Warehouses, stock, and inventory strategies
+domains/location/       Countries, states, and cities
+domains/notifications/  Provider records, audit rows, and delivery workers
+domains/users/          Administrative users, auth, and permissions
+locale/                 Django translations
+```
 
-Do not put business workflows or direct cross-domain data changes in views.
+Keep domain behavior in its owning domain. Shared infrastructure belongs in `core/`; shared business behavior usually does not.
 
-### Serializers
+## Design Boundaries
 
-- Validate request shape, field types, and HTTP-facing input constraints.
-- Represent domain objects in API responses.
-- Leave business rules and multi-step workflows to services or models.
+Use this direction for new work:
 
-### Services
+```text
+Request -> View -> Serializer -> Domain Service -> Model / Infrastructure
+```
 
-- Services are the primary location for domain business logic.
-- Use services for workflows, multi-model operations, reusable actions, and coordination between domains.
-- Wrap operations that must succeed together in `transaction.atomic()`.
-- Accept plain values, validated data, model instances, or an acting user as appropriate.
-- Do not accept DRF `Request` objects or return DRF `Response` objects.
-- Do not create service wrappers for trivial ORM operations unless they enforce a rule or provide a stable domain API.
+Views:
 
-### Models
+- Authenticate and authorize.
+- Validate HTTP input through serializers.
+- Call domain services.
+- Paginate and return the standard response envelope.
 
-- Models define persisted domain data and relationships.
-- Enforce invariants at the model or database level when they must hold regardless of the caller.
-- Keep request and response concerns out of models.
+Serializers:
 
-### Cross-Domain Work
+- Validate request shape and represent responses.
+- Avoid multi-model workflows and cross-domain mutations.
 
-- Call the target domain's public service instead of directly changing its models.
-- Keep dependencies between domains one-directional where possible.
-- Avoid circular imports and mutually dependent domain services.
-- For complex or reusable read operations, use a query/selector service; simple local reads do not require unnecessary abstraction.
+Services:
+
+- Own reusable rules, queries, normalization, and multi-step workflows.
+- Use `transaction.atomic()` when changes must commit together.
+- Accept domain values and objects, not DRF `Request` or `Response` instances.
+- Call another domain's public service instead of mutating its models directly.
+
+Models and the database:
+
+- Enforce invariants that must hold for every caller.
+- Keep HTTP concerns out of models.
+
+Do not add abstraction around trivial ORM operations unless it protects a rule or creates a meaningful domain boundary. Some older code does not fully follow these layers; improve it locally rather than copying the exception.
 
 ## API Conventions
 
-Root routes currently include:
+Root namespaces:
 
-- `/admin/`
 - `/api/users/`
 - `/api/customer/`
 - `/api/catalog/`
 - `/api/inventory/`
 - `/api/location/`
 - `/api/files/`
+- `/api/notifications/`
 
-Use `core.responses.api_response` so API responses retain this envelope:
+Return `core.responses.api_response` envelopes:
 
 ```json
 {
@@ -122,224 +118,137 @@ Use `core.responses.api_response` so API responses retain this envelope:
 }
 ```
 
-- Customer and admin JWTs include a `user_type` claim and use separate authentication classes.
-- API access is authenticated by default.
-- Default pagination is page-number pagination with a page size of 20.
-- Exceptions are normalized by `core.exceptions.custom_exception_handler`.
+Paginated results belong inside `data` as `count`, `next`, `previous`, and `results`. Page-number pagination defaults to 20 items.
 
-Paginated endpoints keep pagination inside the standard envelope's `data` field:
+- Authentication is required by default; mark public views explicitly.
+- Most routes omit trailing slashes. Preserve the existing route contract.
+- Create operations generally return 201, confirmation initiation returns 202, and deletes commonly return a 200 envelope.
+- Keep filtering, ordering allowlists, annotations, and related-object loading on the server.
+- Normalize exceptions through the configured exception handler; do not return ad-hoc error shapes.
 
-```json
-{
-  "success": true,
-  "message": "",
-  "data": {
-    "count": 100,
-    "next": null,
-    "previous": null,
-    "results": []
-  },
-  "errors": null
-}
+## Authentication And Confirmation
+
+Admin and customer JWTs both require a `user_type` claim. Admin tokens represent active staff users; customer tokens recheck customer status and password-hash revocation.
+
+Customer login is intentionally two-step:
+
+1. Validate phone/password and create an SMS challenge without issuing tokens.
+2. Consume the one-time code, recheck account state, issue tokens, and update `last_login`.
+
+Confirmed requests use `core.services.confirmed_request.ConfirmedRequestService` and dedicated Redis storage.
+
+- Codes are HMAC-hashed and bound to request ID, purpose, and subject.
+- Challenges enforce expiry, cooldown, attempt limits, and one-time consumption.
+- A newer challenge invalidates the previous challenge for the same purpose and subject.
+- Do not reimplement Redis keys, code comparison, or challenge lifecycle in a domain.
+- A static development code is valid only when `CONFIRMED_REQUEST_DEV_MODE=True`.
+
+Phone writes and lookups must use `core.utils.phone.normalize_phone`. Forgot-password initiation is account-enumeration safe and must retain the same public response shape for eligible and ineligible phones. Password reset returns no JWT and must invalidate old credentials through the password fingerprint.
+
+No JWT refresh, logout, or refresh-token revocation endpoint is currently mounted.
+
+## Notifications
+
+Notifications are provider-neutral audit records delivered asynchronously through Celery.
+
+- Call `SMSService`; do not enqueue provider tasks directly from views.
+- Sending requires an active provider and normally an active default SMS provider.
+- The only implemented adapter is `fake-sms`, guarded by `NOTIFICATIONS_ALLOW_FAKE_SMS`.
+- Sensitive bodies remain available only while pending and are redacted after success, failure, queue failure, or expiry cleanup.
+- Never expose confirmation codes or sensitive notification bodies through APIs, admin, or logs.
+- A successful 202 response means queued, not delivered.
+
+The seed command does not provision notification provider statuses or a default provider. Fresh development databases need those records before SMS-backed customer flows can work. Production needs a real SMS adapter and external credential configuration.
+
+## Files, Catalog, And Inventory
+
+- The Files domain owns object lifecycle; Catalog owns product-file relationships.
+- Store provider-neutral object keys, not bucket names, credentials, or permanent URLs.
+- Generate URLs through `FileService` and the configured storage alias.
+- Only available files may be attached to products.
+- Use Catalog services for aggregate product, category-detail, variant, and media writes.
+- Use Inventory services for stock mutations and strategy-specific rules.
+- Preserve database constraints, row locking, and atomic replacement workflows when changing aggregate writes.
+
+Current catalog endpoints are administrative and permission-controlled. They are not a public storefront contract.
+
+## Migrations, Seeds, And Tests
+
+- Create migrations for every model or persisted-invariant change.
+- Never edit an applied migration to change current behavior; add a new migration.
+- Pair data normalization with database constraints when introducing canonical formats.
+- Keep seeders idempotent and clearly development-only.
+- The seed command creates location, catalog, inventory reference, and customer fixtures, but no admin account, stock, product variants, or notification provider.
+
+Run focused tests while developing, then broader tests for shared infrastructure or cross-domain changes. Important suites include:
+
+```bash
+python manage.py test core.tests
+python manage.py test domains.customer.tests
+python manage.py test domains.notifications.tests
+python manage.py test domains.catalog.tests
+python manage.py test domains.inventory.tests
+python manage.py test domains.files.tests
+python manage.py test domains.location.tests
+python manage.py test domains.users.tests
 ```
 
-### Catalog Lists
-
-Category and product list endpoints use page-number pagination and accept DRF-style server ordering:
-
-- Ascending: `?ordering=name`
-- Descending: `?ordering=-name`
-- Pagination: `?page=2`
-
-Category list: `GET /api/catalog/categories`
-
-- Filters: `name`, `status_id`
-- Ordering fields: `id`, `name`, `parent_name`, `status_name`
-- Status options: `GET /api/catalog/category-statuses`
-
-Category detail list: `GET /api/catalog/category-details`
-
-- Filters: `name`, `type`
-- Ordering fields: `id`, `name`, `type`, `required`, `filterable`
-
-Product list: `GET /api/catalog/products`
-
-- Filters: `name`, `category_id`, `status_id`
-- Ordering fields: `id`, `name`, `category_name`, `status_name`, `variant_count`
-
-Views parse request query parameters, apply pagination, serialize results, and return `api_response`. Domain services own filter querysets, allowlisted ordering, related-object loading, and annotations. Do not move these queryset rules into frontend code or duplicate them in views.
-
-`CatalogModelPermissions` supports APIViews that declare a `model` attribute. Category status options require `catalog.view_category` so a user who can list categories can also populate the list filter.
-
-### Catalog Write Workflows
-
-Category and category-detail names are globally unique after case/outer-whitespace normalization. The services also collapse repeated internal whitespace before writing. Keep friendly service validation and database constraints aligned when changing name rules.
-
-Category writes:
-
-- Create: `POST /api/catalog/categories`
-- Partial update: `PATCH /api/catalog/categories/{id}`
-- Similar-name check: `GET /api/catalog/categories/name-suggestions?name=...&exclude_id=...`
-- Parent is optional (`null` for a root); updates reject self-parenting and descendant cycles.
-- Exact normalized duplicates are rejected; fuzzy matches are warnings supplied to the admin panel.
-
-Category-detail definition writes:
-
-- Create: `POST /api/catalog/category-details`
-- Partial update: `PATCH /api/catalog/category-details/{id}`
-- Similar-name check: `GET /api/catalog/category-details/name-suggestions?name=...&exclude_id=...`
-- Types are `text`, `number`, and `select`.
-- Select definitions require comma-separated options; options are normalized before storage.
-- Text and number definitions always store `options=""`.
-
-Category-to-detail assignments use one specialized resource:
-
-- Read picker state: `GET /api/catalog/categories/{id}/assign-details`
-- Replace assignments: `POST /api/catalog/categories/{id}/assign-details` with `{ "details": [1, 2] }`
-- Both methods require `catalog.assign_details_to_category`.
-- GET returns the complete assignment snapshot plus filtered/paginated candidates with `assigned` and `in_use` flags.
-- POST requires the `details` key, performs an atomic full replacement, and returns the canonical final assignments.
-- Details used by products or variants cannot be deassigned. Preserve the category/relationship locks and server-side check when changing this workflow.
-- The relationship's legacy `value` is not part of the current assignment UI; new assignments store an empty value.
-
-### Product Creation
-
-The admin product wizard keeps draft data client-side and submits once, so the product and its initial category-derived detail values are created atomically:
-
-- Form options: `GET /api/catalog/product-form-options`
-- Category-derived fields: `GET /api/catalog/product-detail-definitions?category_ids=1`
-- Atomic creation: `POST /api/catalog/products/create`
-- Atomic update: `PATCH /api/catalog/products/{id}/update`
-- Creation requires `catalog.add_product`. Form options accept add or change permission, and complete updates require `catalog.change_product`.
-
-The create payload uses plural `category_ids` deliberately, but validation currently requires exactly one category because `Product.category` remains a foreign key. Keep category-dependent logic behind `ProductService` methods so a future many-to-many migration does not require rewriting views or frontend state.
-
-Product creation validates that:
-
-- The backend assigns the `pending` product status; clients do not submit a status.
-- Submitted details are assigned to the selected category.
-- Every required definition has a nonblank value.
-- Number values parse as numbers.
-- Select values match the definition's options.
-- `(product, detail)` remains unique at the database level.
-
-Complete product updates use the same aggregate payload, replace category-derived detail values atomically, and preserve product status. Generic `PATCH /api/catalog/products/{id}` remains a partial basic-field update and must not delete omitted details.
-
-### Files And Product Media
-
-The Files domain owns storage lifecycle; catalog owns how files are attached to products.
-
-- File list/upload: `GET|POST /api/files/`
-- Status options: `GET /api/files/statuses`
-- Orphan detection: `GET /api/files/orphans`
-- File detail/metadata/delete: `GET|PATCH|DELETE /api/files/{id}`
-- Verify stored content: `POST /api/files/{id}/verify`
-- Product attachments: `GET|POST /api/catalog/products/{id}/files`
-- Product attachment detail: `GET|PATCH|DELETE /api/catalog/products/{id}/files/{relation_id}`
-
-`File.object_key` is provider-neutral and never contains product or category IDs. Database rows store no URLs, bucket names, endpoints, or credentials. Generate URLs at response time through `FileService.url()` and the configured Django storage alias.
-
-Files move through `pending`, `available`, `failed`, and `deleted`. Only available files may be attached to products. A `ProductFile` row is active while it exists; detaching physically deletes only that relationship. Deleting a File detaches all product relationships, removes the stored object, and retains the File row with deleted status and timestamp.
-
-A file is orphaned when it is available and has no `ProductFile` rows. Files can be shared by multiple products. Product attachment ordering uses `position` then ID, and each product has at most one primary attachment.
-
-### Product Variant Workflow
-
-- Global `VariantAttribute` and `VariantOption` records define selectable axes and values independently from descriptive `CategoryDetail` records.
-- Category assignments are suggestions only. A product variant may select options from any global attribute.
-- Category suggestions: `GET|POST /api/catalog/categories/{id}/assign-variant-attributes`
-- Attribute CRUD: `GET|POST /api/catalog/variant-attributes` and `GET|PATCH|DELETE /api/catalog/variant-attributes/{id}`
-- Option CRUD: `GET|POST /api/catalog/variant-options` and `GET|PATCH|DELETE /api/catalog/variant-options/{id}`
-- List/create product variants: `GET|POST /api/catalog/products/{id}/variants`
-- Form options: `GET /api/catalog/products/{id}/variant-form-options`
-- Read/update/delete one variant: `GET|PATCH|DELETE /api/catalog/variants/{id}`
-- Variant writes use `selections: [{attribute_id, option_id}]`, require at least one selection, and allow at most one option per attribute.
-- The backend generates globally unique SKUs as `CG{category_id}-PD{product_id}-{option_codes}`, ordering option codes by attribute ID. Clients must not submit SKUs.
-- `ProductVariants.combination_key` and a database constraint prevent duplicate option combinations within one product independently from SKU uniqueness.
-- Changing selections, an option SKU code, or a product category regenerates affected SKUs.
-- Variant writes choose `inventory_strategy_code` as `normal` or `serialized`; strategy changes are rejected while the current strategy has stock.
-- Normal writes use `inventory: {quantity, sellable}` in the single default warehouse. Inventory must satisfy `0 <= reserved <= sellable <= quantity`.
-- Serialized writes use a full `serial_items: [{id?, serial_number, on_sale}]` snapshot. New rows are in stock and unreserved; sold, reserved, or historical rows cannot be changed or removed.
-- Variant responses expose `total_item_count`, `sellable_item_count`, and `available_item_count`. Serialized availability requires in-stock, on-sale, and unreserved.
-- Full inventory edit state is read from `GET /api/inventory/variants/{id}`; product-variant lists intentionally omit serial rows.
-- Deleting a variant cascades to its owned `ProductVariantSelection` rows.
-- Variants with nonzero normal stock or any serialized rows cannot be deleted.
-
-### Inventory Management
-
-- Inventory overview: `GET /api/inventory/variants`
-- Stock detail/update: `GET|PATCH /api/inventory/variants/{id}`
-- Form options: `GET /api/inventory/strategies` and `GET /api/inventory/serialized-statuses`
-- Warehouse CRUD: `GET|POST /api/inventory/warehouses` and `GET|PATCH|DELETE /api/inventory/warehouses/{id}`
-- Warehouse statuses: `GET /api/inventory/warehouse-statuses`
-- Overview/detail reads require `inventory.view_inventory`; stock updates additionally require `inventory.adjust_stock`.
-- The application supports one default warehouse. The default cannot be deleted, and it cannot be switched while it contains normal or serialized stock.
-- Normal stock updates preserve reservations and enforce `0 <= reserved <= sellable <= quantity`. Serialized updates are full snapshots and support collision-safe swaps of editable serial numbers.
-
-### Location Management
-
-- Country CRUD: `GET|POST /api/location/countries` and `GET|PATCH|DELETE /api/location/countries/{id}`
-- State CRUD: `GET|POST /api/location/states` and `GET|PATCH|DELETE /api/location/states/{id}`
-- City CRUD: `GET|POST /api/location/cities` and `GET|PATCH|DELETE /api/location/cities/{id}`
-- Form options: `GET /api/location/options/countries`, `/states?country_id=...`, and `/cities?state_id=...`
-- CRUD uses native `location.*` model permissions. Option endpoints accept the relevant customer-address, warehouse, or Location form permissions.
-- Location names and country codes are normalized by services. Deletion is physical and blocked while dependent hierarchy rows, customer addresses, or warehouses exist.
-- The legacy customer location-option URLs remain aliases for customer address forms.
-
-Descriptions currently store Markdown/plain text, not trusted HTML. Do not render them as HTML without adding server-side sanitization.
-
-### Development Reloading
-
-Docker bind-mounts backend source, but Gunicorn does not auto-reload it. After changing URLs, views, serializers, or services, run `docker compose restart django` from the workspace root before browser/proxy verification. A stale worker can return HTML 404 pages for newly added routes.
-
-## Internationalization
-
-- Default language: Persian (`fa`)
-- Supported languages: Persian and English
-- `core.middleware.language.HeaderLanguageMiddleware` selects the request language.
-- Translation files live under `locale/`.
+Confirmed-request tests require Redis. Mock external delivery boundaries, not domain rules or database invariants.
 
 ## Environment
 
-Django loads `back/.env`. Copy `back/.env.example` to `back/.env` for direct local development. The database/cache variables are effective now; `DEBUG` and `SECRET_KEY` remain commented placeholders until settings stop hardcoding them.
+Django loads `back/.env` for direct local execution. Use `.env.example` as the variable inventory and never commit real values.
 
-- `DEBUG`, `SECRET_KEY`
-- `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`
-- `REDIS_HOST`, `REDIS_PORT`
-- `MONGO_HOST`, `MONGO_PORT`, `MONGO_USER`, `MONGO_PASSWORD`
+Important groups:
 
-Never commit secrets or local `.env` files.
+- PostgreSQL: `POSTGRES_*`
+- Redis: `REDIS_HOST`, `REDIS_PORT`
+- Celery: `CELERY_BROKER_URL`, normally Redis database `/1`
+- Confirmation: `CONFIRMED_REQUEST_REDIS_URL`, normally Redis database `/2`
+- Development confirmation: `CONFIRMED_REQUEST_DEV_MODE`, `CONFIRMED_REQUEST_DEV_CODE`
+- Notifications: `NOTIFICATIONS_ALLOW_FAKE_SMS`
+- Storage: `STORAGE_BACKEND`, `STORAGE_*`, `FILE_STORAGE_ALIASES`
 
-## Development Data
+`MONGO_*` variables are present in the workspace environment but are not currently consumed by backend Python code.
 
-The current local development database has this testing superadmin:
+## Security And Production Blockers
 
-- Username: `admin`
-- Email: `admin@uzshop.local`
-- Password: `Admin123!`
-- Admin login endpoint: `POST /api/users/login`
+- `config/settings.py` currently hardcodes `SECRET_KEY`, `DEBUG=True`, and an empty `ALLOWED_HOSTS`; this is not production-safe.
+- Debug exception responses may expose stack traces.
+- Never enable static confirmation codes or fake SMS in production.
+- A real SMS provider adapter does not exist yet.
+- Notification cleanup lacks a periodic database sweep fallback.
+- Password-reset throttling is phone-based and still needs trusted-proxy-aware IP protection for public exposure.
+- File validation has size and MIME classification checks but no malware scanning or full content sniffing.
+- Treat product and category descriptions as untrusted text.
 
-This account is for local testing and development only. Do not use these credentials in staging or production. The account is created directly in the local database and is not part of the seed command or source code.
+Do not silently work around these constraints. Address them explicitly when preparing production infrastructure.
 
-After creating a fresh database, run migrations and seed the reference data before testing:
+## Storefront API Backlog
+
+The customer application still needs stable public contracts for:
+
+- Category navigation and customer-safe filter metadata
+- Published product search/list/detail with media, variants, pricing, and availability
+- Home merchandising, promotions, featured products, related products, and recommendations
+- Reviews and ratings
+- Wishlists
+- Persisted carts and stock-aware totals
+- Delivery quotes, discounts, checkout, orders, and payments
+- Order history, tracking, cancellation, returns, and refunds
+- Customer token refresh and revocation
+
+Agree on domain ownership, publication rules, authorization, and response contracts before implementing these APIs. Do not expose administrative catalog serializers directly to the storefront.
+
+## Validation And Git
+
+For backend changes, run the narrowest relevant tests plus:
 
 ```bash
-python manage.py migrate
-python manage.py seed
+python manage.py check
+git diff --check
 ```
 
-The current category seeder idempotently creates 10 temporary root categories and 90 temporary child categories for admin-panel development. Names use `Test Category 001` through `Test Category 100`, and active/inactive/pending statuses are distributed across them.
+Run migrations and integration checks through the workspace stack when behavior depends on PostgreSQL, Redis, Celery, storage, or Nginx.
 
-It also creates `Test Detail 001` through `Test Detail 100` across text, number, and select types. A fixed random seed assigns 5–12 details to every temporary category and generates type-appropriate relationship values. Rerunning the seeder replaces only relationships between these temporary categories and details, producing the same dataset each time. Replace all temporary catalog fixtures when final seed data is available.
-
-The product seeder creates active/inactive/pending product statuses and idempotently creates `Test Product 001` through `Test Product 100`. A fixed random seed distributes products across the temporary categories, and statuses are distributed evenly. These products are temporary admin-panel fixtures and do not include variants or stock.
-
-The customer seeder idempotently creates 100 temporary customers named `Test Customer 001` through `Test Customer 100`. Fixture emails use `test.customer.NNN@uzshop.local`, phones use the reserved development range `09990000001` through `09990000100`, and statuses are distributed evenly across active, inactive, pending, and banned. Profiles include varied birth dates, genders, verification timestamps, notification preferences, and one to three location-valid addresses with exactly one default. The shared development-only customer password is `Customer123!`. These records are for local testing only; the seeder does not modify customers outside the fixture phone namespace.
-
-## TODO / Warnings
-
-These are known repository issues. Do not silently work around or fix them during unrelated tasks:
-
-1. `config/settings.py` currently hardcodes `SECRET_KEY` and `DEBUG` rather than using the corresponding environment variables.
-
-Confirm the intended change with the user before investigating these issues deeply or changing infrastructure configuration.
+Do not commit `.env`, credentials, generated runtime files, or local database artifacts. Commit and push this submodule before committing an updated pointer in the workspace repository.

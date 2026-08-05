@@ -2,6 +2,11 @@ from django.urls import path
 from .views import (
     CustomerRegister,
     CustomerLogin,
+    CustomerLoginConfirmation,
+    CustomerPasswordForgot,
+    CustomerPasswordForgotConfirmation,
+    CustomerPhoneConfirmationRequest,
+    CustomerPhoneConfirmationVerify,
     CustomerMe,
     CustomerChangePassword,
     CustomerAddressListCreate,
@@ -22,6 +27,17 @@ from .admin_views import (
 urlpatterns = [
     path("register", CustomerRegister.as_view()),
     path("login", CustomerLogin.as_view()),
+    path("login/confirmation", CustomerLoginConfirmation.as_view()),
+    path("password/forgot", CustomerPasswordForgot.as_view()),
+    path(
+        "password/forgot/confirmation",
+        CustomerPasswordForgotConfirmation.as_view(),
+    ),
+    path("me/phone/confirmation", CustomerPhoneConfirmationRequest.as_view()),
+    path(
+        "me/phone/confirmation/verify",
+        CustomerPhoneConfirmationVerify.as_view(),
+    ),
     path("me", CustomerMe.as_view()),
     path("me/password", CustomerChangePassword.as_view()),
     path("addresses", CustomerAddressListCreate.as_view()),

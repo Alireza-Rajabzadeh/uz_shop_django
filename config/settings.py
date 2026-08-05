@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    "domains.notifications.apps.NotificationsConfig",
     "domains.files.apps.FilesConfig",
     "domains.catalog.apps.CatalogConfig",
     "domains.inventory.apps.InventoryConfig",
@@ -69,6 +70,38 @@ INSTALLED_APPS = [
     "core",
     "domains.users",
 ]
+
+CELERY_BROKER_URL = os.getenv(
+    "CELERY_BROKER_URL",
+    f"redis://{os.getenv('REDIS_HOST', 'localhost')}:{os.getenv('REDIS_PORT', '6379')}/1",
+)
+CELERY_TASK_IGNORE_RESULT = True
+CELERY_TASK_SERIALIZER = "json"
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+NOTIFICATIONS_ALLOW_FAKE_SMS = env_bool("NOTIFICATIONS_ALLOW_FAKE_SMS", False)
+CONFIRMED_REQUEST_DEV_CODE = os.getenv("CONFIRMED_REQUEST_DEV_CODE", "")
+CONFIRMED_REQUEST_DEV_MODE = env_bool("CONFIRMED_REQUEST_DEV_MODE", False)
+if CONFIRMED_REQUEST_DEV_CODE and not CONFIRMED_REQUEST_DEV_MODE:
+    raise ImproperlyConfigured(
+        "CONFIRMED_REQUEST_DEV_CODE requires CONFIRMED_REQUEST_DEV_MODE=True"
+    )
+
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+    },
+    "confirmed_requests": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": os.getenv(
+            "CONFIRMED_REQUEST_REDIS_URL",
+            f"redis://{os.getenv('REDIS_HOST', 'localhost')}:{os.getenv('REDIS_PORT', '6379')}/2",
+        ),
+        "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient"},
+        "KEY_PREFIX": "uzshop",
+    },
+}
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",

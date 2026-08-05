@@ -1,6 +1,8 @@
 from django.db import models
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 
+from core.utils import normalize_phone
+
 
 GENDER_CHOICES = [
     ("male", "Male"),
@@ -13,7 +15,7 @@ class CustomerManager(BaseUserManager):
     def create_user(self, phone, password=None, **extra_fields):
         if not phone:
             raise ValueError("Phone number is required")
-        customer = self.model(phone=phone, **extra_fields)
+        customer = self.model(phone=normalize_phone(phone), **extra_fields)
         customer.set_password(password)
         customer.save(using=self._db)
         return customer
@@ -30,6 +32,12 @@ class Customer(AbstractBaseUser):
     class Meta:
         db_table = "customer"
         verbose_name_plural = "customers"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(phone__regex=r"^\+?[0-9]{8,15}$"),
+                name="customer_phone_canonical_format",
+            )
+        ]
 
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
@@ -57,6 +65,7 @@ class Customer(AbstractBaseUser):
         return f"CUS-{num:05d}"
 
     def save(self, *args, **kwargs):
+        self.phone = normalize_phone(self.phone)
         if not self.customer_code:
             self.customer_code = self.generate_customer_code()
         super().save(*args, **kwargs)

@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from core.utils import PhoneNormalizationError, normalize_phone
 from domains.customer.models import Customer, CustomerStatus
 
 
@@ -67,3 +68,15 @@ class AdminCustomerSerializer(serializers.ModelSerializer):
             "id", "customer_code", "email_verified_at", "phone_verified_at",
             "last_login", "created_at", "updated_at",
         ]
+
+    def validate_phone(self, value):
+        try:
+            value = normalize_phone(value)
+        except PhoneNormalizationError as exc:
+            raise serializers.ValidationError("Enter a valid mobile number.") from exc
+        duplicates = Customer.objects.filter(phone=value)
+        if self.instance is not None:
+            duplicates = duplicates.exclude(pk=self.instance.pk)
+        if duplicates.exists():
+            raise serializers.ValidationError("A customer with this phone already exists.")
+        return value

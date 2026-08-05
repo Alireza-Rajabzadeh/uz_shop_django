@@ -53,6 +53,48 @@ msgstr "شماره تلفن یا رمز عبور اشتباه است."
 msgid "Account is inactive."
 msgstr "حساب کاربری غیرفعال است."
 
+msgid "Please wait before requesting another code."
+msgstr "لطفاً پیش از درخواست کد جدید کمی صبر کنید."
+
+#, python-format
+msgid "Your UzShop login confirmation code is %(code)s. It expires in %(minutes)s minutes."
+msgstr "کد تایید ورود شما به ازشاپ %(code)s است. این کد تا %(minutes)s دقیقه معتبر است."
+
+msgid "The confirmation code could not be sent."
+msgstr "ارسال کد تایید انجام نشد."
+
+msgid "The confirmation code is invalid or expired."
+msgstr "کد تایید نامعتبر است یا منقضی شده است."
+
+msgid "The confirmation request is no longer valid."
+msgstr "درخواست تایید دیگر معتبر نیست."
+
+msgid "Confirmation code sent."
+msgstr "کد تایید ارسال شد."
+
+msgid "Enter a valid mobile number."
+msgstr "شماره موبایل معتبر وارد کنید."
+
+#, python-format
+msgid "Your UzShop password reset code is %(code)s. It expires in %(minutes)s minutes."
+msgstr "کد بازیابی رمز عبور شما در ازشاپ %(code)s است. این کد تا %(minutes)s دقیقه معتبر است."
+
+msgid "If an eligible account exists, a confirmation code has been sent."
+msgstr "اگر حساب واجد شرایطی وجود داشته باشد، کد تایید ارسال شده است."
+
+msgid "Password reset successful."
+msgstr "بازیابی رمز عبور با موفقیت انجام شد."
+
+msgid "Phone number is already verified."
+msgstr "شماره موبایل قبلاً تایید شده است."
+
+#, python-format
+msgid "Your UzShop phone verification code is %(code)s. It expires in %(minutes)s minutes."
+msgstr "کد تایید شماره موبایل شما در ازشاپ %(code)s است. این کد تا %(minutes)s دقیقه معتبر است."
+
+msgid "Phone number verified."
+msgstr "شماره موبایل تایید شد."
+
 #: backend/domains/customer/views.py:28
 msgid "Registration successful."
 msgstr "ثبت نام با موفقیت انجام شد."

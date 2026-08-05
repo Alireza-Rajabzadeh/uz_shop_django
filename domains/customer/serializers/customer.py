@@ -1,5 +1,8 @@
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils.translation import gettext as _
 from rest_framework import serializers
+from core.utils import PhoneNormalizationError, normalize_phone
 from domains.customer.models import Customer, CustomerPreference
 
 
@@ -18,6 +21,10 @@ class CustomerRegisterSerializer(serializers.Serializer):
     )
 
     def validate_phone(self, value):
+        try:
+            value = normalize_phone(value)
+        except PhoneNormalizationError as exc:
+            raise serializers.ValidationError(_("Enter a valid mobile number.")) from exc
         if Customer.objects.filter(phone=value).exists():
             raise serializers.ValidationError(_("Phone number already registered."))
         return value
@@ -31,6 +38,52 @@ class CustomerRegisterSerializer(serializers.Serializer):
 class CustomerLoginSerializer(serializers.Serializer):
     phone = serializers.CharField(required=True, max_length=20)
     password = serializers.CharField(required=True, write_only=True)
+
+    def validate_phone(self, value):
+        try:
+            return normalize_phone(value)
+        except PhoneNormalizationError as exc:
+            raise serializers.ValidationError(_("Enter a valid mobile number.")) from exc
+
+
+class CustomerLoginConfirmationSerializer(serializers.Serializer):
+    request_id = serializers.CharField(required=True, max_length=64)
+    code = serializers.RegexField(r"^[0-9]{6}$", required=True)
+
+
+class CustomerPhoneConfirmationSerializer(serializers.Serializer):
+    request_id = serializers.CharField(required=True, max_length=64)
+    code = serializers.RegexField(r"^[0-9]{6}$", required=True)
+
+
+class CustomerPasswordForgotSerializer(serializers.Serializer):
+    phone = serializers.CharField(required=True, max_length=20)
+
+    def validate_phone(self, value):
+        try:
+            return normalize_phone(value)
+        except PhoneNormalizationError as exc:
+            raise serializers.ValidationError(_("Enter a valid mobile number.")) from exc
+
+
+class CustomerPasswordForgotConfirmationSerializer(serializers.Serializer):
+    request_id = serializers.CharField(required=True, max_length=64)
+    code = serializers.RegexField(r"^[0-9]{6}$", required=True)
+    new_password = serializers.CharField(write_only=True, trim_whitespace=False)
+    new_password_confirmation = serializers.CharField(
+        write_only=True, trim_whitespace=False
+    )
+
+    def validate(self, attrs):
+        if attrs["new_password"] != attrs["new_password_confirmation"]:
+            raise serializers.ValidationError({
+                "new_password_confirmation": _("Passwords do not match.")
+            })
+        try:
+            validate_password(attrs["new_password"])
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({"new_password": exc.messages}) from exc
+        return attrs
 
 
 class CustomerProfileSerializer(serializers.ModelSerializer):

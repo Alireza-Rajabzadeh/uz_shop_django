@@ -15,6 +15,7 @@ bw_graph_tools==0.8
 bw_processing==1.5
 cached-property==2.0.1
 certifi==2026.5.20
+celery==5.5.3
 chardet==7.4.3
 charset-normalizer==3.4.7
 click==8.4.1

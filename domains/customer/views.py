@@ -1,8 +1,9 @@
 from django.utils.translation import gettext as _
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import APIException, NotFound, Throttled, ValidationError
 from core.responses import api_response
+from domains.customer.auth import CustomerJWTAuthentication
 from domains.location.models import City, Country, State
 from domains.location.api.options import (
     CountryOptionSerializer,
@@ -14,13 +15,22 @@ from domains.location.api.options import (
 from .serializers import (
     CustomerRegisterSerializer,
     CustomerLoginSerializer,
+    CustomerLoginConfirmationSerializer,
+    CustomerPhoneConfirmationSerializer,
+    CustomerPasswordForgotSerializer,
+    CustomerPasswordForgotConfirmationSerializer,
     CustomerProfileSerializer,
     CustomerUpdateSerializer,
     CustomerPasswordChangeSerializer,
     CustomerAddressSerializer,
     CustomerPreferenceSerializer,
 )
-from .services.auth_service import CustomerAuthService
+from .services.auth_service import (
+    CustomerAuthService,
+    CustomerConfirmationError,
+    CustomerConfirmationThrottled,
+    CustomerConfirmationUnavailable,
+)
 from .services.address_service import CustomerAddressService
 from .models import CustomerPreference
 
@@ -46,12 +56,111 @@ class CustomerLogin(APIView):
         serializer.is_valid(raise_exception=True)
 
         service = CustomerAuthService()
-        result = service.login(
-            serializer.validated_data["phone"],
-            serializer.validated_data["password"],
+        try:
+            result = service.request_login_confirmation(
+                serializer.validated_data["phone"],
+                serializer.validated_data["password"],
+            )
+        except CustomerConfirmationThrottled as exc:
+            raise Throttled(wait=exc.retry_after) from exc
+        except CustomerConfirmationUnavailable as exc:
+            raise ConfirmationDeliveryUnavailable() from exc
+        except CustomerConfirmationError as exc:
+            raise ValidationError(exc.errors) from exc
+
+        return api_response(
+            True,
+            _("Confirmation code sent."),
+            result,
+            status_code=202,
         )
 
+
+class ConfirmationDeliveryUnavailable(APIException):
+    status_code = 503
+    default_detail = _("The confirmation code could not be sent.")
+    default_code = "confirmation_delivery_unavailable"
+
+
+class CustomerLoginConfirmation(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = CustomerLoginConfirmationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            result = CustomerAuthService().confirm_login(**serializer.validated_data)
+        except CustomerConfirmationError as exc:
+            raise ValidationError(exc.errors) from exc
         return api_response(True, _("Login successful."), result)
+
+
+class CustomerPasswordForgot(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = CustomerPasswordForgotSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            result = CustomerAuthService().request_password_reset(
+                serializer.validated_data["phone"]
+            )
+        except CustomerConfirmationThrottled as exc:
+            raise Throttled(wait=exc.retry_after) from exc
+        return api_response(
+            True,
+            _("If an eligible account exists, a confirmation code has been sent."),
+            result,
+            status_code=202,
+        )
+
+
+class CustomerPasswordForgotConfirmation(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = CustomerPasswordForgotConfirmationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        values = serializer.validated_data.copy()
+        values.pop("new_password_confirmation")
+        try:
+            CustomerAuthService().reset_password(**values)
+        except CustomerConfirmationError as exc:
+            raise ValidationError(exc.errors) from exc
+        return api_response(True, _("Password reset successful."), None)
+
+
+class CustomerPhoneConfirmationRequest(APIView):
+    authentication_classes = [CustomerJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            result = CustomerAuthService().request_phone_confirmation(request.user)
+        except CustomerConfirmationThrottled as exc:
+            raise Throttled(wait=exc.retry_after) from exc
+        except CustomerConfirmationUnavailable as exc:
+            raise ConfirmationDeliveryUnavailable() from exc
+        except CustomerConfirmationError as exc:
+            raise ValidationError(exc.errors) from exc
+        return api_response(True, _("Confirmation code sent."), result, status_code=202)
+
+
+class CustomerPhoneConfirmationVerify(APIView):
+    authentication_classes = [CustomerJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = CustomerPhoneConfirmationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            result = CustomerAuthService().confirm_phone(
+                request.user,
+                **serializer.validated_data,
+            )
+        except CustomerConfirmationError as exc:
+            raise ValidationError(exc.errors) from exc
+        return api_response(True, _("Phone number verified."), result)
 
 
 class CustomerMe(APIView):
