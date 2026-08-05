@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.postgres",
     "rest_framework",
     "domains.notifications.apps.NotificationsConfig",
     "domains.files.apps.FilesConfig",
@@ -80,6 +81,10 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_ACKS_LATE = True
 CELERY_TASK_REJECT_ON_WORKER_LOST = True
+CATALOG_SEARCH_BACKEND = os.getenv(
+    "CATALOG_SEARCH_BACKEND",
+    "domains.catalog.search.postgres.PostgresProductSearchBackend",
+)
 NOTIFICATIONS_ALLOW_FAKE_SMS = env_bool("NOTIFICATIONS_ALLOW_FAKE_SMS", False)
 CONFIRMED_REQUEST_DEV_CODE = os.getenv("CONFIRMED_REQUEST_DEV_CODE", "")
 CONFIRMED_REQUEST_DEV_MODE = env_bool("CONFIRMED_REQUEST_DEV_MODE", False)

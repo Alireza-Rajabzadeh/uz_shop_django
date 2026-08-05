@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from domains.catalog.models import (
-    Category, CategoryStatus, CategoryDetail,
+    Brand, Category, CategoryStatus, CategoryDetail,
     CategoryDetailRelation, Product, ProductStatus,
     ProductDetails, ProductFile, ProductVariants, VariantAttribute, VariantOption,
 )
@@ -349,6 +349,9 @@ class ProductBasicUpdateSerializer(serializers.Serializer):
         allow_blank=True,
         allow_null=True,
     )
+    brand = serializers.PrimaryKeyRelatedField(
+        queryset=Brand.objects.all(), required=False, allow_null=True
+    )
 
 
 class ProductListSerializer(serializers.ModelSerializer):
@@ -500,6 +503,9 @@ class ProductVariantWriteSerializer(serializers.Serializer):
 class ProductCompleteCreateSerializer(ProductCategorySelectionSerializer):
     name = serializers.CharField(max_length=250)
     description = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    brand = serializers.PrimaryKeyRelatedField(
+        queryset=Brand.objects.all(), required=False, allow_null=True
+    )
     details = ProductDetailValueWriteSerializer(many=True, required=False, default=list)
 
     def validate_details(self, details):

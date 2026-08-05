@@ -9,6 +9,7 @@ from core.services.base import BaseService
 from domains.catalog.models import (
     Category,
     CategoryDetail,
+    CategoryDetailOption,
     CategoryDetailRelation,
     Product,
     ProductDetails,
@@ -203,7 +204,7 @@ class ProductService(BaseService):
 
     @transaction.atomic
     def create_complete_product(
-        self, *, name, category_ids, description=None, details=()
+        self, *, name, category_ids, description=None, brand=None, details=()
     ):
         category = Category.objects.select_for_update().get(pk=category_ids[0].pk)
         self._validate_complete_product_details(category, details)
@@ -212,6 +213,7 @@ class ProductService(BaseService):
             name=name.strip(),
             status=ProductStatus.objects.get(name__iexact="pending"),
             category=category,
+            brand=brand,
             description=description or "",
         )
         self._replace_product_details(product, details)
@@ -219,7 +221,7 @@ class ProductService(BaseService):
 
     @transaction.atomic
     def update_complete_product(
-        self, product, *, name, category_ids, description=None, details=()
+        self, product, *, name, category_ids, description=None, brand=None, details=()
     ):
         product = self.model.objects.select_for_update().get(pk=product.pk)
         category = Category.objects.select_for_update().get(pk=category_ids[0].pk)
@@ -228,8 +230,9 @@ class ProductService(BaseService):
         category_changed = product.category_id != category.id
         product.name = name.strip()
         product.category = category
+        product.brand = brand
         product.description = description or ""
-        product.save(update_fields=["name", "category", "description"])
+        product.save(update_fields=["name", "category", "brand", "description"])
         self._replace_product_details(product, details)
         if category_changed:
             try:
@@ -263,10 +266,24 @@ class ProductService(BaseService):
     def _replace_product_details(self, product, details):
         product.details.all().delete()
         ProductDetails.objects.bulk_create([
-            ProductDetails(product=product, detail=item["detail"], value=item["value"])
+            ProductDetails(
+                product=product,
+                detail=item["detail"],
+                option=self._get_detail_option(item["detail"], item["value"]),
+                value=item["value"],
+            )
             for item in details
             if item["value"] or item["detail"].required
         ])
+
+    @staticmethod
+    def _get_detail_option(detail, value):
+        if not value or not detail.filterable or not detail.options:
+            return None
+        return CategoryDetailOption.objects.filter(
+            detail=detail,
+            name__iexact=value,
+        ).first()
 
     def _validate_detail_values(self, *, definitions, supplied, items):
         missing_required = [
@@ -338,7 +355,11 @@ class ProductService(BaseService):
             obj, _created = ProductDetails.objects.update_or_create(
                 product=product,
                 detail=item["detail"],
-                defaults={"value": item["value"], "extra_value": raw_item.get("extra_value")},
+                defaults={
+                    "value": item["value"],
+                    "option": self._get_detail_option(item["detail"], item["value"]),
+                    "extra_value": raw_item.get("extra_value"),
+                },
             )
             instances.append(obj)
         return instances

@@ -4,7 +4,7 @@ from rapidfuzz import fuzz
 
 from core.constants import TYPE_SELECT
 from core.services.base import BaseService
-from domains.catalog.models import CategoryDetail
+from domains.catalog.models import CategoryDetail, CategoryDetailOption
 from domains.catalog.models.category_detail_relation import CategoryDetailRelation
 
 
@@ -51,7 +51,9 @@ class DetailService(BaseService):
     def create_category_detail(self, **data):
         data = self._prepare_data(data)
         try:
-            return self._create(**data)
+            detail = self._create(**data)
+            self._sync_options(detail)
+            return detail
         except IntegrityError as exc:
             raise self.ValidationError(
                 {"name": [_("A category detail with this name already exists.")]}
@@ -61,11 +63,36 @@ class DetailService(BaseService):
     def update_category_detail(self, instance, **data):
         data = self._prepare_data(data, instance)
         try:
-            return self._update(instance, **data)
+            detail = self._update(instance, **data)
+            self._sync_options(detail)
+            return detail
         except IntegrityError as exc:
             raise self.ValidationError(
                 {"name": [_("A category detail with this name already exists.")]}
             ) from exc
+
+    @staticmethod
+    def _sync_options(detail):
+        names = [name.strip() for name in detail.options.split(",") if name.strip()]
+        existing = {
+            option.name.casefold(): option
+            for option in detail.normalized_options.all()
+        }
+        retained_ids = []
+        for position, name in enumerate(names):
+            option = existing.get(name.casefold())
+            if option is None:
+                option = CategoryDetailOption.objects.create(
+                    detail=detail,
+                    name=name,
+                    position=position,
+                )
+            elif option.name != name or option.position != position:
+                option.name = name
+                option.position = position
+                option.save(update_fields=["name", "position"])
+            retained_ids.append(option.id)
+        detail.normalized_options.exclude(id__in=retained_ids).delete()
 
     def delete_category_detail(self, instance):
         self._delete(instance)

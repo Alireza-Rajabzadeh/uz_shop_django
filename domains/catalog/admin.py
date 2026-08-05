@@ -1,7 +1,8 @@
 from django.contrib import admin
 from unfold.admin import ModelAdmin
+from .models.brand import Brand
 from .models.category import Category, CategoryStatus
-from .models.category_detail import CategoryDetail
+from .models.category_detail import CategoryDetail, CategoryDetailOption
 from .models.category_detail_relation import CategoryDetailRelation
 from .models.product import Product, ProductStatus
 from .models.product_file import ProductFile
@@ -13,6 +14,13 @@ from .models.variant_attribute import (
     VariantAttribute,
     VariantOption,
 )
+from .services.detail_service import DetailService
+
+
+@admin.register(Brand)
+class BrandAdmin(ModelAdmin):
+    list_display = ["name"]
+    search_fields = ["name"]
 
 
 class CategoryDetailRelationInline(admin.TabularInline):
@@ -46,6 +54,18 @@ class CategoryDetailAdmin(ModelAdmin):
     list_filter = ["type", "required", "filterable"]
     search_fields = ["name"]
 
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        DetailService._sync_options(obj)
+
+
+@admin.register(CategoryDetailOption)
+class CategoryDetailOptionAdmin(ModelAdmin):
+    list_display = ["name", "detail", "position"]
+    list_filter = ["detail"]
+    search_fields = ["name", "detail__name"]
+    autocomplete_fields = ["detail"]
+
 
 @admin.register(CategoryDetailRelation)
 class CategoryDetailRelationAdmin(ModelAdmin):
@@ -57,7 +77,7 @@ class CategoryDetailRelationAdmin(ModelAdmin):
 class ProductDetailsInline(admin.TabularInline):
     model = ProductDetails
     extra = 1
-    autocomplete_fields = ["detail"]
+    autocomplete_fields = ["detail", "option"]
 
 
 class ProductVariantInline(admin.TabularInline):
@@ -68,9 +88,11 @@ class ProductVariantInline(admin.TabularInline):
 
 @admin.register(Product)
 class ProductAdmin(ModelAdmin):
-    list_display = ["name", "category", "status"]
-    list_filter = ["category", "status"]
+    list_display = ["name", "slug", "brand", "category", "status"]
+    list_filter = ["brand", "category", "status"]
     search_fields = ["name"]
+    autocomplete_fields = ["brand"]
+    readonly_fields = ["slug"]
     inlines = [ProductDetailsInline, ProductVariantInline]
 
 
@@ -83,7 +105,7 @@ class ProductStatusAdmin(ModelAdmin):
 class ProductDetailAdmin(ModelAdmin):
     list_display = ["product", "detail", "value"]
     list_filter = ["product"]
-    autocomplete_fields = ["product", "detail"]
+    autocomplete_fields = ["product", "detail", "option"]
 
 
 @admin.register(ProductFile)

@@ -11,6 +11,12 @@ class ProductVariants(models.Model):
                 name="catalog_product_variant_combination_unique",
             ),
         ]
+        indexes = [
+            models.Index(
+                fields=["product", "price"],
+                name="catalog_variant_price_idx",
+            ),
+        ]
     product = models.ForeignKey(
         "Product",
         on_delete=models.PROTECT,

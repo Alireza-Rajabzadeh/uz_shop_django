@@ -1,5 +1,6 @@
+from .brand import Brand
 from .category import Category, CategoryStatus
-from .category_detail import CategoryDetail
+from .category_detail import CategoryDetail, CategoryDetailOption
 from .category_detail_relation import CategoryDetailRelation
 from .product import Product, ProductStatus
 from .product_file import ProductFile

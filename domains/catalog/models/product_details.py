@@ -19,6 +19,14 @@ class ProductDetails(models.Model):
 
     detail = models.ForeignKey("CategoryDetail", on_delete=models.CASCADE)
 
+    option = models.ForeignKey(
+        "CategoryDetailOption",
+        on_delete=models.SET_NULL,
+        related_name="product_values",
+        null=True,
+        blank=True,
+    )
+
     value = models.CharField(max_length=250, blank=True)
     extra_value = models.CharField(max_length=250, blank=True , null=True)
 

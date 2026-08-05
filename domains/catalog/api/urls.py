@@ -12,8 +12,19 @@ from .views import (
     CategoryAssignVariantAttributes, VariantAttributeListCreate,
     VariantAttributeDetail, VariantOptionListCreate, VariantOptionDetail,
 )
+from .storefront import (
+    StorefrontProductDetail,
+    StorefrontProductQuickView,
+    StorefrontProductSearch,
+)
 
 urlpatterns = [
+    path("storefront/products", StorefrontProductSearch.as_view()),
+    path(
+        "storefront/products/<str:slug>/quick-view",
+        StorefrontProductQuickView.as_view(),
+    ),
+    path("storefront/products/<str:slug>", StorefrontProductDetail.as_view()),
     # Categories
     path("categories", CategoryListCreate.as_view()),
     path("categories/tree", CategoryTree.as_view()),
