@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import time
+from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import urlsplit
 
 import requests
 
@@ -13,6 +15,22 @@ class DigikalaHTTPError(RuntimeError):
     pass
 
 
+IMAGE_MAX_BYTES = 12 * 1024 * 1024
+IMAGE_EXTENSION_TYPES = {
+    ".avif": "image/avif",
+    ".gif": "image/gif",
+    ".jpeg": "image/jpeg",
+    ".jpg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+}
+
+
+def _allowed_image_host(hostname: str | None) -> bool:
+    hostname = (hostname or "").lower()
+    return hostname == "digikala.com" or hostname.endswith(".digikala.com")
+
+
 class DigikalaClient:
     def __init__(
         self,
@@ -21,6 +39,7 @@ class DigikalaClient:
         retries: int = 3,
         delay: float = 1.0,
         max_response_bytes: int = 10 * 1024 * 1024,
+        max_image_bytes: int = IMAGE_MAX_BYTES,
         session: requests.Session | None = None,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
@@ -28,6 +47,7 @@ class DigikalaClient:
         self.retries = retries
         self.delay = delay
         self.max_response_bytes = max_response_bytes
+        self.max_image_bytes = max_image_bytes
         self.session = session or requests.Session()
         self.sleep = sleep
         self.session.headers.update(
@@ -44,6 +64,52 @@ class DigikalaClient:
     def get_detail(self, url: str, expected_product_id: int | None = None) -> Any:
         validate_detail_url(url, expected_product_id)
         return self._get_json(url)
+
+    def get_image_bytes(
+        self, url: str, *, max_image_bytes: int | None = None
+    ) -> tuple[bytes, str]:
+        """Download an image from a Digikala CDN host, returning (bytes, content_type)."""
+        if not isinstance(url, str):
+            raise DigikalaHTTPError("image URL must be a string")
+        parts = urlsplit(url)
+        if parts.scheme != "https" or not _allowed_image_host(parts.hostname):
+            raise DigikalaHTTPError("image URL must use https on a Digikala host")
+        limit = max_image_bytes or self.max_image_bytes
+        response = None
+        try:
+            response = self.session.get(
+                url, timeout=self.timeout, stream=True, allow_redirects=True
+            )
+            if not 200 <= response.status_code < 300:
+                raise DigikalaHTTPError(f"image HTTP {response.status_code}")
+            final_host = urlsplit(response.url).hostname
+            if not _allowed_image_host(final_host):
+                raise DigikalaHTTPError("image redirect left the Digikala host")
+            content_type = (
+                response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+            )
+            extension = Path(urlsplit(url).path).suffix.lower()
+            if not content_type.startswith("image/"):
+                content_type = IMAGE_EXTENSION_TYPES.get(extension, content_type)
+            if not content_type.startswith("image/"):
+                raise DigikalaHTTPError("response is not an image")
+            try:
+                declared_length = int(response.headers.get("Content-Length") or 0)
+            except ValueError:
+                declared_length = 0
+            if declared_length > limit:
+                raise DigikalaHTTPError("image exceeds size limit")
+            body = bytearray()
+            for chunk in response.iter_content(chunk_size=64 * 1024):
+                body.extend(chunk)
+                if len(body) > limit:
+                    raise DigikalaHTTPError("image exceeds size limit")
+            return bytes(body), content_type
+        except requests.RequestException as error:
+            raise DigikalaHTTPError(str(error)) from error
+        finally:
+            if response is not None:
+                response.close()
 
     def _get_json(self, url: str) -> Any:
         last_error: Exception | None = None

@@ -9,7 +9,11 @@ Python modules are called by the CLI, Celery tasks, and admin API.
 - Prices are stored as Iranian rials (`IRR`) without conversion.
 - Products are created as `pending`.
 - Digikala stock is not imported into UzShop inventory.
-- Image URLs remain in the normalized detail JSON; media is not downloaded.
+- Product images are downloaded from Digikala CDN hosts and stored through the
+  managed Files service when an import job enables `download_media`. Each image
+  becomes a `gallery` product file; the first is the primary image. Media is
+  reconciled by source URL so refreshes reuse existing files instead of
+  duplicating them, and a failed download only emits a warning.
 - Existing imported products are identified by `digikala-<product-id>` slug.
 - Refreshes update source fields and prices, union categories, and preserve
   local status, stock, media, and data absent from a partial source response.
@@ -89,6 +93,9 @@ remain on the shared runtime filesystem so a redelivered task can resume.
 - Optionless products receive the controlled `Variant / Default` selection.
 - `rrp_price` is the base price and the exact difference from `selling_price`
   is stored as a fixed Rial discount.
+- Gallery images are downloaded only from `https` Digikala CDN hosts, capped in
+  size and count, and uploaded through `FileService` with a `source_url`
+  metadata key that deduplicates re-imports.
 
 An upstream detail-fetch failure produces no database write for that product.
 Each product import runs in its own database transaction.

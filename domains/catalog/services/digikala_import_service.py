@@ -2,10 +2,13 @@ import hashlib
 import json
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from urllib.parse import urlsplit
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
 
 from core.management.seeders.categories import CategorySeeder
+from domains.catalog.integrations.digikala.client import DigikalaClient
 from domains.catalog.models import (
     Brand,
     Category,
@@ -20,8 +23,11 @@ from domains.catalog.models import (
 )
 from domains.catalog.services.brand_service import BrandService
 from domains.catalog.services.detail_service import DetailService
+from domains.catalog.services.product_file_service import ProductFileService
 from domains.catalog.services.product_service import ProductService
 from domains.catalog.services.variant_attribute_service import VariantAttributeService
+from domains.files.models import File
+from domains.files.services import FileService
 
 
 class DigikalaImportService:
@@ -42,6 +48,8 @@ class DigikalaImportService:
         self.detail_service = DetailService()
         self.product_service = ProductService()
         self.variant_service = VariantAttributeService()
+        self.file_service = FileService()
+        self.product_file_service = ProductFileService()
 
     @staticmethod
     def _normalize(value):
@@ -444,8 +452,89 @@ class DigikalaImportService:
             result.append({"attribute": attribute, "option": option})
         return result
 
+    def _media_sources(self, detail, max_images=12):
+        images = detail.get("images") if isinstance(detail.get("images"), dict) else {}
+        by_identity = {}
+        for value in [*images.get("main", []), *images.get("gallery", [])]:
+            if not isinstance(value, str) or not value.strip():
+                continue
+            parts = urlsplit(value)
+            identity = (parts.scheme.lower(), parts.netloc.lower(), parts.path)
+            is_webp = (
+                "format,webp" in parts.query.casefold()
+                or parts.path.casefold().endswith(".webp")
+            )
+            existing = by_identity.get(identity)
+            if existing is None or (not is_webp and existing[1]):
+                by_identity[identity] = (value, is_webp)
+            if len(by_identity) >= max_images:
+                break
+        return [value for value, _is_webp in by_identity.values()]
+
+    @staticmethod
+    def _media_source_url(metadata):
+        return metadata.get("source_url") if isinstance(metadata, dict) else None
+
+    def _existing_media_file(self, source_url):
+        return (
+            File.objects.filter(
+                metadata__source_url=source_url,
+                status__name="available",
+                deleted_at__isnull=True,
+            )
+            .order_by("created_at")
+            .first()
+        )
+
+    def import_media(self, product, detail, *, client, warnings):
+        source_id = self._source_id(detail)
+        sources = self._media_sources(detail)
+        if not sources:
+            return 0
+        existing = {
+            self._media_source_url(relation.file.metadata)
+            for relation in product.product_files.select_related("file").all()
+        }
+        attached = 0
+        for index, source_url in enumerate(sources):
+            if source_url in existing:
+                continue
+            try:
+                file_row = self._existing_media_file(source_url)
+                if file_row is None:
+                    payload, content_type = client.get_image_bytes(source_url)
+                    extension = Path(urlsplit(source_url).path).suffix.lower()
+                    file_row = self.file_service.upload(
+                        SimpleUploadedFile(
+                            f"digikala_{source_id}_{index}{extension}",
+                            payload,
+                            content_type=content_type,
+                        ),
+                        metadata={
+                            "source": self.SOURCE_PREFIX,
+                            "source_url": source_url,
+                            "source_product_id": source_id,
+                        },
+                    )
+                self.product_file_service.attach(
+                    product,
+                    file_row,
+                    role="gallery",
+                    position=index,
+                    is_primary=index == 0,
+                    alt_text=self._limited(product.name, 255),
+                )
+                attached += 1
+            except Exception as exc:
+                warnings.append(
+                    f"Image '{source_url}' could not be imported: {exc}"
+                )
+        return attached
+
     @transaction.atomic
-    def import_product(self, detail, category_ids):
+    def import_product(
+        self, detail, category_ids, *, download_media=False, media_client=None
+    ):
         warnings = []
         source_id = self._source_id(detail)
         categories = self._ensure_categories(category_ids)
@@ -516,11 +605,21 @@ class DigikalaImportService:
                 )
                 variant_created += 1
 
+        media_attached = 0
+        if download_media:
+            media_attached = self.import_media(
+                product,
+                detail,
+                client=media_client or DigikalaClient(),
+                warnings=warnings,
+            )
+
         return {
             "status": "created" if created else "updated",
             "source_product_id": source_id,
             "local_product_id": product.id,
             "variants_created": variant_created,
             "variants_updated": variant_updated,
+            "media_attached": media_attached,
             "warnings": warnings,
         }

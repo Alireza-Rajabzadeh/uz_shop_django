@@ -21,14 +21,39 @@ from domains.catalog.models import (
     CategoryVariantAttribute,
     Product,
     ProductDetails,
+    ProductFile,
     ProductStatus,
     ProductVariants,
     VariantOption,
 )
 from domains.catalog.services.digikala_import_service import DigikalaImportService
+from domains.files.models import File
 from domains.inventory.models import InventoryStrategy
 
+IN_MEMORY_STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.InMemoryStorage"},
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
+    },
+}
 
+
+class FakeMediaClient:
+    def __init__(self, payloads):
+        self.payloads = dict(payloads)
+        self.calls = []
+
+    def get_image_bytes(self, url):
+        self.calls.append(url)
+        if url not in self.payloads:
+            raise RuntimeError("download failed")
+        return self.payloads[url], "image/jpeg"
+
+
+@override_settings(
+    STORAGES=IN_MEMORY_STORAGES,
+    FILE_STORAGE_ALIASES=["default"],
+)
 class DigikalaImportServiceTests(TestCase):
     def setUp(self):
         status, _ = CategoryStatus.objects.get_or_create(name="active")
@@ -88,7 +113,15 @@ class DigikalaImportServiceTests(TestCase):
                     "price": {"selling_price": selling + 100, "rrp_price": rrp},
                 },
             ],
-            "images": {"main": ["https://example.test/image.jpg"], "gallery": []},
+            "images": {
+                "main": [
+                    "https://dkstatics-public.digikala.com/digikala-products/12345/1.jpg"
+                ],
+                "gallery": [
+                    "https://dkstatics-public.digikala.com/digikala-products/12345/1.jpg",
+                    "https://dkstatics-public.digikala.com/digikala-products/12345/2.jpg",
+                ],
+            },
             "raw_status": "marketable",
         }
 
@@ -152,6 +185,87 @@ class DigikalaImportServiceTests(TestCase):
         self.assertEqual(variant.discount_value, 500)
         self.assertEqual(Product.objects.count(), 1)
         self.assertEqual(ProductVariants.objects.count(), 1)
+
+    def test_import_without_media_download_keeps_source_urls_only(self):
+        self.service.import_product(self.detail(), [self.category.id])
+
+        product = Product.objects.get(slug="digikala-12345")
+        self.assertEqual(File.objects.count(), 0)
+        self.assertEqual(ProductFile.objects.filter(product=product).count(), 0)
+
+    def test_import_with_media_download_attaches_gallery_files(self):
+        detail = self.detail()
+        main_url = detail["images"]["main"][0]
+        gallery_url = detail["images"]["gallery"][1]
+        client = FakeMediaClient(
+            {main_url: b"main-bytes", gallery_url: b"gallery-bytes"}
+        )
+
+        result = self.service.import_product(
+            detail, [self.category.id], download_media=True, media_client=client
+        )
+
+        product = Product.objects.get(slug="digikala-12345")
+        self.assertEqual(result["media_attached"], 2)
+        self.assertEqual(File.objects.count(), 2)
+        relations = list(
+            ProductFile.objects.filter(product=product).order_by("position")
+        )
+        self.assertEqual(len(relations), 2)
+        self.assertEqual(
+            [relation.file.metadata["source_url"] for relation in relations],
+            [main_url, gallery_url],
+        )
+        self.assertEqual(
+            [relation.position for relation in relations], [0, 1]
+        )
+        self.assertTrue(relations[0].is_primary)
+        self.assertFalse(relations[1].is_primary)
+        for relation in relations:
+            self.assertEqual(relation.role, "gallery")
+            self.assertEqual(relation.file.status.name, "available")
+            self.assertEqual(relation.file.file_type, "image")
+            self.assertEqual(relation.file.metadata["source"], "digikala")
+        self.assertEqual(client.calls, [main_url, gallery_url])
+
+    def test_media_refresh_reuses_files_and_is_idempotent(self):
+        detail = self.detail()
+        main_url = detail["images"]["main"][0]
+        gallery_url = detail["images"]["gallery"][1]
+        client = FakeMediaClient(
+            {main_url: b"main-bytes", gallery_url: b"gallery-bytes"}
+        )
+
+        self.service.import_product(
+            detail, [self.category.id], download_media=True, media_client=client
+        )
+        result = self.service.import_product(
+            detail, [self.category.id], download_media=True, media_client=client
+        )
+
+        product = Product.objects.get(slug="digikala-12345")
+        self.assertEqual(result["media_attached"], 0)
+        self.assertEqual(File.objects.count(), 2)
+        self.assertEqual(ProductFile.objects.filter(product=product).count(), 2)
+        self.assertEqual(Product.objects.count(), 1)
+
+    def test_media_download_failure_is_a_soft_warning(self):
+        detail = self.detail()
+        main_url = detail["images"]["main"][0]
+        gallery_url = detail["images"]["gallery"][1]
+        client = FakeMediaClient({main_url: b"main-bytes"})
+
+        result = self.service.import_product(
+            detail, [self.category.id], download_media=True, media_client=client
+        )
+
+        product = Product.objects.get(slug="digikala-12345")
+        self.assertEqual(result["status"], "created")
+        self.assertEqual(result["media_attached"], 1)
+        self.assertTrue(
+            any(gallery_url in warning for warning in result["warnings"])
+        )
+        self.assertEqual(ProductFile.objects.filter(product=product).count(), 1)
 
 
 class DigikalaAdminAPITests(APITestCase):

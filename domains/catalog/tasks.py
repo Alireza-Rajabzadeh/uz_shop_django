@@ -155,7 +155,12 @@ def import_digikala_products(job_id):
                     )
                     runtime.update_job(job_id, phase="importing")
                     result = importer.import_product(
-                        detail, listing_product["category_ids"]
+                        detail,
+                        listing_product["category_ids"],
+                        download_media=bool(
+                            request.get("options", {}).get("download_media")
+                        ),
+                        media_client=client,
                     )
                     result["finished_at"] = runtime.now()
                     runtime.update_result(job_id, product_id, result)

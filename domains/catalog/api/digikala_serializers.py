@@ -52,10 +52,6 @@ class DigikalaImportOptionsSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 {"update_existing": "The pilot requires safe source refresh."}
             )
-        if attrs["download_media"]:
-            raise serializers.ValidationError(
-                {"download_media": "Media download is not enabled for the pilot."}
-            )
         if attrs["dry_run"]:
             raise serializers.ValidationError(
                 {"dry_run": "Dry-run import is not implemented yet."}
