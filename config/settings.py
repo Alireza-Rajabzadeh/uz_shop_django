@@ -81,6 +81,18 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_ACKS_LATE = True
 CELERY_TASK_REJECT_ON_WORKER_LOST = True
+CELERY_TASK_ROUTES = {
+    "catalog.digikala.*": {"queue": "digikala"},
+}
+DIGIKALA_RUNTIME_ROOT = Path(
+    os.getenv("DIGIKALA_RUNTIME_ROOT", BASE_DIR / "runtime" / "digikala")
+)
+DIGIKALA_CATEGORY_MAPPING_PATH = Path(
+    os.getenv(
+        "DIGIKALA_CATEGORY_MAPPING_PATH",
+        BASE_DIR / "core" / "management" / "data" / "digikala_category_mappings.json",
+    )
+)
 CATALOG_SEARCH_BACKEND = os.getenv(
     "CATALOG_SEARCH_BACKEND",
     "domains.catalog.search.postgres.PostgresProductSearchBackend",

@@ -173,6 +173,11 @@ The seed command does not provision notification provider statuses or a default 
 
 Current catalog endpoints are administrative and permission-controlled. They are not a public storefront contract.
 
+The Digikala integration under `domains/catalog/integrations/digikala/` is
+shared by the CLI, Celery, and admin API. Keep extraction and file contracts
+framework-light; catalog writes belong in `DigikalaImportService`. Generated
+listing/job data lives outside the repository under `DIGIKALA_RUNTIME_ROOT`.
+
 ## Migrations, Seeds, And Tests
 
 - Create migrations for every model or persisted-invariant change.

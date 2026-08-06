@@ -1,0 +1,526 @@
+import hashlib
+import json
+from decimal import Decimal, InvalidOperation
+from pathlib import Path
+
+from django.db import IntegrityError, transaction
+
+from core.management.seeders.categories import CategorySeeder
+from domains.catalog.models import (
+    Brand,
+    Category,
+    CategoryDetail,
+    CategoryDetailRelation,
+    CategoryStatus,
+    CategoryVariantAttribute,
+    Product,
+    ProductVariants,
+    VariantAttribute,
+    VariantOption,
+)
+from domains.catalog.services.brand_service import BrandService
+from domains.catalog.services.detail_service import DetailService
+from domains.catalog.services.product_service import ProductService
+from domains.catalog.services.variant_attribute_service import VariantAttributeService
+
+
+class DigikalaImportService:
+    """Reconcile one normalized Digikala detail document into Catalog."""
+
+    SOURCE_PREFIX = "digikala"
+    DEFAULT_ATTRIBUTE = "Variant"
+    DEFAULT_OPTION = "Default"
+
+    class Error(Exception):
+        pass
+
+    def __init__(self, category_manifest=None):
+        self.category_manifest = Path(
+            category_manifest or CategorySeeder.MANIFEST_PATH
+        )
+        self.brand_service = BrandService()
+        self.detail_service = DetailService()
+        self.product_service = ProductService()
+        self.variant_service = VariantAttributeService()
+
+    @staticmethod
+    def _normalize(value):
+        return " ".join(str(value or "").split())
+
+    @staticmethod
+    def _limited(value, limit):
+        value = DigikalaImportService._normalize(value)
+        if len(value) <= limit:
+            return value
+        digest = hashlib.sha256(value.encode()).hexdigest()[:8]
+        return f"{value[: limit - 9]}-{digest}"
+
+    @staticmethod
+    def _source_id(detail):
+        try:
+            return int(detail["source"]["id"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise DigikalaImportService.Error(
+                "Normalized detail has no valid source product ID."
+            ) from exc
+
+    @classmethod
+    def source_slug(cls, source_id):
+        return f"{cls.SOURCE_PREFIX}-{int(source_id)}"
+
+    def _manifest_categories(self):
+        with self.category_manifest.open(encoding="utf-8") as manifest_file:
+            manifest = json.load(manifest_file)
+        records = {}
+
+        def visit(items, parent_id=None):
+            for item in items:
+                records[int(item["id"])] = {
+                    "id": int(item["id"]),
+                    "name": item["name"],
+                    "parent_id": parent_id,
+                }
+                visit(item.get("children", []), int(item["id"]))
+
+        visit(manifest.get("categories", []))
+        return records
+
+    def _ensure_categories(self, category_ids):
+        records = self._manifest_categories()
+        active_status = CategoryStatus.objects.filter(name__iexact="active").first()
+        if active_status is None:
+            raise self.Error("The active category status is not configured.")
+        resolved = {}
+
+        def ensure(category_id):
+            if category_id in resolved:
+                return resolved[category_id]
+            existing = Category.objects.filter(pk=category_id).first()
+            if existing:
+                resolved[category_id] = existing
+                return existing
+            record = records.get(category_id)
+            if record is None:
+                raise self.Error(
+                    f"Category {category_id} is not in the canonical category manifest."
+                )
+            parent = ensure(record["parent_id"]) if record["parent_id"] else None
+            try:
+                category = Category.objects.create(
+                    id=record["id"],
+                    name=record["name"],
+                    fa_name=record["name"],
+                    status=active_status,
+                    parent=parent,
+                )
+            except IntegrityError:
+                category = Category.objects.get(pk=record["id"])
+            resolved[category_id] = category
+            return category
+
+        return [ensure(int(category_id)) for category_id in sorted(set(category_ids))]
+
+    def _resolve_brand(self, payload, warnings):
+        if not isinstance(payload, dict):
+            return None
+        title_fa = self._limited(payload.get("title_fa"), 150)
+        title_en = self._limited(payload.get("title_en"), 150)
+        code = self._limited(payload.get("code"), 150)
+        name = title_en or code or title_fa
+        if not name:
+            return None
+        normalized = self.brand_service.normalize_name(name).casefold()
+        brand = next(
+            (
+                item
+                for item in Brand.objects.all()
+                if self.brand_service.normalize_name(item.name).casefold() == normalized
+            ),
+            None,
+        )
+        if brand is None and title_fa:
+            matches = [
+                item
+                for item in Brand.objects.all()
+                if item.fa_name
+                and self.brand_service.normalize_name(item.fa_name).casefold()
+                == self.brand_service.normalize_name(title_fa).casefold()
+            ]
+            if len(matches) == 1:
+                brand = matches[0]
+            elif len(matches) > 1:
+                warnings.append(f"Brand '{title_fa}' matched multiple Persian names.")
+                return None
+        if brand is None:
+            try:
+                return self.brand_service.create_brand(
+                    name=name, fa_name=title_fa or None
+                )
+            except BrandService.ValidationError:
+                brand = Brand.objects.filter(name__iexact=name).first()
+                if brand is None:
+                    raise
+                return brand
+        if title_fa and not brand.fa_name:
+            brand = self.brand_service.update_brand(
+                brand, name=brand.name, fa_name=title_fa
+            )
+        return brand
+
+    @staticmethod
+    def _display_value(value):
+        if isinstance(value, dict):
+            value = (
+                value.get("title_fa")
+                or value.get("title")
+                or value.get("name")
+                or value.get("value")
+            )
+        if isinstance(value, list):
+            parts = [DigikalaImportService._display_value(item) for item in value]
+            return "، ".join(part for part in parts if part)
+        return DigikalaImportService._normalize(value)
+
+    def _detail_items(self, detail, categories, warnings):
+        items = []
+        seen = set()
+        for group in detail.get("specifications", []):
+            for attribute in group.get("attributes", []):
+                name = self._limited(
+                    attribute.get("title") or attribute.get("name"), 100
+                )
+                value = self._display_value(attribute.get("values", []))
+                if not name or not value or name.casefold() in seen:
+                    continue
+                seen.add(name.casefold())
+                definition = next(
+                    (
+                        candidate
+                        for candidate in CategoryDetail.objects.all()
+                        if self.detail_service.normalize_name(candidate.name).casefold()
+                        == self.detail_service.normalize_name(name).casefold()
+                    ),
+                    None,
+                )
+                if definition is None:
+                    try:
+                        definition = self.detail_service.create_category_detail(
+                            name=name,
+                            type="text",
+                            required=False,
+                            options="",
+                            filterable=False,
+                        )
+                    except DetailService.ValidationError:
+                        definition = CategoryDetail.objects.filter(
+                            name__iexact=name
+                        ).first()
+                if definition is None:
+                    warnings.append(f"Could not resolve detail '{name}'.")
+                    continue
+                if definition.type != "text":
+                    warnings.append(
+                        f"Skipped detail '{name}' because its existing type is {definition.type}."
+                    )
+                    continue
+                for category in categories:
+                    CategoryDetailRelation.objects.get_or_create(
+                        category=category, detail=definition, defaults={"value": ""}
+                    )
+                if len(value) > 250:
+                    warnings.append(f"Detail '{name}' was truncated to 250 characters.")
+                    value = value[:250]
+                items.append({"detail_id": definition.id, "value": value})
+        return items
+
+    @staticmethod
+    def _named(value):
+        if not isinstance(value, dict):
+            return None
+        title_fa = DigikalaImportService._normalize(
+            value.get("title_fa") or value.get("title") or value.get("name")
+        )
+        title_en = DigikalaImportService._normalize(value.get("title_en"))
+        if not title_fa and not title_en:
+            return None
+        return {
+            "id": value.get("id"),
+            "code": value.get("code"),
+            "title_fa": title_fa,
+            "title_en": title_en,
+        }
+
+    def _source_selections(self, variant):
+        selections = []
+        for theme in variant.get("themes", []):
+            if not isinstance(theme, dict):
+                continue
+            attribute_name = self._normalize(
+                theme.get("title")
+                or theme.get("name")
+                or theme.get("label")
+                or theme.get("type")
+            )
+            raw_option = theme.get("value") or theme.get("option") or theme
+            nature = raw_option.get("nature") if isinstance(raw_option, dict) else None
+            if (
+                nature == "color"
+                or theme.get("type") == "colored"
+                or attribute_name.casefold() in {"رنگ", "color"}
+            ):
+                attribute_name = "Color"
+            option = self._named(raw_option)
+            if not option and isinstance(raw_option, str):
+                option = {
+                    "id": None,
+                    "code": None,
+                    "title_fa": self._normalize(raw_option),
+                    "title_en": "",
+                }
+            if attribute_name and option:
+                selections.append({"attribute": attribute_name, "option": option})
+        unique = {}
+        for selection in selections:
+            unique.setdefault(selection["attribute"].casefold(), selection)
+        color = self._named(variant.get("color"))
+        if color:
+            unique.setdefault(
+                "color", {"attribute": "Color", "option": color}
+            )
+        if unique:
+            return list(unique.values())
+        return [
+            {
+                "attribute": self.DEFAULT_ATTRIBUTE,
+                "option": {
+                    "id": "default",
+                    "code": "default",
+                    "title_fa": self.DEFAULT_OPTION,
+                    "title_en": self.DEFAULT_OPTION,
+                },
+            }
+        ]
+
+    def _source_combination(self, variant):
+        selections = self._source_selections(variant)
+        return tuple(
+            sorted(
+                (
+                    item["attribute"].casefold(),
+                    str(
+                        item["option"].get("id")
+                        or item["option"].get("code")
+                        or item["option"].get("title_en")
+                        or item["option"].get("title_fa")
+                    ).casefold(),
+                )
+                for item in selections
+            )
+        )
+
+    @staticmethod
+    def _decimal(value):
+        if value is None or isinstance(value, bool):
+            return None
+        try:
+            number = Decimal(str(value))
+        except (InvalidOperation, ValueError):
+            return None
+        return number if number.is_finite() and number >= 0 else None
+
+    def _pricing(self, variant):
+        price = variant.get("price") if isinstance(variant.get("price"), dict) else {}
+        selling = self._decimal(price.get("selling_price"))
+        rrp = self._decimal(price.get("rrp_price"))
+        if selling is None and rrp is None:
+            return None
+        if selling is not None and rrp is not None and rrp >= selling:
+            discount = rrp - selling
+            return {
+                "price": rrp,
+                "discount_type": "fixed" if discount > 0 else None,
+                "discount_value": discount if discount > 0 else None,
+            }
+        return {
+            "price": selling if selling is not None else rrp,
+            "discount_type": None,
+            "discount_value": None,
+        }
+
+    def _preferred_variants(self, detail):
+        grouped = {}
+        for variant in detail.get("variants", []):
+            pricing = self._pricing(variant)
+            if pricing is None:
+                continue
+            key = self._source_combination(variant)
+            marketable = str(variant.get("status") or "").casefold() in {
+                "marketable",
+                "active",
+                "available",
+            }
+            candidate = (not marketable, pricing["price"], int(variant.get("id") or 0))
+            if key not in grouped or candidate < grouped[key][0]:
+                grouped[key] = (candidate, variant, pricing)
+        return [(variant, pricing) for _rank, variant, pricing in grouped.values()]
+
+    @staticmethod
+    def _sku_code(attribute_name, option):
+        identity = "|".join(
+            str(value or "")
+            for value in (
+                attribute_name,
+                option.get("id"),
+                option.get("code"),
+                option.get("title_en"),
+                option.get("title_fa"),
+            )
+        )
+        return "DK" + hashlib.sha256(identity.encode()).hexdigest()[:14].upper()
+
+    def _resolve_attribute(self, name):
+        name = self._limited(name, 100)
+        normalized = self.variant_service.normalize_name(name).casefold()
+        attribute = next(
+            (
+                item
+                for item in VariantAttribute.objects.all()
+                if self.variant_service.normalize_name(item.name).casefold() == normalized
+            ),
+            None,
+        )
+        if attribute:
+            return attribute
+        try:
+            return self.variant_service.create_attribute(name=name)
+        except VariantAttributeService.ValidationError:
+            return VariantAttribute.objects.get(name__iexact=name)
+
+    def _resolve_option(self, attribute, source):
+        title_fa = self._limited(source.get("title_fa"), 100)
+        title_en = self._limited(source.get("title_en"), 100)
+        name = title_en or title_fa
+        if not name:
+            raise self.Error(f"Variant attribute '{attribute.name}' has an empty option.")
+        code = self._sku_code(attribute.name, source)
+        option = VariantOption.objects.filter(sku_code__iexact=code).first()
+        if option:
+            if option.attribute_id != attribute.id:
+                raise self.Error(f"Variant option SKU code collision for {code}.")
+            return option
+        normalized = self.variant_service.normalize_name(name).casefold()
+        option = next(
+            (
+                item
+                for item in attribute.options.all()
+                if self.variant_service.normalize_name(item.name).casefold() == normalized
+            ),
+            None,
+        )
+        if option:
+            return option
+        try:
+            return self.variant_service.create_option(
+                attribute=attribute,
+                name=name,
+                fa_name=title_fa or None,
+                sku_code=code,
+            )
+        except VariantAttributeService.ValidationError:
+            option = VariantOption.objects.filter(sku_code__iexact=code).first()
+            if option is None:
+                raise
+            return option
+
+    def _variant_selections(self, variant, categories):
+        result = []
+        for source in self._source_selections(variant):
+            attribute = self._resolve_attribute(source["attribute"])
+            option = self._resolve_option(attribute, source["option"])
+            for category in categories:
+                CategoryVariantAttribute.objects.get_or_create(
+                    category=category, attribute=attribute
+                )
+            result.append({"attribute": attribute, "option": option})
+        return result
+
+    @transaction.atomic
+    def import_product(self, detail, category_ids):
+        warnings = []
+        source_id = self._source_id(detail)
+        categories = self._ensure_categories(category_ids)
+        if not categories:
+            raise self.Error("At least one local category is required.")
+        brand = self._resolve_brand(detail.get("brand"), warnings)
+        name = self._limited(detail.get("title_fa") or detail.get("title_en"), 250)
+        if not name:
+            raise self.Error("The product has no usable title.")
+        description = self._normalize(detail.get("description"))
+        slug = self.source_slug(source_id)
+        product = Product.objects.select_for_update().filter(slug=slug).first()
+        created = product is None
+        if created:
+            product = self.product_service.create_product(
+                name=name,
+                brand=brand,
+                description=description,
+            )
+            product.slug = slug
+            product.save(update_fields=["slug"])
+        else:
+            self.product_service.update_product(
+                product,
+                name=name,
+                brand=brand,
+                description=description,
+            )
+        previous_primary_id = self.product_service._primary_category_id(product)
+        current_categories = list(product.categories.all())
+        by_id = {category.id: category for category in current_categories + categories}
+        product.categories.set(by_id.values())
+        if (
+            not created
+            and self.product_service._primary_category_id(product) != previous_primary_id
+        ):
+            self.product_service.regenerate_product_variant_skus(product)
+
+        detail_items = self._detail_items(detail, list(by_id.values()), warnings)
+        if detail_items:
+            self.product_service.add_detail_to_product(product, detail_items)
+
+        variant_created = 0
+        variant_updated = 0
+        for variant, pricing in self._preferred_variants(detail):
+            selections = self._variant_selections(variant, list(by_id.values()))
+            combination_key = self.product_service._build_combination_key(
+                sorted(selections, key=lambda item: item["attribute"].id)
+            )
+            existing = ProductVariants.objects.filter(
+                product=product, combination_key=combination_key
+            ).first()
+            if existing:
+                self.product_service.update_variant(
+                    existing,
+                    selections=selections,
+                    inventory_submitted=False,
+                    **pricing,
+                )
+                variant_updated += 1
+            else:
+                self.product_service.add_variant_to_product(
+                    product,
+                    selections=selections,
+                    inventory_strategy_code="normal",
+                    inventory_submitted=False,
+                    **pricing,
+                )
+                variant_created += 1
+
+        return {
+            "status": "created" if created else "updated",
+            "source_product_id": source_id,
+            "local_product_id": product.id,
+            "variants_created": variant_created,
+            "variants_updated": variant_updated,
+            "warnings": warnings,
+        }

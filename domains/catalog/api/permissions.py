@@ -32,6 +32,16 @@ class CustomActionPermission(BasePermission):
         return request.user.has_perm(perm)
 
 
+class AllRequiredPermissions(BasePermission):
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        return all(
+            request.user.has_perm(permission)
+            for permission in getattr(view, "required_permissions", ())
+        )
+
+
 class MethodPermission(BasePermission):
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:

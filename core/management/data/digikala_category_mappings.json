@@ -1,0 +1,35 @@
+{
+  "schema": "uzshop.digikala.category-mappings/v1",
+  "categories": [
+    {
+      "category_id": 1003,
+      "name": "شارژر گوشی",
+      "digikala_category_id": 1271,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/1271/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1004,
+      "name": "قاب گوشی",
+      "digikala_category_id": 77,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/77/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1005,
+      "name": "گلس گوشی",
+      "digikala_category_id": 76,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/76/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1006,
+      "name": "هولدر گوشی موبایل",
+      "digikala_category_id": 81,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/81/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1007,
+      "name": "کابل شارژ و مبدل",
+      "digikala_category_id": 80,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/80/products?columns_per_page=3&page=1"
+    }
+  ]
+}
