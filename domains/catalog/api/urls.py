@@ -1,5 +1,6 @@
 from django.urls import path
 from .views import (
+    BrandListCreate, BrandDetail, BrandNameSuggestions,
     CategoryListCreate, CategoryDetail, CategoryTree, CategoryStatusList, CategoryAssignDetails,
     CategoryNameSuggestions,
     CategoryDetailListCreate, CategoryDetailDetail, CategoryDetailNameSuggestions,
@@ -25,6 +26,10 @@ urlpatterns = [
         StorefrontProductQuickView.as_view(),
     ),
     path("storefront/products/<str:slug>", StorefrontProductDetail.as_view()),
+    # Brands
+    path("brands", BrandListCreate.as_view()),
+    path("brands/name-suggestions", BrandNameSuggestions.as_view()),
+    path("brands/<int:id>", BrandDetail.as_view()),
     # Categories
     path("categories", CategoryListCreate.as_view()),
     path("categories/tree", CategoryTree.as_view()),

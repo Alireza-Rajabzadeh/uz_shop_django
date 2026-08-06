@@ -41,6 +41,7 @@ class VariantOption(models.Model):
         related_name="options",
     )
     name = models.CharField(max_length=100)
+    fa_name = models.CharField(max_length=100, blank=True, null=True)
     sku_code = models.CharField(max_length=16)
 
     def __str__(self):

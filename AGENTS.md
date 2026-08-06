@@ -29,6 +29,7 @@ Run directly from `back/`:
 | `python manage.py migrate` | Apply migrations |
 | `python manage.py makemigrations` | Generate migrations |
 | `python manage.py seed` | Seed development/reference data |
+| `python manage.py seed_categories` | Idempotently load the canonical category taxonomy |
 | `python manage.py test` | Run all tests |
 | `python manage.py test domains.customer.tests` | Run a focused suite |
 | `python manage.py makemessages -l fa -l en` | Update translations |
@@ -178,7 +179,8 @@ Current catalog endpoints are administrative and permission-controlled. They are
 - Never edit an applied migration to change current behavior; add a new migration.
 - Pair data normalization with database constraints when introducing canonical formats.
 - Keep seeders idempotent and clearly development-only.
-- The seed command creates location, catalog, inventory reference, and customer fixtures, but no admin account, stock, product variants, or notification provider.
+- The seed command creates location, canonical categories, catalog/inventory reference data, and customer fixtures, but no generated test catalog, admin account, stock, product variants, or notification provider.
+- Canonical category IDs start at `1001`; category seeding updates those IDs without deleting pre-existing categories.
 
 Run focused tests while developing, then broader tests for shared infrastructure or cross-domain changes. Important suites include:
 

@@ -2,6 +2,7 @@ from django.contrib.auth.models import User
 from rest_framework.test import APITestCase
 
 from domains.catalog.models import (
+    Brand,
     Category,
     CategoryDetail,
     CategoryDetailRelation,
@@ -28,9 +29,9 @@ class ProductVariantWorkflowTests(APITestCase):
         self.category = Category.objects.create(name="Variant Phones", status=category_status)
         self.product = Product.objects.create(
             name="Test Phone",
-            category=self.category,
             status=product_status,
         )
+        self.product.categories.add(self.category)
         self.color = VariantAttribute.objects.create(name="Color")
         self.storage = VariantAttribute.objects.create(name="Storage")
         self.black = VariantOption.objects.create(
@@ -293,6 +294,32 @@ class CategoryWriteTests(APITestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(Category.objects.count(), 1)
 
+    def test_create_allows_same_normalized_name_under_different_parents(self):
+        first_parent = Category.objects.create(name="Home", status=self.status)
+        second_parent = Category.objects.create(name="Baby", status=self.status)
+        Category.objects.create(name="Towel", parent=first_parent, status=self.status)
+
+        response = self.client.post(
+            "/api/catalog/categories",
+            {"name": " towel ", "parent": second_parent.id, "status": self.status.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(Category.objects.filter(name__iexact="Towel").count(), 2)
+
+    def test_create_rejects_normalized_duplicate_under_same_parent(self):
+        parent = Category.objects.create(name="Home", status=self.status)
+        Category.objects.create(name="Towel", parent=parent, status=self.status)
+
+        response = self.client.post(
+            "/api/catalog/categories",
+            {"name": " towel ", "parent": parent.id, "status": self.status.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
     def test_update_excludes_current_category_from_duplicate_check(self):
         category = Category.objects.create(name="Phones", status=self.status)
 
@@ -348,6 +375,23 @@ class CategoryWriteTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.data["data"]["exact_duplicate"])
         self.assertEqual(response.data["data"]["suggestions"], [])
+
+    def test_name_suggestions_scope_exact_duplicate_to_parent(self):
+        first_parent = Category.objects.create(name="Home", status=self.status)
+        second_parent = Category.objects.create(name="Baby", status=self.status)
+        Category.objects.create(name="Towel", parent=first_parent, status=self.status)
+
+        other_parent_response = self.client.get(
+            "/api/catalog/categories/name-suggestions",
+            {"name": "towel", "parent_id": second_parent.id},
+        )
+        same_parent_response = self.client.get(
+            "/api/catalog/categories/name-suggestions",
+            {"name": "towel", "parent_id": first_parent.id},
+        )
+
+        self.assertFalse(other_parent_response.data["data"]["exact_duplicate"])
+        self.assertTrue(same_parent_response.data["data"]["exact_duplicate"])
 
 
 class CategoryDetailWriteTests(APITestCase):
@@ -510,9 +554,9 @@ class CategoryDetailAssignmentTests(APITestCase):
         )
         product = Product.objects.create(
             name="Phone",
-            category=self.category,
             status=self.product_status,
         )
+        product.categories.add(self.category)
         ProductDetails.objects.create(product=product, detail=self.color, value="Red")
 
         response = self.client.post(self.url, {"details": []}, format="json")
@@ -563,7 +607,7 @@ class ProductCompleteCreateTests(APITestCase):
 
         self.assertEqual(options_response.status_code, 200)
         self.assertEqual(options_response.data["data"]["categories"][0]["path"], "Phones")
-        self.assertEqual(set(options_response.data["data"]), {"categories"})
+        self.assertEqual(set(options_response.data["data"]), {"categories", "brands"})
 
         details_response = self.client.get(
             "/api/catalog/product-detail-definitions",
@@ -594,7 +638,7 @@ class ProductCompleteCreateTests(APITestCase):
 
         self.assertEqual(response.status_code, 201)
         product = Product.objects.get(name="Smart Phone")
-        self.assertEqual(product.category, self.category)
+        self.assertEqual(product.categories.first(), self.category)
         self.assertEqual(product.status.name, "pending")
         self.assertEqual(product.details.count(), 3)
 
@@ -681,9 +725,9 @@ class ProductCompleteCreateTests(APITestCase):
     def test_product_detail_endpoint_rejects_unassigned_detail(self):
         product = Product.objects.create(
             name="Existing Phone",
-            category=self.category,
             status=self.product_status,
         )
+        product.categories.add(self.category)
         unassigned = CategoryDetail.objects.create(name="Unassigned", type="text")
 
         response = self.client.post(
@@ -716,10 +760,10 @@ class ProductCompleteCreateTests(APITestCase):
     def test_complete_update_replaces_details_and_preserves_status(self):
         product = Product.objects.create(
             name="Old Phone",
-            category=self.category,
             status=self.product_status,
             description="Old description",
         )
+        product.categories.add(self.category)
         ProductDetails.objects.create(product=product, detail=self.color, value="Red")
         ProductDetails.objects.create(product=product, detail=self.storage, value="128 GB")
 
@@ -755,9 +799,9 @@ class ProductCompleteCreateTests(APITestCase):
     def test_complete_update_rolls_back_invalid_category_details(self):
         product = Product.objects.create(
             name="Stable Phone",
-            category=self.category,
             status=self.product_status,
         )
+        product.categories.add(self.category)
         ProductDetails.objects.create(product=product, detail=self.color, value="Red")
         ProductDetails.objects.create(product=product, detail=self.storage, value="128 GB")
         other_category = Category.objects.create(
@@ -779,7 +823,7 @@ class ProductCompleteCreateTests(APITestCase):
         self.assertEqual(response.status_code, 400)
         product.refresh_from_db()
         self.assertEqual(product.name, "Stable Phone")
-        self.assertEqual(product.category, self.category)
+        self.assertEqual(product.categories.first(), self.category)
         self.assertEqual(
             set(product.details.values_list("detail_id", "value")),
             {(self.color.id, "Red"), (self.storage.id, "128 GB")},
@@ -788,9 +832,9 @@ class ProductCompleteCreateTests(APITestCase):
     def test_complete_update_changes_category_and_replaces_old_details(self):
         product = Product.objects.create(
             name="Phone",
-            category=self.category,
             status=self.product_status,
         )
+        product.categories.add(self.category)
         ProductDetails.objects.create(product=product, detail=self.color, value="Red")
         ProductDetails.objects.create(product=product, detail=self.storage, value="128 GB")
         other_category = Category.objects.create(
@@ -821,7 +865,7 @@ class ProductCompleteCreateTests(APITestCase):
 
         self.assertEqual(response.status_code, 200)
         product.refresh_from_db()
-        self.assertEqual(product.category, other_category)
+        self.assertEqual(product.categories.first(), other_category)
         self.assertEqual(
             list(product.details.values_list("detail_id", "value")),
             [(material.id, "Aluminum")],
@@ -830,9 +874,9 @@ class ProductCompleteCreateTests(APITestCase):
     def test_basic_patch_preserves_existing_product_details(self):
         product = Product.objects.create(
             name="Phone",
-            category=self.category,
             status=self.product_status,
         )
+        product.categories.add(self.category)
         ProductDetails.objects.create(product=product, detail=self.color, value="Red")
 
         response = self.client.patch(
@@ -849,9 +893,9 @@ class ProductCompleteCreateTests(APITestCase):
     def test_basic_patch_cannot_change_category(self):
         product = Product.objects.create(
             name="Phone",
-            category=self.category,
             status=self.product_status,
         )
+        product.categories.add(self.category)
         other_category = Category.objects.create(
             name="Unsafe Category",
             status=self.category_status,
@@ -865,7 +909,7 @@ class ProductCompleteCreateTests(APITestCase):
 
         self.assertEqual(response.status_code, 200)
         product.refresh_from_db()
-        self.assertEqual(product.category, self.category)
+        self.assertEqual(product.categories.first(), self.category)
 
 
 class CatalogSearchAndReadTests(APITestCase):
@@ -899,8 +943,10 @@ class CatalogSearchAndReadTests(APITestCase):
 
     def create_product(self, name, prices):
         product = Product.objects.create(
-            name=name, category=self.category, status=self.product_status
+            name=name,
+            status=self.product_status,
         )
+        product.categories.add(self.category)
         variants = []
         for index, price in enumerate(prices):
             variant = ProductVariants.objects.create(
@@ -1016,3 +1062,236 @@ class CatalogSearchAndReadTests(APITestCase):
             {"price_operator": "between", "price_min": "20", "price_max": "10"},
         )
         self.assertEqual(response.status_code, 400)
+
+
+class BrandWriteTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_superuser(username="brand-admin", password="password")
+        self.client.force_authenticate(self.user)
+
+    def test_create_and_update_brand_with_fa_name(self):
+        response = self.client.post(
+            "/api/catalog/brands",
+            {"name": "Apple", "fa_name": "اپل"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        brand = Brand.objects.get(name="Apple")
+        self.assertEqual(brand.fa_name, "اپل")
+
+        patch = self.client.patch(
+            f"/api/catalog/brands/{brand.id}",
+            {"name": "Apple Inc.", "fa_name": "اپل‌"},
+            format="json",
+        )
+        self.assertEqual(patch.status_code, 200)
+        brand.refresh_from_db()
+        self.assertEqual(brand.name, "Apple Inc.")
+
+    def test_create_rejects_normalized_duplicate_name(self):
+        Brand.objects.create(name="Xiaomi")
+        response = self.client.post(
+            "/api/catalog/brands", {"name": "  xiaomi  "}, format="json"
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_brand_in_use_cannot_be_deleted(self):
+        category_status = CategoryStatus.objects.create(name="brand-active")
+        product_status = ProductStatus.objects.create(name="brand-pending")
+        category = Category.objects.create(name="Brand Phones", status=category_status)
+        brand = Brand.objects.create(name="Apple")
+        product = Product.objects.create(name="iPhone", status=product_status)
+        product.categories.add(category)
+        product.brand = brand
+        product.save(update_fields=["brand"])
+
+        response = self.client.delete(f"/api/catalog/brands/{brand.id}")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertTrue(Brand.objects.filter(id=brand.id).exists())
+
+    def test_brand_name_suggestions_rank_and_flag_exact(self):
+        Brand.objects.create(name="Apple")
+        Brand.objects.create(name="Appleton")
+
+        response = self.client.get(
+            "/api/catalog/brands/name-suggestions", {"name": "apple"}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["data"]["exact_duplicate"])
+        self.assertEqual(response.data["data"]["suggestions"][0]["name"], "Apple")
+
+    def test_brand_options_included_in_product_form_and_filter_options(self):
+        Brand.objects.create(name="Samsung", fa_name="سامسونگ")
+
+        form = self.client.get("/api/catalog/product-form-options")
+        filters = self.client.get("/api/catalog/product-filter-options")
+
+        self.assertEqual(form.status_code, 200)
+        self.assertEqual(form.data["data"]["brands"][0]["fa_name"], "سامسونگ")
+        self.assertEqual(filters.data["data"]["brands"][0]["name"], "Samsung")
+
+
+class VariantOptionFaNameTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_superuser(username="fa-admin", password="password")
+        self.client.force_authenticate(self.user)
+        self.color = VariantAttribute.objects.create(name="Color")
+
+    def test_create_option_accepts_fa_name(self):
+        response = self.client.post(
+            "/api/catalog/variant-options",
+            {"attribute": self.color.id, "name": "Blue", "fa_name": "آبی", "sku_code": "BLU"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["data"]["fa_name"], "آبی")
+
+    def test_update_option_clears_and_sets_fa_name(self):
+        option = VariantOption.objects.create(
+            attribute=self.color, name="Black", fa_name="مشکی", sku_code="BLK"
+        )
+        cleared = self.client.patch(
+            f"/api/catalog/variant-options/{option.id}", {"fa_name": ""}, format="json"
+        )
+        self.assertEqual(cleared.status_code, 200)
+        option.refresh_from_db()
+        self.assertIsNone(option.fa_name)
+
+        set_response = self.client.patch(
+            f"/api/catalog/variant-options/{option.id}",
+            {"fa_name": "سیاه"},
+            format="json",
+        )
+        self.assertEqual(set_response.status_code, 200)
+        option.refresh_from_db()
+        self.assertEqual(option.fa_name, "سیاه")
+
+
+class ProductMultiCategoryTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_superuser(username="m2m-admin", password="password")
+        self.client.force_authenticate(self.user)
+        self.category_status = CategoryStatus.objects.create(name="m2m-active")
+        self.product_status = ProductStatus.objects.create(name="m2m-pending")
+        self.color = CategoryDetail.objects.create(name="Color", type="select", options="Red")
+        self.phones = Category.objects.create(name="Phones", status=self.category_status)
+        self.accessories = Category.objects.create(name="Accessories", status=self.category_status)
+        CategoryDetailRelation.objects.create(category=self.phones, detail=self.color, value="")
+        CategoryDetailRelation.objects.create(
+            category=self.accessories, detail=self.color, value=""
+        )
+        self.color_attr = VariantAttribute.objects.create(name="Color")
+        self.black = VariantOption.objects.create(
+            attribute=self.color_attr, name="Black", sku_code="BLK"
+        )
+        self.normal, _ = InventoryStrategy.objects.get_or_create(
+            code="normal", defaults={"name": "M2M Normal"}
+        )
+        country = Country.objects.create(name="M2M Country", code="MC", phone_code="+3")
+        state = State.objects.create(name="M2M State", country=country)
+        city = City.objects.create(name="M2M City", state=state)
+        warehouse_status = WarehouseStatus.objects.create(name="m2m-available")
+        self.warehouse = Warehouse.objects.create(
+            code="WH-M2M",
+            name="M2M Warehouse",
+            city=city,
+            address="M2M",
+            lat="0",
+            lng="0",
+            is_default=True,
+            status=warehouse_status,
+        )
+
+    def test_complete_create_sets_multiple_categories_and_sku_uses_lowest_id(self):
+        response = self.client.post(
+            "/api/catalog/products/create",
+            {
+                "name": "Multi Phone",
+                "category_ids": [self.accessories.id, self.phones.id],
+                "details": [{"detail_id": self.color.id, "value": "Red"}],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        product = Product.objects.get(name="Multi Phone")
+        self.assertEqual(
+            set(product.categories.values_list("id", flat=True)),
+            {self.accessories.id, self.phones.id},
+        )
+
+        variant_response = self.client.post(
+            f"/api/catalog/products/{product.id}/variants",
+            {
+                "price": "100.00",
+                "inventory_strategy_code": "normal",
+                "inventory": {"quantity": 1, "sellable": 1},
+                "selections": [{"attribute_id": self.color_attr.id, "option_id": self.black.id}],
+            },
+            format="json",
+        )
+        self.assertEqual(variant_response.status_code, 201)
+        lowest_id = min(self.accessories.id, self.phones.id)
+        self.assertEqual(
+            variant_response.data["data"]["sku"],
+            f"CG{lowest_id}-PD{product.id}-BLK",
+        )
+
+    def test_complete_update_replaces_categories_and_regenerates_sku(self):
+        product = Product.objects.create(name="Old Multi", status=self.product_status)
+        product.categories.add(self.phones)
+        variant = ProductVariants.objects.create(
+            product=product,
+            inventory_strategy=self.normal,
+            sku=f"CG{self.phones.id}-PD{product.id}-BLK",
+            combination_key=f"{self.color_attr.id}:{self.black.id}",
+            price="100.00",
+        )
+        ProductVariantSelection.objects.create(
+            variant=variant, attribute=self.color_attr, option=self.black
+        )
+
+        response = self.client.patch(
+            f"/api/catalog/products/{product.id}/update",
+            {
+                "name": "Updated Multi",
+                "category_ids": [self.accessories.id],
+                "details": [],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        product.refresh_from_db()
+        self.assertEqual(list(product.categories.values_list("id", flat=True)), [self.accessories.id])
+        variant.refresh_from_db()
+        self.assertEqual(variant.sku, f"CG{self.accessories.id}-PD{product.id}-BLK")
+
+    def test_product_list_exposes_categories_and_primary_category_name(self):
+        product = Product.objects.create(name="List Multi", status=self.product_status)
+        product.categories.add(self.accessories)
+        product.categories.add(self.phones)
+
+        response = self.client.get("/api/catalog/products")
+
+        self.assertEqual(response.status_code, 200)
+        row = next(item for item in response.data["data"]["results"] if item["id"] == product.id)
+        lowest_id = min(self.accessories.id, self.phones.id)
+        self.assertEqual(sorted(row["categories"]), sorted([self.accessories.id, self.phones.id]))
+        primary_name = self.accessories.name if self.accessories.id == lowest_id else self.phones.name
+        self.assertEqual(row["category_name"], primary_name)
+
+    def test_detail_definitions_accept_multiple_categories(self):
+        response = self.client.get(
+            "/api/catalog/product-detail-definitions",
+            {"category_ids": f"{self.phones.id},{self.accessories.id}"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        color = next(detail for detail in response.data["data"] if detail["id"] == self.color.id)
+        self.assertEqual(
+            sorted(color["category_ids"]),
+            sorted([self.phones.id, self.accessories.id]),
+        )

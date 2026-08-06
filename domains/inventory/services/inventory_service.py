@@ -6,6 +6,7 @@ from django.db.models import Case, Count, F, IntegerField, OuterRef, Q, Subquery
 from django.db.models.functions import Coalesce
 from django.utils.translation import gettext as _
 
+from domains.catalog.models import Category
 from domains.inventory.models import (
     InventoryStrategy,
     SerializedStock,
@@ -40,9 +41,14 @@ class InventoryService:
     ):
         from domains.catalog.models import ProductVariants
 
+        primary_category = Category.objects.filter(
+            products=OuterRef("product_id")
+        ).order_by("id").values("name")[:1]
         queryset = ProductVariants.objects.select_related(
-            "product__category", "inventory_strategy"
-        ).prefetch_related("selections__attribute", "selections__option")
+            "product", "inventory_strategy"
+        ).prefetch_related(
+            "product__categories", "selections__attribute", "selections__option"
+        ).annotate(primary_category_name=Subquery(primary_category))
         queryset = self.annotate_variant_summaries(queryset)
         reserved_normal = WarehouseStock.objects.filter(
             variant_id=OuterRef("pk")
@@ -81,7 +87,7 @@ class InventoryService:
         if product is not None:
             queryset = queryset.filter(product_id=product)
         if category is not None:
-            queryset = queryset.filter(product__category_id=category)
+            queryset = queryset.filter(product__categories__id=category).distinct()
         if strategy_code:
             queryset = queryset.filter(inventory_strategy__code=strategy_code)
         if has_reserved is not None:
@@ -101,7 +107,7 @@ class InventoryService:
             "id": "id",
             "sku": "sku",
             "product_name": "product__name",
-            "category_name": "product__category__name",
+            "category_name": "primary_category_name",
             "strategy": "inventory_strategy__code",
             "total": "total_item_count",
             "sellable": "sellable_item_count",
@@ -115,13 +121,14 @@ class InventoryService:
         return queryset.order_by(f"-{field}" if descending else field, "id")
 
     def serialize_variant_overview(self, variant, default_warehouse):
+        primary_category = variant.product.categories.order_by("id").first()
         return {
             "variant": variant.id,
             "sku": variant.sku,
             "product_id": variant.product_id,
             "product_name": variant.product.name,
-            "category_id": variant.product.category_id,
-            "category_name": variant.product.category.name,
+            "category_id": primary_category.id if primary_category else None,
+            "category_name": primary_category.name if primary_category else None,
             "strategy": {
                 "id": variant.inventory_strategy_id,
                 "code": variant.inventory_strategy.code,
@@ -483,6 +490,7 @@ class InventoryService:
 
     def get_variant_details(self, variant):
         summary = self.get_summary(variant)
+        primary_category = variant.product.categories.order_by("id").first()
         strategy = {
             "id": variant.inventory_strategy_id,
             "code": variant.inventory_strategy.code,
@@ -492,8 +500,8 @@ class InventoryService:
             "sku": variant.sku,
             "product": {"id": variant.product_id, "name": variant.product.name},
             "category": {
-                "id": variant.product.category_id,
-                "name": variant.product.category.name,
+                "id": primary_category.id if primary_category else None,
+                "name": primary_category.name if primary_category else None,
             },
             "selections": [
                 {
@@ -547,8 +555,10 @@ class InventoryService:
     @transaction.atomic
     def adjust_variant_stock(self, variant, *, inventory=None, serial_items=None):
         variant = type(variant).objects.select_for_update().select_related(
-            "inventory_strategy", "product__category"
-        ).prefetch_related("selections__attribute", "selections__option").get(pk=variant.pk)
+            "inventory_strategy", "product"
+        ).prefetch_related(
+            "product__categories", "selections__attribute", "selections__option"
+        ).get(pk=variant.pk)
         strategy_code = variant.inventory_strategy.code
         self.apply_variant_inventory(
             variant,
@@ -558,8 +568,10 @@ class InventoryService:
             inventory_submitted=True,
         )
         return type(variant).objects.select_related(
-            "inventory_strategy", "product__category"
-        ).prefetch_related("selections__attribute", "selections__option").get(pk=variant.pk)
+            "inventory_strategy", "product"
+        ).prefetch_related(
+            "product__categories", "selections__attribute", "selections__option"
+        ).get(pk=variant.pk)
 
     @staticmethod
     def serialize_warehouse(warehouse):

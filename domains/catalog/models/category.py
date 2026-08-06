@@ -25,11 +25,19 @@ class Category(models.Model):
         constraints = [
             models.UniqueConstraint(
                 Lower(Trim("name")),
-                name="catalog_category_normalized_name_unique",
+                condition=models.Q(parent__isnull=True),
+                name="catalog_root_category_normalized_name_unique",
+            ),
+            models.UniqueConstraint(
+                models.F("parent"),
+                Lower(Trim("name")),
+                condition=models.Q(parent__isnull=False),
+                name="catalog_child_category_normalized_name_unique",
             ),
         ]
     
     name = models.CharField(max_length=100)
+    fa_name = models.CharField(max_length=100, blank=True, null=True)
 
     status = models.ForeignKey(
         "CategoryStatus",

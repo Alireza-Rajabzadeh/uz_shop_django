@@ -1,3 +1,4 @@
+from .brand_service import BrandService
 from .category_service import CategoryService
 from .detail_service import DetailService
 from .product_service import ProductService

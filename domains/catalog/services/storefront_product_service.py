@@ -41,19 +41,31 @@ class StorefrontProductService:
         variants = self.inventory_service.annotate_variant_summaries(
             ProductVariants.objects.select_related("inventory_strategy")
         ).prefetch_related("selections__attribute", "selections__option").order_by("id")
-        product = Product.objects.select_related(
-            "brand", "category", "category__status", "category__parent"
-        ).prefetch_related(
-            Prefetch("product_files", queryset=media, to_attr="storefront_media"),
-            Prefetch("details", queryset=details, to_attr="storefront_details"),
-            Prefetch("variants", queryset=variants, to_attr="storefront_variants"),
-        ).get(
-            slug=slug,
-            status__name__iexact="active",
-            category__status__name__iexact="active",
+        product = (
+            Product.objects.select_related("brand")
+            .prefetch_related(
+                "categories",
+                Prefetch("product_files", queryset=media, to_attr="storefront_media"),
+                Prefetch("details", queryset=details, to_attr="storefront_details"),
+                Prefetch("variants", queryset=variants, to_attr="storefront_variants"),
+            )
+            .filter(
+                slug=slug,
+                status__name__iexact="active",
+            )
+            .first()
         )
-        self._validate_category_ancestors(product.category)
+        if product is None:
+            raise Product.DoesNotExist
+        primary_category = self._primary_category(product)
+        if primary_category is None or primary_category.status.name.casefold() != "active":
+            raise Product.DoesNotExist
+        self._validate_category_ancestors(primary_category)
         return product
+
+    @staticmethod
+    def _primary_category(product):
+        return product.categories.order_by("id").first()
 
     @staticmethod
     def _validate_category_ancestors(category):
@@ -73,11 +85,15 @@ class StorefrontProductService:
         )
         effective_prices = [self.variant_service.calculate_discounted_price(row) for row in variants]
         media = self._media_payload(product.storefront_media)
+        primary_category = self._primary_category(product)
         return {
             "id": product.id,
             "slug": product.slug,
             "name": product.name,
-            "category": {"id": product.category_id, "name": product.category.name},
+            "category": (
+                {"id": primary_category.id, "name": primary_category.name}
+                if primary_category else None
+            ),
             "brand": (
                 {"id": product.brand_id, "name": product.brand.name}
                 if product.brand_id else None

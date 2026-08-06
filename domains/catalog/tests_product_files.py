@@ -41,14 +41,14 @@ class ProductFileTests(APITestCase):
         product_status = ProductStatus.objects.get(name="pending")
         self.product = Product.objects.create(
             name="File test product",
-            category=self.category,
             status=product_status,
         )
+        self.product.categories.add(self.category)
         self.other_product = Product.objects.create(
             name="Other file test product",
-            category=self.category,
             status=product_status,
         )
+        self.other_product.categories.add(self.category)
         self.file_service = FileService()
         self.relation_service = ProductFileService()
 

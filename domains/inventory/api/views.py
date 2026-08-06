@@ -79,8 +79,10 @@ class InventoryVariantList(InventoryAPIView):
 class VariantInventoryDetail(InventoryAPIView):
     def get_object(self, variant_id):
         variant = ProductVariants.objects.select_related(
-            "inventory_strategy", "product__category"
-        ).prefetch_related("selections__attribute", "selections__option").filter(pk=variant_id).first()
+            "inventory_strategy", "product"
+        ).prefetch_related(
+            "product__categories", "selections__attribute", "selections__option"
+        ).filter(pk=variant_id).first()
         if variant is None:
             raise NotFound("Variant not found.")
         return variant

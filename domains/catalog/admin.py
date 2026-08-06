@@ -19,8 +19,8 @@ from .services.detail_service import DetailService
 
 @admin.register(Brand)
 class BrandAdmin(ModelAdmin):
-    list_display = ["name"]
-    search_fields = ["name"]
+    list_display = ["name", "fa_name"]
+    search_fields = ["name", "fa_name"]
 
 
 class CategoryDetailRelationInline(admin.TabularInline):
@@ -37,9 +37,9 @@ class CategoryVariantAttributeInline(admin.TabularInline):
 
 @admin.register(Category)
 class CategoryAdmin(ModelAdmin):
-    list_display = ["name", "parent", "status"]
+    list_display = ["name", "fa_name", "parent", "status"]
     list_filter = ["status"]
-    search_fields = ["name"]
+    search_fields = ["name", "fa_name"]
     inlines = [CategoryDetailRelationInline, CategoryVariantAttributeInline]
 
 
@@ -88,12 +88,19 @@ class ProductVariantInline(admin.TabularInline):
 
 @admin.register(Product)
 class ProductAdmin(ModelAdmin):
-    list_display = ["name", "slug", "brand", "category", "status"]
-    list_filter = ["brand", "category", "status"]
+    list_display = ["name", "slug", "brand", "categories_display", "status"]
+    list_filter = ["brand", "categories", "status"]
     search_fields = ["name"]
     autocomplete_fields = ["brand"]
     readonly_fields = ["slug"]
+    filter_horizontal = ["categories"]
     inlines = [ProductDetailsInline, ProductVariantInline]
+
+    @admin.display(description="categories")
+    def categories_display(self, obj):
+        return ", ".join(
+            obj.categories.order_by("id").values_list("name", flat=True)
+        )
 
 
 @admin.register(ProductStatus)
@@ -164,9 +171,9 @@ class VariantAttributeAdmin(ModelAdmin):
 
 @admin.register(VariantOption)
 class VariantOptionAdmin(ModelAdmin):
-    list_display = ["name", "attribute", "sku_code"]
+    list_display = ["name", "fa_name", "attribute", "sku_code"]
     list_filter = ["attribute"]
-    search_fields = ["name", "sku_code"]
+    search_fields = ["name", "fa_name", "sku_code"]
     autocomplete_fields = ["attribute"]
 
 

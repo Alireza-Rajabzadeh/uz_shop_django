@@ -9,6 +9,10 @@ from domains.files.services import FileService
 from domains.inventory.services import InventoryService
 
 
+def primary_category(obj):
+    return obj.categories.order_by("id").first()
+
+
 class CategoryStatusSerializer(serializers.ModelSerializer):
     class Meta:
         model = CategoryStatus
@@ -97,17 +101,19 @@ class CategoryListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Category
-        fields = ["id", "name", "parent", "parent_name", "status", "status_name", "logo"]
+        fields = ["id", "name", "fa_name", "parent", "parent_name", "status", "status_name", "logo"]
 
 
 class CategoryNameSuggestionQuerySerializer(serializers.Serializer):
     name = serializers.CharField(max_length=100)
+    parent_id = serializers.IntegerField(required=False, min_value=1)
     exclude_id = serializers.IntegerField(required=False, min_value=1)
 
 
 class CategoryNameSuggestionSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     name = serializers.CharField()
+    fa_name = serializers.CharField(allow_null=True)
     parent = serializers.IntegerField(allow_null=True)
     parent_name = serializers.CharField(allow_null=True)
     status = serializers.IntegerField()
@@ -123,10 +129,37 @@ class ProductStatusSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+class BrandSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Brand
+        fields = ["id", "name", "fa_name"]
+
+
+class BrandWriteSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=150)
+    fa_name = serializers.CharField(
+        max_length=150, required=False, allow_blank=True, allow_null=True
+    )
+
+
+class BrandNameSuggestionQuerySerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=150)
+    exclude_id = serializers.IntegerField(required=False, min_value=1)
+
+
+class BrandNameSuggestionSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    name = serializers.CharField()
+    fa_name = serializers.CharField(allow_null=True)
+    similarity = serializers.IntegerField(read_only=True)
+    exact = serializers.BooleanField(read_only=True)
+
+
 class ProductListQuerySerializer(serializers.Serializer):
     id = serializers.IntegerField(required=False, min_value=1)
     name = serializers.CharField(required=False, allow_blank=False, trim_whitespace=True)
     category_id = serializers.IntegerField(required=False, min_value=1)
+    brand_id = serializers.IntegerField(required=False, min_value=1)
     status_id = serializers.IntegerField(required=False, min_value=1)
     search = serializers.CharField(required=False, allow_blank=False, trim_whitespace=True)
     ordering = serializers.CharField(required=False, allow_blank=False)
@@ -174,7 +207,7 @@ class VariantOptionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = VariantOption
-        fields = ["id", "attribute", "attribute_name", "name", "sku_code"]
+        fields = ["id", "attribute", "attribute_name", "name", "fa_name", "sku_code"]
 
 
 class VariantAttributeSerializer(serializers.ModelSerializer):
@@ -192,6 +225,7 @@ class VariantAttributeWriteSerializer(serializers.Serializer):
 class VariantOptionWriteSerializer(serializers.Serializer):
     attribute = serializers.PrimaryKeyRelatedField(queryset=VariantAttribute.objects.all())
     name = serializers.CharField(max_length=100)
+    fa_name = serializers.CharField(max_length=100, required=False, allow_blank=True, allow_null=True)
     sku_code = serializers.CharField(max_length=16)
 
 
@@ -212,6 +246,7 @@ class ProductVariantSelectionSerializer(serializers.Serializer):
     attribute_name = serializers.CharField(source="attribute.name")
     option_id = serializers.IntegerField(source="option.id")
     option_name = serializers.CharField(source="option.name")
+    option_fa_name = serializers.CharField(source="option.fa_name", allow_null=True)
     sku_code = serializers.CharField(source="option.sku_code")
 
 
@@ -261,11 +296,13 @@ class ProductVariantSerializer(serializers.ModelSerializer):
 class ProductSerializer(serializers.ModelSerializer):
     details = ProductDetailsSerializer(many=True, read_only=True)
     variants = ProductVariantSerializer(many=True, read_only=True)
+    brand_name = serializers.CharField(source="brand.name", read_only=True, allow_null=True)
+    brand_fa_name = serializers.CharField(source="brand.fa_name", read_only=True, allow_null=True)
 
     class Meta:
         model = Product
         fields = "__all__"
-        read_only_fields = ["status"]
+        read_only_fields = ["status", "categories"]
 
 
 class ProductFileReadSerializer(serializers.ModelSerializer):
@@ -320,18 +357,30 @@ class ProductFileReorderSerializer(serializers.Serializer):
 
 
 class ProductDetailReadSerializer(serializers.ModelSerializer):
-    category_name = serializers.CharField(source="category.name", read_only=True)
+    category_name = serializers.SerializerMethodField()
+    category_fa_name = serializers.SerializerMethodField()
     status_name = serializers.CharField(source="status.name", read_only=True)
     pictures = serializers.SerializerMethodField()
     details = ProductDetailsSerializer(many=True, read_only=True)
     variants = ProductVariantSerializer(many=True, read_only=True)
+    brand_name = serializers.CharField(source="brand.name", read_only=True, allow_null=True)
+    brand_fa_name = serializers.CharField(source="brand.fa_name", read_only=True, allow_null=True)
 
     class Meta:
         model = Product
         fields = [
-            "id", "name", "description", "category", "category_name", "status",
-            "status_name", "pictures", "details", "variants",
+            "id", "name", "description", "categories", "category_name", "category_fa_name",
+            "status", "status_name", "brand", "brand_name", "brand_fa_name",
+            "pictures", "details", "variants",
         ]
+
+    def get_category_name(self, obj):
+        category = primary_category(obj)
+        return category.name if category else None
+
+    def get_category_fa_name(self, obj):
+        category = primary_category(obj)
+        return category.fa_name if category else None
 
     def get_pictures(self, obj):
         relations = getattr(obj, "ordered_files", None)
@@ -355,10 +404,21 @@ class ProductBasicUpdateSerializer(serializers.Serializer):
 
 
 class ProductListSerializer(serializers.ModelSerializer):
-    category_name = serializers.CharField(source="category.name", read_only=True)
+    category_name = serializers.SerializerMethodField()
+    category_fa_name = serializers.SerializerMethodField()
     status_name = serializers.CharField(source="status.name", read_only=True)
+    brand_name = serializers.CharField(source="brand.name", read_only=True, allow_null=True)
+    brand_fa_name = serializers.CharField(source="brand.fa_name", read_only=True, allow_null=True)
     variant_count = serializers.IntegerField(read_only=True)
     thumbnail_url = serializers.SerializerMethodField()
+
+    def get_category_name(self, obj):
+        category = primary_category(obj)
+        return category.name if category else None
+
+    def get_category_fa_name(self, obj):
+        category = primary_category(obj)
+        return category.fa_name if category else None
 
     def get_thumbnail_url(self, obj):
         media = getattr(obj, "list_media", [])
@@ -372,7 +432,8 @@ class ProductListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = [
-            "id", "name", "category", "category_name", "status", "status_name",
+            "id", "name", "categories", "category_name", "category_fa_name", "brand",
+            "brand_name", "brand_fa_name", "status", "status_name",
             "description", "variant_count", "thumbnail_url",
         ]
 
@@ -383,13 +444,6 @@ class ProductCategorySelectionSerializer(serializers.Serializer):
         many=True,
         allow_empty=False,
     )
-
-    def validate_category_ids(self, categories):
-        if len(categories) != 1:
-            raise serializers.ValidationError(
-                "Exactly one category is supported until product categories become many-to-many."
-            )
-        return categories
 
 
 class ProductDetailValueWriteSerializer(serializers.Serializer):

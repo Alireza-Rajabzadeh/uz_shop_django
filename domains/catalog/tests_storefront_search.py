@@ -75,10 +75,10 @@ class StorefrontProductSearchTests(TestCase):
     def create_product(self, name, brand, *, status=None, detail_option=None):
         product = Product.objects.create(
             name=name,
-            category=self.category,
             brand=brand,
             status=status or self.product_status,
         )
+        product.categories.add(self.category)
         if detail_option:
             ProductDetails.objects.create(
                 product=product,

@@ -2,7 +2,7 @@ from django.core.management.base import BaseCommand
 
 from core.management.seeders.categories import CategorySeeder
 from core.management.seeders.inventory import InventorySeeder
-from core.management.seeders.products import ProductSeeder
+from core.management.seeders.product_statuses import ProductStatusSeeder
 from core.management.seeders.customers import CustomerSeeder
 from core.management.seeders.location import LocationSeeder
 from core.management.seeders.variant_attributes import VariantAttributeSeeder
@@ -16,7 +16,7 @@ class Command(BaseCommand):
             LocationSeeder(),
             CategorySeeder(),
             VariantAttributeSeeder(),
-            ProductSeeder(),
+            ProductStatusSeeder(),
             InventorySeeder(),
             CustomerSeeder(),
         ]

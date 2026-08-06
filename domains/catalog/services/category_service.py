@@ -27,7 +27,7 @@ class CategoryService(BaseService):
 
     def _validate_category(self, name, parent=None, instance=None):
         normalized_name = self.normalize_name(name)
-        duplicates = self.model.objects.all()
+        duplicates = self.model.objects.filter(parent=parent)
         if instance:
             duplicates = duplicates.exclude(pk=instance.pk)
         if any(
@@ -81,6 +81,7 @@ class CategoryService(BaseService):
         ordering_fields = {
             "id": "id",
             "name": "name",
+            "fa_name": "fa_name",
             "parent_name": "parent__name",
             "status_name": "status__name",
         }
@@ -96,7 +97,7 @@ class CategoryService(BaseService):
     def get_tree(self):
         return self.model.objects.filter(parent__isnull=True).prefetch_related("children")
 
-    def find_name_matches(self, name, exclude_id=None, limit=5, threshold=65):
+    def find_name_matches(self, name, parent=None, exclude_id=None, limit=5, threshold=65):
         normalized_name = self.normalize_name(name)
         queryset = self.model.objects.select_related("parent", "status")
         if exclude_id:
@@ -107,7 +108,7 @@ class CategoryService(BaseService):
         for category in queryset:
             score = round(fuzz.WRatio(normalized_name.casefold(), category.name.casefold()))
             exact = self.normalize_name(category.name).casefold() == normalized_name.casefold()
-            exact_duplicate = exact_duplicate or exact
+            exact_duplicate = exact_duplicate or (exact and category.parent_id == parent)
             if exact or score >= threshold:
                 matches.append((exact, score, category))
 
@@ -126,7 +127,7 @@ class CategoryService(BaseService):
 
     def get_used_detail_ids(self, category):
         product_detail_ids = ProductDetails.objects.filter(
-            product__category=category
+            product__categories=category
         ).values_list("detail_id", flat=True)
         return set(product_detail_ids)
 

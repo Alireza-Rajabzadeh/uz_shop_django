@@ -99,13 +99,15 @@ class PostgresProductSearchBackend:
 
     def _public_products(self):
         inactive_category_ids = self._inactive_category_tree_ids()
-        queryset = Product.objects.filter(
-            status__name__iexact="active",
-            category__status__name__iexact="active",
-        )
+        queryset = Product.objects.filter(status__name__iexact="active")
         if inactive_category_ids:
-            queryset = queryset.exclude(category_id__in=inactive_category_ids)
-        return queryset
+            queryset = queryset.exclude(categories__id__in=inactive_category_ids)
+        primary_category = Category.objects.filter(
+            products=OuterRef("pk")
+        ).order_by("id").values("name")[:1]
+        return queryset.filter(categories__isnull=False).annotate(
+            primary_category_name=Subquery(primary_category)
+        ).distinct()
 
     @staticmethod
     def _inactive_category_tree_ids():
@@ -134,7 +136,7 @@ class PostgresProductSearchBackend:
         vector = (
             SearchVector("name", config="simple", weight="A")
             + SearchVector("brand__name", config="simple", weight="A")
-            + SearchVector("category__name", config="simple", weight="B")
+            + SearchVector("primary_category_name", config="simple", weight="B")
             + SearchVector("description", config="simple", weight="D")
         )
         search_query = SearchQuery(query_text, config="simple", search_type="websearch")
@@ -159,7 +161,7 @@ class PostgresProductSearchBackend:
         return queryset.annotate(
             normalized_name=normalized_text_expression("name"),
             normalized_brand=normalized_text_expression("brand__name"),
-            normalized_category=normalized_text_expression("category__name"),
+            normalized_category=normalized_text_expression("primary_category_name"),
             search_rank=(
                 SearchRank(vector, search_query)
                 + TrigramSimilarity(normalized_text_expression("name"), query_text)
@@ -176,7 +178,9 @@ class PostgresProductSearchBackend:
     def _apply_filters(self, queryset, criteria, excluded=None):
         excluded = excluded or ""
         if criteria.category_ids and excluded != "category":
-            queryset = queryset.filter(category_id__in=self._category_tree_ids(criteria.category_ids))
+            queryset = queryset.filter(
+                categories__id__in=self._category_tree_ids(criteria.category_ids)
+            ).distinct()
         if criteria.brand_ids and excluded != "brand":
             queryset = queryset.filter(brand_id__in=criteria.brand_ids)
 
@@ -303,8 +307,9 @@ class PostgresProductSearchBackend:
             file__status__name="available",
             file__deleted_at__isnull=True,
         ).select_related("file").order_by("-is_primary", "position", "id")
-        return queryset.select_related("category", "brand").prefetch_related(
-            Prefetch("product_files", queryset=media, to_attr="storefront_media")
+        return queryset.select_related("brand").prefetch_related(
+            "categories",
+            Prefetch("product_files", queryset=media, to_attr="storefront_media"),
         )
 
     @staticmethod
@@ -315,11 +320,15 @@ class PostgresProductSearchBackend:
                 thumbnail_url = FileService().url(product.storefront_media[0].file)
             except FileService.Error:
                 pass
+        primary_category = product.categories.order_by("id").first()
         return {
             "id": product.id,
             "slug": product.slug,
             "name": product.name,
-            "category": {"id": product.category_id, "name": product.category.name},
+            "category": (
+                {"id": primary_category.id, "name": primary_category.name}
+                if primary_category else None
+            ),
             "brand": (
                 {"id": product.brand_id, "name": product.brand.name}
                 if product.brand_id else None
@@ -353,8 +362,8 @@ class PostgresProductSearchBackend:
     def _category_facet(self, base, criteria):
         queryset = self._apply_filters(base, criteria, "category")
         direct_counts = {
-            row["category_id"]: row["count"]
-            for row in queryset.order_by().values("category_id").annotate(
+            row["categories__id"]: row["count"]
+            for row in queryset.order_by().values("categories__id").annotate(
                 count=Count("id", distinct=True)
             )
         }

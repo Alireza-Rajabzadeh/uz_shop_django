@@ -55,8 +55,9 @@ class VariantInventoryAPITests(APITestCase):
         product_status = ProductStatus.objects.create(name="inventory-pending")
         category = Category.objects.create(name="Inventory Category", status=category_status)
         self.product = Product.objects.create(
-            name="Inventory Product", category=category, status=product_status
+            name="Inventory Product", status=product_status
         )
+        self.product.categories.add(category)
         self.attribute = VariantAttribute.objects.create(name="Inventory Color")
         self.option_a = VariantOption.objects.create(
             attribute=self.attribute, name="Black", sku_code="INVBLK"

@@ -22,8 +22,8 @@ class Product(models.Model):
         ]
         indexes = [
             models.Index(
-                fields=["status", "category", "id"],
-                name="catalog_product_public_idx",
+                fields=["status", "id"],
+                name="catalog_product_status_idx",
             ),
             GinIndex(
                 fields=["name"],
@@ -46,11 +46,12 @@ class Product(models.Model):
         related_name="status_products"
     )
 
-    category = models.ForeignKey(
-            "Category",
-            on_delete=models.PROTECT,
-            related_name="category_products"
-      )
+    categories = models.ManyToManyField(
+        "Category",
+        related_name="products",
+        blank=True,
+        db_table="catalog_product_categories",
+    )
 
     brand = models.ForeignKey(
         "Brand",

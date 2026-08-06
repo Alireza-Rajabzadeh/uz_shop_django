@@ -45,6 +45,7 @@ class VariantAttributeService:
         if search:
             query = (
                 Q(name__icontains=search)
+                | Q(fa_name__icontains=search)
                 | Q(sku_code__icontains=search)
                 | Q(attribute__name__icontains=search)
             )
@@ -101,12 +102,13 @@ class VariantAttributeService:
         return instance
 
     @transaction.atomic
-    def create_option(self, *, attribute, name, sku_code):
+    def create_option(self, *, attribute, name, sku_code, fa_name=None):
         try:
             with transaction.atomic():
                 return VariantOption.objects.create(
                     attribute=attribute,
                     name=self.normalize_name(name),
+                    fa_name=self.normalize_name(fa_name) if fa_name else None,
                     sku_code=self.normalize_sku_code(sku_code),
                 )
         except IntegrityError as exc:
@@ -124,13 +126,15 @@ class VariantAttributeService:
             })
         instance.attribute = attribute
         instance.name = self.normalize_name(data.get("name", instance.name))
+        if data.get("fa_name") is not None:
+            instance.fa_name = self.normalize_name(data["fa_name"]) if data["fa_name"] else None
         old_code = instance.sku_code
         instance.sku_code = self.normalize_sku_code(
             data.get("sku_code", instance.sku_code)
         )
         try:
             with transaction.atomic():
-                instance.save(update_fields=["attribute", "name", "sku_code"])
+                instance.save(update_fields=["attribute", "name", "fa_name", "sku_code"])
                 if instance.sku_code != old_code:
                     from domains.catalog.services.product_service import ProductService
 

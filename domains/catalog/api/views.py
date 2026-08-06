@@ -22,8 +22,11 @@ from .serializers import (
     CategoryVariantAttributeAssignmentWriteSerializer,
     VariantAttributeSerializer, VariantAttributeWriteSerializer,
     VariantOptionSerializer, VariantOptionWriteSerializer,
+    BrandSerializer, BrandWriteSerializer, BrandNameSuggestionQuerySerializer,
+    BrandNameSuggestionSerializer,
 )
 from domains.catalog.models import (
+    Brand,
     Category,
     CategoryDetail as CategoryDetailModel,
     Product,
@@ -34,7 +37,7 @@ from domains.catalog.models import (
     VariantOption,
 )
 from domains.catalog.services import (
-    CategoryService, DetailService, ProductFileService, ProductService,
+    BrandService, CategoryService, DetailService, ProductFileService, ProductService,
     VariantAttributeService,
 )
 from domains.inventory.services import InventoryService
@@ -42,6 +45,7 @@ from domains.users.auth import AdminJWTAuthentication
 
 
 category_service = CategoryService()
+brand_service = BrandService()
 detail_service = DetailService()
 product_service = ProductService()
 product_file_service = ProductFileService()
@@ -136,12 +140,14 @@ class CategoryNameSuggestions(APIView):
         query.is_valid(raise_exception=True)
         exact_duplicate, matches = category_service.find_name_matches(
             query.validated_data["name"],
-            query.validated_data.get("exclude_id"),
+            parent=query.validated_data.get("parent_id"),
+            exclude_id=query.validated_data.get("exclude_id"),
         )
         suggestions = [
             {
                 "id": category.id,
                 "name": category.name,
+                "fa_name": category.fa_name,
                 "parent": category.parent_id,
                 "parent_name": category.parent.name if category.parent else None,
                 "status": category.status_id,
@@ -272,6 +278,99 @@ class CategoryAssignVariantAttributes(APIView):
         return api_response(True, _("Category variant attributes updated."), {
             "assignments": VariantAttributeSerializer(assigned, many=True).data,
         })
+
+
+# ─────────────────────── Brands ───────────────────────
+
+def save_brand(serializer, instance=None):
+    try:
+        if instance:
+            return brand_service.update_brand(instance, **serializer.validated_data)
+        return brand_service.create_brand(**serializer.validated_data)
+    except BrandService.ValidationError as exc:
+        raise ValidationError(exc.errors) from exc
+
+
+class BrandListCreate(APIView):
+    model = Brand
+    permission_classes = [CatalogModelPermissions]
+
+    def get(self, request):
+        filters = {}
+        name = request.query_params.get("name")
+        if name:
+            filters["name__icontains"] = name
+        brands = brand_service.search_brands(
+            ordering=request.query_params.get("ordering"),
+            **filters,
+        )
+        paginator = PageNumberPagination()
+        page = paginator.paginate_queryset(brands, request, view=self)
+        serializer = BrandSerializer(page, many=True)
+        return api_response(True, "", paginator.get_paginated_response(serializer.data).data)
+
+    def post(self, request):
+        serializer = BrandWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        brand = save_brand(serializer)
+        return api_response(True, _("Brand created."), BrandSerializer(brand).data, status_code=201)
+
+
+class BrandDetail(APIView):
+    model = Brand
+    permission_classes = [CatalogModelPermissions]
+
+    def get_object(self, id):
+        try:
+            return brand_service.get_brand(id)
+        except Exception:
+            raise NotFound(_("Brand not found."))
+
+    def get(self, request, id):
+        return api_response(True, "", BrandSerializer(self.get_object(id)).data)
+
+    def patch(self, request, id):
+        brand = self.get_object(id)
+        serializer = BrandWriteSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        brand = save_brand(serializer, brand)
+        return api_response(True, _("Brand updated."), BrandSerializer(brand).data)
+
+    def delete(self, request, id):
+        try:
+            brand_service.delete_brand(self.get_object(id))
+        except BrandService.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
+        return api_response(True, _("Brand deleted."), None)
+
+
+class BrandNameSuggestions(APIView):
+    permission_classes = [CustomActionPermission]
+    required_permission = "catalog.view_brand"
+
+    def get(self, request):
+        query = BrandNameSuggestionQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        exact_duplicate, matches = brand_service.find_name_matches(
+            query.validated_data["name"],
+            exclude_id=query.validated_data.get("exclude_id"),
+        )
+        suggestions = [
+            {
+                "id": brand.id,
+                "name": brand.name,
+                "fa_name": brand.fa_name,
+                "similarity": score,
+                "exact": exact,
+            }
+            for exact, score, brand in matches
+        ]
+        serializer = BrandNameSuggestionSerializer(suggestions, many=True)
+        return api_response(
+            True,
+            "",
+            {"exact_duplicate": exact_duplicate, "suggestions": serializer.data},
+        )
 
 
 # ─────────────────────── Variant Attributes and Options ───────────────────────
@@ -491,9 +590,9 @@ class ProductFormOptions(APIView):
     required_permissions = ["catalog.add_product", "catalog.change_product"]
 
     def get(self, request):
-        categories = product_service.get_form_options()
         return api_response(True, "", {
-            "categories": categories,
+            "categories": product_service.get_form_options(),
+            "brands": product_service._brand_options(),
         })
 
 
@@ -825,8 +924,8 @@ class ProductVariantFormOptions(APIView):
             "product": {
                 "id": product.id,
                 "name": product.name,
-                "category": product.category_id,
-                "category_name": product.category.name,
+                "category": (lambda c: c.id if c else None)(product.categories.order_by("id").first()),
+                "category_name": (lambda c: c.name if c else None)(product.categories.order_by("id").first()),
             },
             "inventory_strategies": [
                 {"id": strategy.id, "code": strategy.code, "name": strategy.name}

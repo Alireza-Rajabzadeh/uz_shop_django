@@ -1,12 +1,13 @@
 from decimal import Decimal, InvalidOperation
 
 from django.db import IntegrityError, transaction
-from django.db.models import Count, Exists, OuterRef, Prefetch, Q
+from django.db.models import Count, Exists, OuterRef, Prefetch, Q, Subquery
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext as _
 
 from core.services.base import BaseService
 from domains.catalog.models import (
+    Brand,
     Category,
     CategoryDetail,
     CategoryDetailOption,
@@ -48,7 +49,8 @@ class ProductService(BaseService):
     def get_product_details(self, id):
         variants = self._variant_queryset()
         return get_object_or_404(
-            self.model.objects.select_related("category", "status").prefetch_related(
+            self.model.objects.select_related("status").prefetch_related(
+                "categories",
                 Prefetch(
                     "details",
                     queryset=ProductDetails.objects.select_related("detail").order_by("detail__name", "id"),
@@ -65,11 +67,22 @@ class ProductService(BaseService):
             id=id,
         )
 
+    @staticmethod
+    def _primary_category_id(product):
+        return product.categories.order_by("id").values_list("id", flat=True).first()
+
     def get_filter_options(self):
         return {
             "categories": self.get_form_options(),
+            "brands": self._brand_options(),
             "statuses": list(ProductStatus.objects.order_by("name").values("id", "name")),
         }
+
+    @staticmethod
+    def _brand_options():
+        return list(
+            Brand.objects.order_by("name", "id").values("id", "name", "fa_name")
+        )
 
     @staticmethod
     def _numeric_values(search):
@@ -109,12 +122,14 @@ class ProductService(BaseService):
         ordering_fields = {
             "id": "id",
             "name": "name",
-            "category_name": "category__name",
+            "category_name": "primary_category_name",
+            "brand_name": "brand__name",
             "status_name": "status__name",
             "variant_count": "variant_count",
         }
         name = filters.pop("name", None)
         search = filters.pop("search", None)
+        category_id = filters.pop("category_id", None)
         price_operator = filters.pop("price_operator", None)
         price = filters.pop("price", None)
         price_min = filters.pop("price_min", None)
@@ -124,15 +139,22 @@ class ProductService(BaseService):
             file__status__name="available",
             file__deleted_at__isnull=True,
         ).select_related("file", "file__status").order_by("-is_primary", "position", "id")
+        primary_category = Category.objects.filter(
+            products=OuterRef("pk")
+        ).order_by("id").values("name")[:1]
         queryset = (
             self.model.objects.filter(**filters)
-            .select_related("category", "status")
+            .select_related("status")
             .prefetch_related(
-                Prefetch("product_files", queryset=list_media, to_attr="list_media")
+                "categories",
+                Prefetch("product_files", queryset=list_media, to_attr="list_media"),
             )
+            .annotate(primary_category_name=Subquery(primary_category))
         )
         if name:
             queryset = queryset.filter(name__icontains=name)
+        if category_id:
+            queryset = queryset.filter(categories__id=category_id).distinct()
         if price_operator:
             matching_prices = ProductVariants.objects.filter(product_id=OuterRef("pk"))
             if price_operator == "equal":
@@ -147,11 +169,11 @@ class ProductService(BaseService):
         if search:
             base_query = (
                 Q(name__icontains=search) | Q(description__icontains=search)
-                | Q(category__name__icontains=search) | Q(status__name__icontains=search)
+                | Q(categories__name__icontains=search) | Q(status__name__icontains=search)
             )
             integer, _ = self._numeric_values(search)
             if integer is not None:
-                base_query |= Q(id=integer) | Q(category_id=integer) | Q(status_id=integer)
+                base_query |= Q(id=integer) | Q(categories__id=integer) | Q(status_id=integer)
             matching_details = ProductDetails.objects.filter(product_id=OuterRef("pk")).filter(
                 Q(detail__name__icontains=search) | Q(detail__type__icontains=search)
                 | Q(value__icontains=search) | Q(extra_value__icontains=search)
@@ -159,7 +181,7 @@ class ProductService(BaseService):
             matching_variants = self._variant_search_queryset(search).filter(product_id=OuterRef("pk"))
             queryset = queryset.filter(
                 base_query | Exists(matching_details) | Exists(matching_variants)
-            )
+            ).distinct()
         queryset = queryset.annotate(variant_count=Count("variants", distinct=True))
         descending = ordering and ordering.startswith("-")
         requested_field = ordering.lstrip("-") if ordering else "id"
@@ -167,7 +189,7 @@ class ProductService(BaseService):
         return queryset.order_by(f"-{order_field}" if descending else order_field)
 
     def list_by_category(self, category_id):
-        return self.model.objects.filter(category_id=category_id)
+        return self.model.objects.filter(categories__id=category_id)
 
     def get_form_options(self):
         categories = list(Category.objects.select_related("parent").order_by("name"))
@@ -206,16 +228,16 @@ class ProductService(BaseService):
     def create_complete_product(
         self, *, name, category_ids, description=None, brand=None, details=()
     ):
-        category = Category.objects.select_for_update().get(pk=category_ids[0].pk)
-        self._validate_complete_product_details(category, details)
+        categories = list(category_ids)
+        self._validate_complete_product_details(categories, details)
 
         product = self.model.objects.create(
             name=name.strip(),
             status=ProductStatus.objects.get(name__iexact="pending"),
-            category=category,
             brand=brand,
             description=description or "",
         )
+        product.categories.set(categories)
         self._replace_product_details(product, details)
         return product
 
@@ -224,17 +246,17 @@ class ProductService(BaseService):
         self, product, *, name, category_ids, description=None, brand=None, details=()
     ):
         product = self.model.objects.select_for_update().get(pk=product.pk)
-        category = Category.objects.select_for_update().get(pk=category_ids[0].pk)
-        self._validate_complete_product_details(category, details)
+        categories = list(category_ids)
+        previous_ids = set(product.categories.values_list("id", flat=True))
+        self._validate_complete_product_details(categories, details)
 
-        category_changed = product.category_id != category.id
         product.name = name.strip()
-        product.category = category
         product.brand = brand
         product.description = description or ""
-        product.save(update_fields=["name", "category", "brand", "description"])
+        product.save(update_fields=["name", "brand", "description"])
+        product.categories.set(categories)
         self._replace_product_details(product, details)
-        if category_changed:
+        if {category.id for category in categories} != previous_ids:
             try:
                 with transaction.atomic():
                     self.regenerate_product_variant_skus(product)
@@ -244,12 +266,12 @@ class ProductService(BaseService):
                 }) from exc
         return product
 
-    def _validate_complete_product_details(self, category, details):
+    def _validate_complete_product_details(self, categories, details):
         assigned_details = {
             detail.id: detail
             for detail in CategoryDetail.objects.filter(
-                categorydetailrelation__category=category
-            )
+                categorydetailrelation__category__in=categories
+            ).distinct()
         }
         supplied_details = {item["detail"].id: item for item in details}
 
@@ -338,8 +360,8 @@ class ProductService(BaseService):
             detail.id: detail
             for detail in CategoryDetail.objects.filter(
                 id__in=detail_ids,
-                categorydetailrelation__category=product.category,
-            )
+                categorydetailrelation__category__in=product.categories.all(),
+            ).distinct()
         }
         if set(detail_ids) != set(definitions):
             raise self.ValidationError({
@@ -368,9 +390,9 @@ class ProductService(BaseService):
         return ProductDetails.objects.filter(product=product).select_related("detail")
 
     def get_variant_form_options(self, product, search=None):
-        category_attribute_ids = set(product.category.variant_attribute_assignments.values_list(
-            "attribute_id", flat=True
-        ))
+        category_attribute_ids = set(VariantAttribute.objects.filter(
+            category_assignments__category__in=product.categories.all()
+        ).values_list("id", flat=True))
         attributes = VariantAttribute.objects.prefetch_related("options").order_by("name", "id")
         result = []
         search = search.casefold() if search else None
@@ -380,7 +402,7 @@ class ProductService(BaseService):
             option_matches = search and any(
                 search in value.casefold()
                 for option in options
-                for value in (option.name, option.sku_code)
+                for value in (option.name, option.fa_name, option.sku_code)
             )
             if search and not attribute_matches and not option_matches:
                 continue
@@ -389,7 +411,12 @@ class ProductService(BaseService):
                 "name": attribute.name,
                 "category_default": attribute.id in category_attribute_ids,
                 "options": [
-                    {"id": option.id, "name": option.name, "sku_code": option.sku_code}
+                    {
+                        "id": option.id,
+                        "name": option.name,
+                        "fa_name": option.fa_name,
+                        "sku_code": option.sku_code,
+                    }
                     for option in options
                 ],
             })
@@ -530,7 +557,7 @@ class ProductService(BaseService):
     @staticmethod
     def _build_sku(product, selections):
         suffix = "-".join(item["option"].sku_code for item in selections)
-        return f"CG{product.category_id}-PD{product.id}-{suffix}"
+        return f"CG{ProductService._primary_category_id(product) or 0}-PD{product.id}-{suffix}"
 
     def _replace_variant_selections(self, variant, selections):
         variant.selections.all().delete()
