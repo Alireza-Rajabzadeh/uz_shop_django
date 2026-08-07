@@ -894,6 +894,42 @@
       "name": "شمع",
       "digikala_category_id": 6311,
       "api_url": "https://api.digikala.com/discovery/api/v2/categories/6311/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1180,
+      "name": "شمعدان",
+      "digikala_category_id": 6312,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6312/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1181,
+      "name": "دیوارکوب",
+      "digikala_category_id": 10313,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/10313/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1182,
+      "name": "اسماج",
+      "digikala_category_id": 10589,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/10589/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1183,
+      "name": "گل و گلدان",
+      "digikala_category_id": 6330,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6330/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1184,
+      "name": "آینه دکوراتیو",
+      "digikala_category_id": 6916,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6916/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1186,
+      "name": "تابلو",
+      "digikala_category_id": 6946,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6946/products?columns_per_page=3&page=1"
     }
   ]
 }
