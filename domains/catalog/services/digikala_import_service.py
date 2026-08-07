@@ -251,11 +251,15 @@ class DigikalaImportService:
         title_en = DigikalaImportService._normalize(value.get("title_en"))
         if not title_fa and not title_en:
             return None
+        info = DigikalaImportService._normalize(
+            value.get("hex") or value.get("hex_code") or value.get("color")
+        )
         return {
             "id": value.get("id"),
             "code": value.get("code"),
             "title_fa": title_fa,
             "title_en": title_en,
+            "info": info,
         }
 
     def _source_selections(self, variant):
@@ -432,6 +436,7 @@ class DigikalaImportService:
                 attribute=attribute,
                 name=name,
                 fa_name=title_fa or None,
+                info=source.get("info"),
                 sku_code=code,
             )
         except VariantAttributeService.ValidationError:

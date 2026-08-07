@@ -5,9 +5,8 @@ class DigikalaListingCreateSerializer(serializers.Serializer):
     category_ids = serializers.ListField(
         child=serializers.IntegerField(min_value=1),
         min_length=1,
-        max_length=5,
     )
-    products_per_category = serializers.IntegerField(min_value=1, max_value=20)
+    products_per_category = serializers.IntegerField(min_value=1, max_value=100)
     timeout_seconds = serializers.IntegerField(min_value=1, max_value=60, default=30)
     retries = serializers.IntegerField(min_value=1, max_value=5, default=3)
     delay_seconds = serializers.FloatField(min_value=0.5, max_value=10, default=1.0)

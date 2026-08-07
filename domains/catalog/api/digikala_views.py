@@ -55,25 +55,25 @@ class DigikalaAPIView(APIView):
 class DigikalaListingOptions(DigikalaAPIView):
     def get(self, request):
         try:
-            categories = [
-                {
-                    "id": category.category_id,
-                    "name": category.name,
-                    "digikala_category_id": category.digikala_category_id,
-                }
-                for category in self.runtime().approved_categories()
-            ]
+            categories = self.runtime().approved_categories()
         except DigikalaRuntimeService.Error as exc:
             self.handle_runtime_error(exc)
         return api_response(
             True,
             "",
             {
-                "categories": categories,
+                "categories": [
+                    {
+                        "id": category.category_id,
+                        "name": category.name,
+                        "digikala_category_id": category.digikala_category_id,
+                    }
+                    for category in categories
+                ],
                 "limits": {
-                    "max_categories": 5,
-                    "max_products_per_category": 20,
-                    "max_unique_products": 100,
+                    "max_categories": len(categories),
+                    "max_products_per_category": 100,
+                    "max_unique_products": 500,
                     "min_delay_seconds": 0.5,
                     "max_delay_seconds": 10,
                 },
@@ -182,11 +182,6 @@ class DigikalaImportCreate(DigikalaAPIView):
             listing = runtime.get_listing(data["listing_id"])
             if listing["sha256"] != data["listing_sha256"]:
                 raise DigikalaRuntimeService.Error("Listing checksum changed.")
-            selected = runtime.selected_product_ids(listing, data["selection"])
-            if len(selected) > 100:
-                raise DigikalaRuntimeService.Error(
-                    "At most 100 unique products may be imported."
-                )
             request_data = {
                 "listing_id": str(data["listing_id"]),
                 "listing_sha256": data["listing_sha256"],

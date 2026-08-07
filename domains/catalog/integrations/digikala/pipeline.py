@@ -140,8 +140,8 @@ def validate_listing_document(document: Any) -> dict[str, Any]:
     if not isinstance(source, dict) or source.get("currency") != "IRR":
         raise ValueError("listing source currency must be IRR")
     categories = document.get("categories")
-    if not isinstance(categories, list) or not 1 <= len(categories) <= 5:
-        raise ValueError("listing must contain between 1 and 5 category summaries")
+    if not isinstance(categories, list) or not 1 <= len(categories):
+        raise ValueError("listing must contain at least one category summary")
     products = document.get("products")
     if not isinstance(products, list):
         raise ValueError("listing products must be a list")

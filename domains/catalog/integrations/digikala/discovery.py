@@ -70,8 +70,8 @@ def discover_categories(
         if record.get("children"):
             raise ValueError(f"Category {category_id} is not a leaf category.")
         selected.append(record)
-    if not 1 <= len(selected) <= 5:
-        raise ValueError("Discovery requires between one and five leaf categories.")
+    if not selected:
+        raise ValueError("Discovery requires at least one leaf category.")
 
     discovered = []
     with sync_playwright() as playwright:

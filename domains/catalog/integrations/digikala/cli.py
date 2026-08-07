@@ -16,7 +16,7 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
 
     discovery = commands.add_parser(
-        "discover", help="Discover approved API mappings for up to five leaf categories."
+        "discover", help="Discover approved API mappings for leaf categories."
     )
     discovery.add_argument("--categories", required=True)
     discovery.add_argument("--category-id", type=int, action="append", required=True)

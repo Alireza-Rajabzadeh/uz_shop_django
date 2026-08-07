@@ -30,6 +30,870 @@
       "name": "کابل شارژ و مبدل",
       "digikala_category_id": 80,
       "api_url": "https://api.digikala.com/discovery/api/v2/categories/80/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1008,
+      "name": "پاوربانک (شارژر همراه)",
+      "digikala_category_id": 1272,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/1272/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1010,
+      "name": "سایر برند های لپ تاپ",
+      "digikala_category_id": 18,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/18/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1012,
+      "name": "کول پد",
+      "digikala_category_id": 98,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/98/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1013,
+      "name": "کیف لپ تاپ",
+      "digikala_category_id": 97,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/97/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1014,
+      "name": "شارژر لپ تاپ",
+      "digikala_category_id": 102,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/102/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1015,
+      "name": "ماوس",
+      "digikala_category_id": 26,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/26/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1016,
+      "name": "ماوس پد",
+      "digikala_category_id": 100,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/100/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1019,
+      "name": "PS4",
+      "digikala_category_id": 216,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/216/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1020,
+      "name": "دسته بازی",
+      "digikala_category_id": 1291,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/1291/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1021,
+      "name": "بازی PC",
+      "digikala_category_id": 5609,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/5609/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1022,
+      "name": "دیسک های بازی",
+      "digikala_category_id": 10498,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/10498/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1023,
+      "name": "تبلت",
+      "digikala_category_id": 13,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/13/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1025,
+      "name": "all in one",
+      "digikala_category_id": 20,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/20/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1026,
+      "name": "کامپیوتر کامل",
+      "digikala_category_id": 6678,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6678/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1027,
+      "name": "mini pc",
+      "digikala_category_id": 5921,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/5921/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1028,
+      "name": "قلم نوری",
+      "digikala_category_id": 28,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/28/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1029,
+      "name": "رم ریدر",
+      "digikala_category_id": 104,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/104/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1030,
+      "name": "قیمت مانیتور",
+      "digikala_category_id": 24,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/24/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1031,
+      "name": "اسپیکر",
+      "digikala_category_id": 25,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/25/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1032,
+      "name": "هدفون",
+      "digikala_category_id": 211,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/211/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1034,
+      "name": "بند ساعت هوشمند",
+      "digikala_category_id": 6944,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6944/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1035,
+      "name": "لوازم جانبی ساعت هوشمند",
+      "digikala_category_id": 5872,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/5872/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1037,
+      "name": "دوربین فیلمبرداری",
+      "digikala_category_id": 49,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/49/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1038,
+      "name": "رینگ لایت",
+      "digikala_category_id": 141,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/141/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1039,
+      "name": "پایه دوربین",
+      "digikala_category_id": 107,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/107/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1040,
+      "name": "لنز دوربین",
+      "digikala_category_id": 109,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/109/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1041,
+      "name": "کارت حافظه",
+      "digikala_category_id": 70,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/70/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1042,
+      "name": "گیمبال و استبلایزر",
+      "digikala_category_id": 11020,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/11020/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1044,
+      "name": "هارد ssd",
+      "digikala_category_id": 69,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/69/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1045,
+      "name": "هارد اینترنال",
+      "digikala_category_id": 210,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/210/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1046,
+      "name": "هارد اکسترنال",
+      "digikala_category_id": 68,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/68/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1047,
+      "name": "هارد اکسترنال ssd",
+      "digikala_category_id": 11140,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/11140/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1048,
+      "name": "فلش",
+      "digikala_category_id": 64,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/64/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1050,
+      "name": "باتری لیتیومی",
+      "digikala_category_id": 113,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/113/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1051,
+      "name": "باتری قلمی",
+      "digikala_category_id": 5880,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/5880/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1053,
+      "name": "پرینتر سه بعدی",
+      "digikala_category_id": 8122,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/8122/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1054,
+      "name": "پرینتر حرارتی",
+      "digikala_category_id": 2391,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/2391/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1056,
+      "name": "کابل پرینتر",
+      "digikala_category_id": 1344,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/1344/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1057,
+      "name": "کارتریج",
+      "digikala_category_id": 3358,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/3358/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1058,
+      "name": "اسکنر",
+      "digikala_category_id": 35,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/35/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1059,
+      "name": "تلفن",
+      "digikala_category_id": 39,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/39/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1060,
+      "name": "بارکدخوان",
+      "digikala_category_id": 46,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/46/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1061,
+      "name": "ویدئو وال",
+      "digikala_category_id": 8852,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/8852/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1062,
+      "name": "ویدئو پروژکتور",
+      "digikala_category_id": 43,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/43/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1063,
+      "name": "دستگاه حضور و غیاب",
+      "digikala_category_id": 45,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/45/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1064,
+      "name": "پیجر و سیستم نوبت دهی",
+      "digikala_category_id": 8683,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/8683/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1065,
+      "name": "کیوسک لمسی",
+      "digikala_category_id": 9204,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/9204/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1067,
+      "name": "هاب USB",
+      "digikala_category_id": 1317,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/1317/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1068,
+      "name": "سوییچ",
+      "digikala_category_id": 195,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/195/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1069,
+      "name": "هاب سوئیچ",
+      "digikala_category_id": 196,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/196/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1070,
+      "name": "تجهیزات ویدئویی",
+      "digikala_category_id": 5585,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/5585/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1071,
+      "name": "کارت شبکه",
+      "digikala_category_id": 67,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/67/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1072,
+      "name": "کامپیوتر سرور",
+      "digikala_category_id": 23,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/23/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1073,
+      "name": "رک شبکه و سرور",
+      "digikala_category_id": 9252,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/9252/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1074,
+      "name": "پچ پنل",
+      "digikala_category_id": 8704,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/8704/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1075,
+      "name": "پرینت سرور",
+      "digikala_category_id": 201,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/201/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1076,
+      "name": "آداپتور شبکه",
+      "digikala_category_id": 3354,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/3354/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1077,
+      "name": "اسپلیتر",
+      "digikala_category_id": 3355,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/3355/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1078,
+      "name": "کابل شبکه (LAN)",
+      "digikala_category_id": 1274,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/1274/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1079,
+      "name": "کابل کمبو",
+      "digikala_category_id": 1293,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/1293/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1080,
+      "name": "کارت و ماژول",
+      "digikala_category_id": 8711,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/8711/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1081,
+      "name": "لوازم جانبی NAS و سرور",
+      "digikala_category_id": 6281,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6281/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1082,
+      "name": "ذخیره ساز تحت شبکه (NAS)",
+      "digikala_category_id": 200,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/200/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1083,
+      "name": "یو پی اس (UPS)",
+      "digikala_category_id": 8578,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/8578/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1084,
+      "name": "ابزار شبکه",
+      "digikala_category_id": 6885,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6885/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1085,
+      "name": "آنتن تقویتی",
+      "digikala_category_id": 197,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/197/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1086,
+      "name": "مبدل فیبر نوری",
+      "digikala_category_id": 3349,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/3349/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1087,
+      "name": "سیم آنتن",
+      "digikala_category_id": 1292,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/1292/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1089,
+      "name": "مودم جیبی",
+      "digikala_category_id": 193,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/193/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1090,
+      "name": "توسعه دهنده محدوده بی‌سیم",
+      "digikala_category_id": 4581,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/4581/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1091,
+      "name": "روتر و اکسس پوینت",
+      "digikala_category_id": 194,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/194/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1093,
+      "name": "دوربین مدار بسته",
+      "digikala_category_id": 204,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/204/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1095,
+      "name": "پردازنده (cpu)",
+      "digikala_category_id": 6899,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6899/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1096,
+      "name": "کارت گرافیک",
+      "digikala_category_id": 208,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/208/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1097,
+      "name": "مادربرد",
+      "digikala_category_id": 6888,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6888/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1098,
+      "name": "رم کامپیوتر",
+      "digikala_category_id": 209,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/209/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1099,
+      "name": "کیس کامپیوتر",
+      "digikala_category_id": 6923,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6923/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1100,
+      "name": "دانگل بلوتوث",
+      "digikala_category_id": 6218,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6218/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1101,
+      "name": "کیبورد",
+      "digikala_category_id": 27,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/27/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1104,
+      "name": "قابلمه و تابه",
+      "digikala_category_id": 10638,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/10638/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1105,
+      "name": "زودپز",
+      "digikala_category_id": 6229,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6229/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1106,
+      "name": "سرویس پخت و پز",
+      "digikala_category_id": 6255,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6255/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1108,
+      "name": "ست کفگیر و ملاقه",
+      "digikala_category_id": 6364,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6364/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1109,
+      "name": "چاقو",
+      "digikala_category_id": 10987,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/10987/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1110,
+      "name": "تخته گوشت",
+      "digikala_category_id": 6322,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6322/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1111,
+      "name": "ظرف و قالب یخ",
+      "digikala_category_id": 6350,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6350/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1112,
+      "name": "قیف",
+      "digikala_category_id": 6577,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6577/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1113,
+      "name": "صافی",
+      "digikala_category_id": 6317,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6317/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1114,
+      "name": "فندک آشپزخانه",
+      "digikala_category_id": 6369,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6369/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1115,
+      "name": "ترازوی آشپزخانه",
+      "digikala_category_id": 5859,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/5859/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1117,
+      "name": "قهوه ساز و دمنوش ساز",
+      "digikala_category_id": 6887,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6887/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1118,
+      "name": "سماور",
+      "digikala_category_id": 6935,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6935/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1119,
+      "name": "شیر جوش - قهوه جوش",
+      "digikala_category_id": 6232,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6232/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1120,
+      "name": "قوری",
+      "digikala_category_id": 6261,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6261/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1121,
+      "name": "کتری و قوری",
+      "digikala_category_id": 6270,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6270/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1122,
+      "name": "فیلتر چای",
+      "digikala_category_id": 10482,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/10482/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1124,
+      "name": "آبکش و آبگیر",
+      "digikala_category_id": 6315,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6315/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1125,
+      "name": "بطری",
+      "digikala_category_id": 6338,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6338/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1126,
+      "name": "ارگانایزر آشپزخانه",
+      "digikala_category_id": 6367,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6367/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1127,
+      "name": "جای ادویه",
+      "digikala_category_id": 6319,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6319/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1128,
+      "name": "بانکه و ظروف بنشن",
+      "digikala_category_id": 6316,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6316/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1129,
+      "name": "شکر پاش و نمک پاش",
+      "digikala_category_id": 6313,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6313/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1130,
+      "name": "سبد آشپزخانه",
+      "digikala_category_id": 6347,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6347/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1131,
+      "name": "سبد سیب زمینی و پیاز",
+      "digikala_category_id": 6334,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6334/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1132,
+      "name": "ظرف نگهدارنده",
+      "digikala_category_id": 6301,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6301/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1133,
+      "name": "سایر ظروف",
+      "digikala_category_id": 6359,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6359/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1134,
+      "name": "لوازم تهیه کیک و دسر",
+      "digikala_category_id": 6257,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6257/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1136,
+      "name": "سفره",
+      "digikala_category_id": 9279,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/9279/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1137,
+      "name": "ماگ",
+      "digikala_category_id": 10707,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/10707/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1138,
+      "name": "سینی",
+      "digikala_category_id": 6268,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6268/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1139,
+      "name": "لیوان",
+      "digikala_category_id": 6289,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6289/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1140,
+      "name": "بشقاب",
+      "digikala_category_id": 6302,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6302/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1141,
+      "name": "قندان",
+      "digikala_category_id": 6410,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6410/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1142,
+      "name": "پارچ و بطری",
+      "digikala_category_id": 6287,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6287/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1143,
+      "name": "بستنی خوری",
+      "digikala_category_id": 6306,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6306/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1144,
+      "name": "سس خوری و آبلیمو خوری",
+      "digikala_category_id": 6321,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6321/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1145,
+      "name": "کاسه و پیاله",
+      "digikala_category_id": 6305,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6305/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1146,
+      "name": "کلمن و فلاسک",
+      "digikala_category_id": 6459,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6459/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1147,
+      "name": "ظروف سرو و پذیرایی",
+      "digikala_category_id": 6336,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6336/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1148,
+      "name": "سرویس غذاخوری",
+      "digikala_category_id": 6329,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6329/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1149,
+      "name": "قاشق، چنگال و کارد",
+      "digikala_category_id": 10646,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/10646/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1150,
+      "name": "زیر لیوانی، زیر بشقابی و زیر قابلمه ای",
+      "digikala_category_id": 10644,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/10644/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1151,
+      "name": "ابزار مهمانی",
+      "digikala_category_id": 6675,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6675/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1153,
+      "name": "دستگیره",
+      "digikala_category_id": 6275,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6275/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1154,
+      "name": "پیش بند",
+      "digikala_category_id": 6276,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6276/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1155,
+      "name": "کیسه نان و سبزی",
+      "digikala_category_id": 6304,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6304/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1156,
+      "name": "دستمال نظافت خانه و آشپزخانه",
+      "digikala_category_id": 10481,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/10481/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1158,
+      "name": "مبل اداری و صندلی انتظار",
+      "digikala_category_id": 8276,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/8276/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1159,
+      "name": "پاف",
+      "digikala_category_id": 6915,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6915/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1162,
+      "name": "کتابخانه",
+      "digikala_category_id": 8303,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/8303/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1163,
+      "name": "شلف و طبقه",
+      "digikala_category_id": 8302,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/8302/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1164,
+      "name": "کنسول",
+      "digikala_category_id": 8742,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/8742/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1165,
+      "name": "صندلی",
+      "digikala_category_id": 8368,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/8368/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1166,
+      "name": "میز تلویزیون",
+      "digikala_category_id": 5812,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/5812/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1167,
+      "name": "میز ناهارخوری",
+      "digikala_category_id": 8300,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/8300/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1169,
+      "name": "صندلی اداری",
+      "digikala_category_id": 8277,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/8277/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1170,
+      "name": "میز اداری",
+      "digikala_category_id": 8376,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/8376/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1172,
+      "name": "جاکفشی",
+      "digikala_category_id": 8304,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/8304/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1173,
+      "name": "جالباسی",
+      "digikala_category_id": 8733,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/8733/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1174,
+      "name": "کاور لوازم خانگی",
+      "digikala_category_id": 6444,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6444/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1176,
+      "name": "مجسمه و تندیس",
+      "digikala_category_id": 6307,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6307/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1177,
+      "name": "ساعت",
+      "digikala_category_id": 10963,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/10963/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1178,
+      "name": "عود",
+      "digikala_category_id": 10567,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/10567/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1179,
+      "name": "شمع",
+      "digikala_category_id": 6311,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/6311/products?columns_per_page=3&page=1"
     }
   ]
 }

@@ -30,6 +30,9 @@ Run directly from `back/`:
 | `python manage.py makemigrations` | Generate migrations |
 | `python manage.py seed` | Seed development/reference data |
 | `python manage.py seed_categories` | Idempotently load the canonical category taxonomy |
+| `pip install -r scripts/requirements-digikala-discovery.txt` | Install Playwright+Chromium deps for Digikala mapping discovery |
+| `python scripts/discover_all_categories.py` | Discover/merge Digikala mappings one by one |
+| `python scripts/digikala.py validate\|listings\|details ...` | Run the Digikala import CLI |
 | `python manage.py test` | Run all tests |
 | `python manage.py test domains.customer.tests` | Run a focused suite |
 | `python manage.py makemessages -l fa -l en` | Update translations |
@@ -173,10 +176,29 @@ The seed command does not provision notification provider statuses or a default 
 
 Current catalog endpoints are administrative and permission-controlled. They are not a public storefront contract.
 
-The Digikala integration under `domains/catalog/integrations/digikala/` is
-shared by the CLI, Celery, and admin API. Keep extraction and file contracts
-framework-light; catalog writes belong in `DigikalaImportService`. Generated
-listing/job data lives outside the repository under `DIGIKALA_RUNTIME_ROOT`.
+### Digikala Catalog Import
+
+The Digikala integration is file-backed and migration-free. The same reusable modules
+under `domains/catalog/integrations/digikala/` are called by the CLI, Celery, and the
+admin API. Keep extraction and file contracts framework-light; catalog writes belong in
+`DigikalaImportService`. Generated listing/job data lives outside the repository under
+`DIGIKALA_RUNTIME_ROOT` (gitignored `runtime/`).
+
+Pipeline:
+
+1. **Mapping discovery** — `scripts/discover_all_categories.py` reads
+   `core/management/data/categories.json`, discovers the Digikala API endpoint for each
+   leaf category, and merges results **one by one** into
+   `core/management/data/digikala_category_mappings.json`. It resumes from the existing
+   file and dedupes by `category_id`, so progress survives interruption. Requires
+   Playwright + Chromium and internet access to digikala.com
+   (`pip install -r scripts/requirements-digikala-discovery.txt`; use
+   `--chromium-path` / `--headful` / `--batch-size`).
+2. **Import CLI** — `scripts/digikala.py`: `validate --mapping ...`, then
+   `listings --mapping ...` and `details --listing ...`.
+3. **Admin import** — catalog service queues listing/import jobs consumed by the Celery
+   `digikala` queue (concurrency one). There is no per-job cap on unique imported
+   products.
 
 ## Migrations, Seeds, And Tests
 
@@ -194,6 +216,8 @@ python manage.py test core.tests
 python manage.py test domains.customer.tests
 python manage.py test domains.notifications.tests
 python manage.py test domains.catalog.tests
+python manage.py test domains.catalog.tests_digikala_core
+python manage.py test domains.catalog.tests_digikala_import
 python manage.py test domains.inventory.tests
 python manage.py test domains.files.tests
 python manage.py test domains.location.tests
@@ -258,4 +282,4 @@ git diff --check
 
 Run migrations and integration checks through the workspace stack when behavior depends on PostgreSQL, Redis, Celery, storage, or Nginx.
 
-Do not commit `.env`, credentials, generated runtime files, or local database artifacts. Commit and push this submodule before committing an updated pointer in the workspace repository.
+Do not commit `.env`, credentials, generated runtime files, or local database artifacts. Commit and push this submodule before committing an updated pointer in the workspace repository. The local scraper under `./script_space/digikala/` is not a tracked path or submodule; keep it out of the repo and commit only `back/` changes.

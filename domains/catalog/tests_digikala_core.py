@@ -95,7 +95,7 @@ class ContractTests(TestCase):
         self.assertEqual(options.currency, "IRR")
         self.assertFalse(options.include_ads)
         for values in (
-            {"products_per_category": 21},
+            {"products_per_category": 101},
             {"timeout": 61},
             {"retries": 6},
             {"delay": 0.49},
@@ -118,7 +118,7 @@ class ContractTests(TestCase):
             with self.subTest(url=url), self.assertRaises(ValidationError):
                 ApprovedCategory.from_dict({**mapping(), "api_url": url})
 
-    def test_mapping_file_accepts_categories_wrapper_and_caps_count(self):
+    def test_mapping_file_accepts_categories_wrapper_and_many_categories(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "mapping.json"
             path.write_text(json.dumps({"categories": [mapping()]}), encoding="utf-8")
@@ -127,8 +127,12 @@ class ContractTests(TestCase):
                 json.dumps([mapping(1000 + index, index) for index in range(1, 7)]),
                 encoding="utf-8",
             )
-            with self.assertRaisesRegex(ValidationError, "at most 5"):
-                load_approved_mapping(path)
+            self.assertEqual(len(load_approved_mapping(path)), 6)
+            path.write_text(
+                json.dumps([mapping(1000 + index, index) for index in range(1, 51)]),
+                encoding="utf-8",
+            )
+            self.assertEqual(len(load_approved_mapping(path)), 50)
 
 
 class ClientTests(TestCase):

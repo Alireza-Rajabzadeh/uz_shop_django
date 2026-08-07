@@ -59,8 +59,8 @@ class ListingOptions:
     include_ads: bool = False
 
     def __post_init__(self) -> None:
-        if not isinstance(self.products_per_category, int) or isinstance(self.products_per_category, bool) or not 1 <= self.products_per_category <= 20:
-            raise ValidationError("products_per_category must be between 1 and 20")
+        if not isinstance(self.products_per_category, int) or isinstance(self.products_per_category, bool) or not 1 <= self.products_per_category <= 100:
+            raise ValidationError("products_per_category must be between 1 and 100")
         if self.currency != "IRR":
             raise ValidationError("currency must be IRR")
         if not isinstance(self.timeout, int) or isinstance(self.timeout, bool) or not 1 <= self.timeout <= 60:
@@ -111,8 +111,6 @@ def validate_mappings(values: Iterable[Any]) -> list[ApprovedCategory]:
     ]
     if not mappings:
         raise ValidationError("at least one approved category is required")
-    if len(mappings) > 5:
-        raise ValidationError("at most 5 categories may be collected")
     local_ids = [item.category_id for item in mappings]
     if len(local_ids) != len(set(local_ids)):
         raise ValidationError("category_id values must be unique")
