@@ -1148,6 +1148,39 @@ class VariantOptionFaNameTests(APITestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["data"]["fa_name"], "آبی")
 
+    def test_create_option_accepts_info(self):
+        response = self.client.post(
+            "/api/catalog/variant-options",
+            {
+                "attribute": self.color.id,
+                "name": "Red",
+                "fa_name": "قرمز",
+                "info": "#FF0000",
+                "sku_code": "RED",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["data"]["info"], "#FF0000")
+
+    def test_update_option_sets_and_clears_info(self):
+        option = VariantOption.objects.create(
+            attribute=self.color, name="Black", info="#000000", sku_code="BLK"
+        )
+        cleared = self.client.patch(
+            f"/api/catalog/variant-options/{option.id}", {"info": ""}, format="json"
+        )
+        self.assertEqual(cleared.status_code, 200)
+        option.refresh_from_db()
+        self.assertEqual(option.info, "")
+
+        set_response = self.client.patch(
+            f"/api/catalog/variant-options/{option.id}", {"info": "#111111"}, format="json"
+        )
+        self.assertEqual(set_response.status_code, 200)
+        option.refresh_from_db()
+        self.assertEqual(option.info, "#111111")
+
     def test_update_option_clears_and_sets_fa_name(self):
         option = VariantOption.objects.create(
             attribute=self.color, name="Black", fa_name="مشکی", sku_code="BLK"

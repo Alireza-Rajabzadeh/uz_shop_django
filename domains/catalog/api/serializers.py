@@ -207,7 +207,7 @@ class VariantOptionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = VariantOption
-        fields = ["id", "attribute", "attribute_name", "name", "fa_name", "sku_code"]
+        fields = ["id", "attribute", "attribute_name", "name", "fa_name", "info", "sku_code"]
 
 
 class VariantAttributeSerializer(serializers.ModelSerializer):
@@ -226,6 +226,7 @@ class VariantOptionWriteSerializer(serializers.Serializer):
     attribute = serializers.PrimaryKeyRelatedField(queryset=VariantAttribute.objects.all())
     name = serializers.CharField(max_length=100)
     fa_name = serializers.CharField(max_length=100, required=False, allow_blank=True, allow_null=True)
+    info = serializers.CharField(max_length=100, required=False, allow_blank=True, allow_null=True)
     sku_code = serializers.CharField(max_length=16)
 
 
@@ -247,6 +248,7 @@ class ProductVariantSelectionSerializer(serializers.Serializer):
     option_id = serializers.IntegerField(source="option.id")
     option_name = serializers.CharField(source="option.name")
     option_fa_name = serializers.CharField(source="option.fa_name", allow_null=True)
+    option_info = serializers.CharField(source="option.info", allow_null=True)
     sku_code = serializers.CharField(source="option.sku_code")
 
 

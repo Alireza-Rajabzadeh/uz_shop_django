@@ -171,9 +171,9 @@ class VariantAttributeAdmin(ModelAdmin):
 
 @admin.register(VariantOption)
 class VariantOptionAdmin(ModelAdmin):
-    list_display = ["name", "fa_name", "attribute", "sku_code"]
+    list_display = ["name", "fa_name", "info", "attribute", "sku_code"]
     list_filter = ["attribute"]
-    search_fields = ["name", "fa_name", "sku_code"]
+    search_fields = ["name", "fa_name", "info", "sku_code"]
     autocomplete_fields = ["attribute"]
 
 

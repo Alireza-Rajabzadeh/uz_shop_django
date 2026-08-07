@@ -415,6 +415,7 @@ class ProductService(BaseService):
                         "id": option.id,
                         "name": option.name,
                         "fa_name": option.fa_name,
+                        "info": option.info,
                         "sku_code": option.sku_code,
                     }
                     for option in options

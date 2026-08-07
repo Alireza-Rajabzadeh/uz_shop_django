@@ -509,6 +509,8 @@ class PostgresProductSearchBackend:
                 {
                     "option_id": option.id,
                     "label": option.name,
+                    "fa_name": option.fa_name,
+                    "info": option.info,
                     "count": counts.get(option.id, 0),
                     "in_stock_count": available_counts.get(option.id, 0),
                     "selected": option.id in selected.get(attribute.id, set()),
