@@ -1,0 +1,137 @@
+{
+  "schema_version": 1,
+  "brands": [
+    {
+      "name": "Alcatel",
+      "fa_name": "آلکاتل"
+    },
+    {
+      "name": "Anker",
+      "fa_name": "انکر"
+    },
+    {
+      "name": "Apple",
+      "fa_name": "اپل"
+    },
+    {
+      "name": "Baseus",
+      "fa_name": "بیسوس"
+    },
+    {
+      "name": "Beniuse",
+      "fa_name": "بنیوس"
+    },
+    {
+      "name": "Beyond",
+      "fa_name": "بیاند"
+    },
+    {
+      "name": "Cypher",
+      "fa_name": "سایفر"
+    },
+    {
+      "name": "Daria",
+      "fa_name": "داریا"
+    },
+    {
+      "name": "DEKKIN",
+      "fa_name": "دکین"
+    },
+    {
+      "name": "DOX",
+      "fa_name": "داکس"
+    },
+    {
+      "name": "Gigaset",
+      "fa_name": "گیگاست"
+    },
+    {
+      "name": "GLX",
+      "fa_name": "جی ال ایکس"
+    },
+    {
+      "name": "Hanofer",
+      "fa_name": "هانوفر"
+    },
+    {
+      "name": "Honor",
+      "fa_name": "آنر"
+    },
+    {
+      "name": "JUBITER",
+      "fa_name": "ژوبیتر"
+    },
+    {
+      "name": "Mcdodo",
+      "fa_name": "مک دودو"
+    },
+    {
+      "name": "microtel",
+      "fa_name": "میکروتل"
+    },
+    {
+      "name": "Miscellaneous",
+      "fa_name": "متفرقه"
+    },
+    {
+      "name": "Motorola",
+      "fa_name": "موتورولا"
+    },
+    {
+      "name": "Nokia",
+      "fa_name": "نوکیا"
+    },
+    {
+      "name": "Panasonic",
+      "fa_name": "پاناسونیک"
+    },
+    {
+      "name": "realme",
+      "fa_name": "ریلمی"
+    },
+    {
+      "name": "RedTone",
+      "fa_name": "ردتون"
+    },
+    {
+      "name": "Remax",
+      "fa_name": "ریمکس"
+    },
+    {
+      "name": "Samsung",
+      "fa_name": "سامسونگ"
+    },
+    {
+      "name": "SOMOSTEL",
+      "fa_name": "سوموس تل"
+    },
+    {
+      "name": "Sony Ericsson",
+      "fa_name": "سونی اریکسون"
+    },
+    {
+      "name": "tch",
+      "fa_name": "تی سی اچ"
+    },
+    {
+      "name": "TECNO mobile",
+      "fa_name": "تکنو موبایل"
+    },
+    {
+      "name": "TSCO",
+      "fa_name": "تسکو"
+    },
+    {
+      "name": "VOCAL",
+      "fa_name": "وکال"
+    },
+    {
+      "name": "Xiaomi",
+      "fa_name": "شیائومی"
+    },
+    {
+      "name": "Zhivaco",
+      "fa_name": "ژیواکو"
+    }
+  ]
+}

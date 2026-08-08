@@ -63,3 +63,29 @@ class DigikalaImportCreateSerializer(serializers.Serializer):
     listing_sha256 = serializers.RegexField(r"^[a-f0-9]{64}$")
     selection = DigikalaSelectionSerializer()
     options = DigikalaImportOptionsSerializer()
+
+
+class DigikalaMappingSerializer(serializers.Serializer):
+    category_id = serializers.IntegerField(min_value=1)
+    name = serializers.CharField(max_length=100, trim_whitespace=True)
+    digikala_category_id = serializers.IntegerField(min_value=1)
+    api_url = serializers.CharField(
+        required=False, allow_blank=False, max_length=500
+    )
+
+
+class DigikalaMappingUpdateSerializer(serializers.Serializer):
+    name = serializers.CharField(
+        required=False, allow_blank=False, max_length=100, trim_whitespace=True
+    )
+    digikala_category_id = serializers.IntegerField(min_value=1, required=False)
+    api_url = serializers.CharField(
+        required=False, allow_blank=False, max_length=500
+    )
+
+    def validate(self, attrs):
+        if not any(key in attrs for key in ("name", "digikala_category_id", "api_url")):
+            raise serializers.ValidationError(
+                "At least one field is required for an update."
+            )
+        return attrs

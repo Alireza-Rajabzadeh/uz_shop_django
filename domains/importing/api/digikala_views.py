@@ -8,6 +8,8 @@ from core.responses import api_response
 from domains.catalog.api.digikala_serializers import (
     DigikalaImportCreateSerializer,
     DigikalaListingCreateSerializer,
+    DigikalaMappingSerializer,
+    DigikalaMappingUpdateSerializer,
 )
 from domains.catalog.api.permissions import (
     AllRequiredPermissions,
@@ -208,6 +210,107 @@ class DigikalaImportCreate(DigikalaAPIView):
             {"job_id": job["id"], "status": job["status"]},
             status_code=202,
         )
+
+
+class DigikalaMappingListCreate(DigikalaAPIView):
+    permission_classes = [IsAuthenticated, MethodPermission]
+    method_permissions = {
+        "GET": "catalog.view_product",
+        "POST": "catalog.add_product",
+    }
+
+    def get(self, request):
+        mappings = self.runtime().list_mappings()
+        search = request.query_params.get("search", "").strip().casefold()
+        if search:
+            mappings = [
+                mapping
+                for mapping in mappings
+                if search
+                in " ".join(
+                    str(value or "")
+                    for value in (
+                        mapping.get("category_id"),
+                        mapping.get("name"),
+                        mapping.get("digikala_category_id"),
+                    )
+                ).casefold()
+            ]
+        ordering = request.query_params.get("ordering")
+        descending = ordering and ordering.startswith("-")
+        field = (ordering or "").lstrip("-")
+        if field in {"category_id", "name", "digikala_category_id"}:
+            mappings = sorted(
+                mappings,
+                key=lambda item: item.get(field, 0),
+                reverse=bool(descending),
+            )
+        return api_response(True, "", _paginate(request, mappings))
+
+    def post(self, request):
+        serializer = DigikalaMappingSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            mapping = self.runtime().create_mapping(**serializer.validated_data)
+        except DigikalaRuntimeService.Error as exc:
+            self.handle_runtime_error(exc)
+        return api_response(
+            True, "Category mapping created.", mapping, status_code=201
+        )
+
+
+class DigikalaMappingDetail(DigikalaAPIView):
+    permission_classes = [IsAuthenticated, MethodPermission]
+    method_permissions = {
+        "GET": "catalog.view_product",
+        "PATCH": "catalog.change_product",
+        "DELETE": "catalog.delete_product",
+    }
+
+    def get(self, request, category_id):
+        try:
+            mapping = self.runtime().get_mapping(category_id)
+        except DigikalaRuntimeService.Error as exc:
+            raise NotFound(str(exc)) from exc
+        return api_response(True, "", mapping)
+
+    def patch(self, request, category_id):
+        serializer = DigikalaMappingUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            mapping = self.runtime().update_mapping(
+                category_id, **serializer.validated_data
+            )
+        except DigikalaRuntimeService.Error as exc:
+            self.handle_runtime_error(exc)
+        return api_response(True, "Category mapping updated.", mapping)
+
+    def delete(self, request, category_id):
+        try:
+            self.runtime().delete_mapping(category_id)
+        except DigikalaRuntimeService.Error as exc:
+            self.handle_runtime_error(exc)
+        return api_response(True, "Category mapping deleted.", None)
+
+
+class DigikalaMappingCategoryOptions(DigikalaAPIView):
+    def get(self, request):
+        from domains.catalog.models import Category
+
+        mapped = {
+            category["category_id"]
+            for category in self.runtime().list_mappings()
+        }
+        categories = [
+            {
+                "id": category.id,
+                "name": category.name,
+                "fa_name": category.fa_name,
+                "mapped": category.id in mapped,
+            }
+            for category in Category.objects.order_by("id")
+        ]
+        return api_response(True, "", {"categories": categories})
 
 
 class DigikalaJobList(DigikalaAPIView):

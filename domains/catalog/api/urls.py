@@ -27,6 +27,9 @@ from .digikala_views import (
     DigikalaListingListCreate,
     DigikalaListingOptions,
     DigikalaListingProducts,
+    DigikalaMappingCategoryOptions,
+    DigikalaMappingDetail,
+    DigikalaMappingListCreate,
 )
 
 urlpatterns = [
@@ -44,6 +47,15 @@ urlpatterns = [
     path(
         "digikala/jobs/<uuid:job_id>/retry-failures",
         DigikalaJobRetryFailures.as_view(),
+    ),
+    path("digikala/mappings", DigikalaMappingListCreate.as_view()),
+    path(
+        "digikala/mappings/category-options",
+        DigikalaMappingCategoryOptions.as_view(),
+    ),
+    path(
+        "digikala/mappings/<int:category_id>",
+        DigikalaMappingDetail.as_view(),
     ),
     path("storefront/products", StorefrontProductSearch.as_view()),
     path(

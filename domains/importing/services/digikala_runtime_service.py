@@ -7,7 +7,11 @@ from uuid import UUID, uuid4
 
 from django.conf import settings
 
-from domains.catalog.integrations.digikala.contracts import load_approved_mapping
+from domains.catalog.integrations.digikala.contracts import (
+    ApprovedCategory,
+    load_approved_mapping,
+    validate_mappings,
+)
 from domains.catalog.integrations.digikala.filesystem import read_json, write_json_atomic
 from domains.catalog.integrations.digikala.pipeline import validate_listing_document
 
@@ -70,6 +74,160 @@ class DigikalaRuntimeService:
             return load_approved_mapping(self.mapping_path)
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             raise self.Error(f"Approved category mapping is invalid: {exc}") from exc
+
+    def _mapping_document(self):
+        try:
+            data = read_json(self.mapping_path)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            raise self.Error(f"Approved category mapping is invalid: {exc}") from exc
+        if not isinstance(data, dict) or not isinstance(data.get("categories"), list):
+            raise self.Error("Approved category mapping must contain a categories list.")
+        return data
+
+    def _write_mapping_categories(self, categories):
+        document = self._mapping_document()
+        document["schema"] = "uzshop.digikala.category-mappings/v1"
+        document["categories"] = [entry.as_dict() for entry in categories]
+        payload = json.dumps(document, ensure_ascii=False, indent=2)
+        try:
+            existing = self.mapping_path.read_text(encoding="utf-8")
+        except OSError:
+            existing = None
+        if existing is not None and (existing == payload or existing == payload + "\n"):
+            return
+        import os
+        import tempfile as _tempfile
+
+        descriptor, temporary_name = _tempfile.mkstemp(
+            prefix=f".{self.mapping_path.name}.",
+            suffix=".tmp",
+            dir=self.mapping_path.parent,
+        )
+        temporary = Path(temporary_name)
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+                stream.write(payload)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, self.mapping_path)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+    def list_mappings(self):
+        return [
+            category.as_dict()
+            for category in sorted(
+                self.approved_categories(), key=lambda item: item.category_id
+            )
+        ]
+
+    def get_mapping(self, category_id):
+        category_id = int(category_id)
+        for category in self.approved_categories():
+            if category.category_id == category_id:
+                return category.as_dict()
+        raise self.Error("Mapping was not found.")
+
+    @staticmethod
+    def _auto_api_url(digikala_category_id):
+        return (
+            f"https://api.digikala.com/discovery/api/v2/categories/"
+            f"{int(digikala_category_id)}/products?columns_per_page=3&page=1"
+        )
+
+    def create_mapping(self, *, category_id, name, digikala_category_id, api_url=None):
+        try:
+            entry = ApprovedCategory.from_dict(
+                {
+                    "category_id": category_id,
+                    "name": name,
+                    "digikala_category_id": digikala_category_id,
+                    "api_url": api_url or self._auto_api_url(digikala_category_id),
+                }
+            )
+        except (TypeError, ValueError) as exc:
+            raise self.Error(str(exc)) from exc
+        with self.lock("mapping"):
+            current = self.approved_categories()
+            if any(item.category_id == entry.category_id for item in current):
+                raise self.Error("A mapping for this category already exists.")
+            if any(
+                item.digikala_category_id == entry.digikala_category_id
+                for item in current
+            ):
+                raise self.Error(
+                    "This Digikala category is already mapped to another category."
+                )
+            self._write_mapping_categories([*current, entry])
+        return entry.as_dict()
+
+    def update_mapping(
+        self,
+        category_id,
+        *,
+        name=None,
+        digikala_category_id=None,
+        api_url=None,
+    ):
+        category_id = int(category_id)
+        with self.lock("mapping"):
+            current = self.approved_categories()
+            target_index = next(
+                (
+                    index
+                    for index, item in enumerate(current)
+                    if item.category_id == category_id
+                ),
+                None,
+            )
+            if target_index is None:
+                raise self.Error("Mapping was not found.")
+            target = current[target_index]
+            if (
+                digikala_category_id is not None
+                and digikala_category_id != target.digikala_category_id
+                and api_url is None
+            ):
+                api_url = self._auto_api_url(digikala_category_id)
+            updated = {
+                "category_id": target.category_id,
+                "name": name if name is not None else target.name,
+                "digikala_category_id": (
+                    digikala_category_id
+                    if digikala_category_id is not None
+                    else target.digikala_category_id
+                ),
+                "api_url": api_url if api_url is not None else target.api_url,
+            }
+            try:
+                entry = ApprovedCategory.from_dict(updated)
+            except (TypeError, ValueError) as exc:
+                raise self.Error(str(exc)) from exc
+            if any(
+                item.digikala_category_id == entry.digikala_category_id
+                and item.category_id != entry.category_id
+                for item in current
+            ):
+                raise self.Error(
+                    "This Digikala category is already mapped to another category."
+                )
+            next_categories = list(current)
+            next_categories[target_index] = entry
+            self._write_mapping_categories(next_categories)
+        return entry.as_dict()
+
+    def delete_mapping(self, category_id):
+        category_id = int(category_id)
+        with self.lock("mapping"):
+            current = self.approved_categories()
+            remaining = [
+                item for item in current if item.category_id != category_id
+            ]
+            if len(remaining) == len(current):
+                raise self.Error("Mapping was not found.")
+            if not remaining:
+                raise self.Error("At least one approved category is required.")
+            self._write_mapping_categories(remaining)
 
     def selected_categories(self, category_ids):
         requested = {int(category_id) for category_id in category_ids}

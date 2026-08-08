@@ -930,6 +930,12 @@
       "name": "تابلو",
       "digikala_category_id": 6946,
       "api_url": "https://api.digikala.com/discovery/api/v2/categories/6946/products?columns_per_page=3&page=1"
+    },
+    {
+      "category_id": 1001,
+      "name": "موبایل",
+      "digikala_category_id": 11,
+      "api_url": "https://api.digikala.com/discovery/api/v2/categories/11/products?columns_per_page=3&page=1"
     }
   ]
 }

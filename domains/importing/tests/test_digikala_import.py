@@ -382,3 +382,147 @@ class DigikalaAdminAPITests(APITestCase):
             )
         self.assertEqual(response.status_code, 202)
         queued.assert_called_once()
+
+
+class DigikalaMappingAPITests(APITestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name) / "runtime"
+        self.mapping = Path(self.temporary.name) / "mapping.json"
+        write_json_atomic(
+            self.mapping,
+            {
+                "categories": [
+                    {
+                        "category_id": 1003,
+                        "name": "Chargers",
+                        "digikala_category_id": 1271,
+                        "api_url": "https://api.digikala.com/discovery/api/v2/categories/1271/products",
+                    }
+                ]
+            },
+        )
+        self.settings_override = override_settings(
+            DIGIKALA_RUNTIME_ROOT=self.root,
+            DIGIKALA_CATEGORY_MAPPING_PATH=self.mapping,
+        )
+        self.settings_override.enable()
+        self.addCleanup(self.settings_override.disable)
+        user = get_user_model().objects.create_superuser(
+            username="admin", password="password"
+        )
+        self.client.force_authenticate(user)
+        status, _ = CategoryStatus.objects.get_or_create(name="active")
+        Category.objects.create(id=1003, name="Chargers", fa_name="شارژر", status=status)
+        Category.objects.create(id=1004, name="Cases", status=status)
+
+    def test_list_mappings(self):
+        response = self.client.get("/api/catalog/digikala/mappings")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["count"], 1)
+        self.assertEqual(response.data["data"]["results"][0]["category_id"], 1003)
+
+    def test_create_mapping_auto_generates_api_url(self):
+        response = self.client.post(
+            "/api/catalog/digikala/mappings",
+            {
+                "category_id": 1004,
+                "name": "Cases",
+                "digikala_category_id": 77,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["data"]["category_id"], 1004)
+        self.assertEqual(
+            response.data["data"]["api_url"],
+            "https://api.digikala.com/discovery/api/v2/categories/77/products?columns_per_page=3&page=1",
+        )
+
+    def test_create_mapping_rejects_duplicate_category(self):
+        response = self.client.post(
+            "/api/catalog/digikala/mappings",
+            {
+                "category_id": 1003,
+                "name": "Chargers",
+                "digikala_category_id": 500,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_create_mapping_rejects_duplicate_digikala_id(self):
+        response = self.client.post(
+            "/api/catalog/digikala/mappings",
+            {
+                "category_id": 1004,
+                "name": "Cases",
+                "digikala_category_id": 1271,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_update_mapping_regenerates_api_url(self):
+        response = self.client.patch(
+            "/api/catalog/digikala/mappings/1003",
+            {"digikala_category_id": 5000},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["digikala_category_id"], 5000)
+        self.assertEqual(
+            response.data["data"]["api_url"],
+            "https://api.digikala.com/discovery/api/v2/categories/5000/products?columns_per_page=3&page=1",
+        )
+
+    def test_update_mapping_custom_api_url(self):
+        response = self.client.patch(
+            "/api/catalog/digikala/mappings/1003",
+            {
+                "api_url": "https://api.digikala.com/discovery/api/v2/categories/1271/products?columns_per_page=3&page=2"
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("page=2", response.data["data"]["api_url"])
+
+    def test_update_mapping_rejects_mismatched_api_url(self):
+        response = self.client.patch(
+            "/api/catalog/digikala/mappings/1003",
+            {
+                "api_url": "https://api.digikala.com/discovery/api/v2/categories/9999/products"
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_delete_mapping(self):
+        self.client.post(
+            "/api/catalog/digikala/mappings",
+            {
+                "category_id": 1004,
+                "name": "Cases",
+                "digikala_category_id": 77,
+            },
+            format="json",
+        )
+        response = self.client.delete("/api/catalog/digikala/mappings/1003")
+        self.assertEqual(response.status_code, 200)
+        response = self.client.get("/api/catalog/digikala/mappings")
+        self.assertEqual(response.data["data"]["count"], 1)
+
+    def test_delete_mapping_refuses_last_mapping(self):
+        response = self.client.delete("/api/catalog/digikala/mappings/1003")
+        self.assertEqual(response.status_code, 400)
+
+    def test_mapping_category_options(self):
+        response = self.client.get("/api/catalog/digikala/mappings/category-options")
+        self.assertEqual(response.status_code, 200)
+        by_id = {
+            category["id"]: category
+            for category in response.data["data"]["categories"]
+        }
+        self.assertTrue(by_id[1003]["mapped"])
+        self.assertFalse(by_id[1004]["mapped"])

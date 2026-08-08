@@ -1,0 +1,405 @@
+{
+  "schema_version": 1,
+  "attributes": [
+    {
+      "name": "Color",
+      "options": [
+        {
+          "name": "Black",
+          "fa_name": "Black",
+          "info": "",
+          "sku_code": "BLK"
+        },
+        {
+          "name": "Blue",
+          "fa_name": "Blue",
+          "info": "",
+          "sku_code": "BLU"
+        },
+        {
+          "name": "White",
+          "fa_name": "White",
+          "info": "",
+          "sku_code": "WHT"
+        },
+        {
+          "name": "آبی",
+          "fa_name": "آبی",
+          "info": "#0000FF",
+          "sku_code": "DK2C437771C92BE1"
+        },
+        {
+          "name": "آبی آسمانی",
+          "fa_name": "آبی آسمانی",
+          "info": "#e0ffff",
+          "sku_code": "DK825094AC3D1383"
+        },
+        {
+          "name": "آبی تیره",
+          "fa_name": "آبی تیره",
+          "info": "#020266",
+          "sku_code": "DK0BAB6662D416BF"
+        },
+        {
+          "name": "آبی روشن",
+          "fa_name": "آبی روشن",
+          "info": "#aee9fc",
+          "sku_code": "DK089CD2FB0F35CB"
+        },
+        {
+          "name": "آبی فیروزه ای",
+          "fa_name": "آبی فیروزه ای",
+          "info": "#40E0D0",
+          "sku_code": "DK9AE5770A51211E"
+        },
+        {
+          "name": "آبی کم‌رنگ",
+          "fa_name": "آبی کم‌رنگ",
+          "info": "#AFEEEE",
+          "sku_code": "DK6FB6191579FC48"
+        },
+        {
+          "name": "آبی نیلی",
+          "fa_name": "آبی نیلی",
+          "info": "#4682b4",
+          "sku_code": "DKC721048309C892"
+        },
+        {
+          "name": "آبی یخی",
+          "fa_name": "آبی یخی",
+          "info": "#d5f2ff",
+          "sku_code": "DK06992048C5581F"
+        },
+        {
+          "name": "آجری",
+          "fa_name": "آجری",
+          "info": "#C45A3F",
+          "sku_code": "DK73B786F3A01B64"
+        },
+        {
+          "name": "استیل",
+          "fa_name": "استیل",
+          "info": "#ebebeb",
+          "sku_code": "DKF81535237514D2"
+        },
+        {
+          "name": "بژ",
+          "fa_name": "بژ",
+          "info": "#e6dab3",
+          "sku_code": "DKA94FB6FD7D807D"
+        },
+        {
+          "name": "بنفش",
+          "fa_name": "بنفش",
+          "info": "#800080",
+          "sku_code": "DK8D04C834D44D3C"
+        },
+        {
+          "name": "تیتانیوم سفید",
+          "fa_name": "تیتانیوم سفید",
+          "info": "#E4E4E3",
+          "sku_code": "DKEC1C86150E56FC"
+        },
+        {
+          "name": "تیتانیومی",
+          "fa_name": "تیتانیومی",
+          "info": "#b2abb2",
+          "sku_code": "DK84498275EC3D9E"
+        },
+        {
+          "name": "خاکستری",
+          "fa_name": "خاکستری",
+          "info": "#9E9E9E",
+          "sku_code": "DKE3EEEEB1B6C815"
+        },
+        {
+          "name": "خاکستری روشن",
+          "fa_name": "خاکستری روشن",
+          "info": "#D3D3D3",
+          "sku_code": "DKCE546A285AEC9E"
+        },
+        {
+          "name": "ذغالی",
+          "fa_name": "ذغالی",
+          "info": "#333333",
+          "sku_code": "DK4AD616206BE80E"
+        },
+        {
+          "name": "زرد",
+          "fa_name": "زرد",
+          "info": "#FFFF00",
+          "sku_code": "DK193256ED36B039"
+        },
+        {
+          "name": "زرد لیمویی",
+          "fa_name": "زرد لیمویی",
+          "info": "#FFF9C4",
+          "sku_code": "DK023FC49A681F3E"
+        },
+        {
+          "name": "زیتونی",
+          "fa_name": "زیتونی",
+          "info": "#808000",
+          "sku_code": "DK486FD6C552F5C2"
+        },
+        {
+          "name": "سبز",
+          "fa_name": "سبز",
+          "info": "#008000",
+          "sku_code": "DK001D81DC9DCC00"
+        },
+        {
+          "name": "سبز آبی",
+          "fa_name": "سبز آبی",
+          "info": "#008080",
+          "sku_code": "DK381731B1901876"
+        },
+        {
+          "name": "سبز تیره",
+          "fa_name": "سبز تیره",
+          "info": "#007e33",
+          "sku_code": "DK083FB7E55E4035"
+        },
+        {
+          "name": "سبز دریایی",
+          "fa_name": "سبز دریایی",
+          "info": "#6accab",
+          "sku_code": "DK656CFB7507E048"
+        },
+        {
+          "name": "سرخابی",
+          "fa_name": "سرخابی",
+          "info": "#ff1493",
+          "sku_code": "DKC8A8AAB594DCBE"
+        },
+        {
+          "name": "سرمه ای",
+          "fa_name": "سرمه ای",
+          "info": "#002171",
+          "sku_code": "DKE65D10DFF30400"
+        },
+        {
+          "name": "سفید",
+          "fa_name": "سفید",
+          "info": "#FFFFFF",
+          "sku_code": "DK7FD5F2C90A2BC0"
+        },
+        {
+          "name": "سفید صدفی",
+          "fa_name": "سفید صدفی",
+          "info": "#f3f3f3",
+          "sku_code": "DKA9AA110575C60E"
+        },
+        {
+          "name": "سفید مات",
+          "fa_name": "سفید مات",
+          "info": "#FDFBF9",
+          "sku_code": "DKA3E4FD561F3B73"
+        },
+        {
+          "name": "صورتی",
+          "fa_name": "صورتی",
+          "info": "#ffc0cb",
+          "sku_code": "DK1C338FCE1D92BF"
+        },
+        {
+          "name": "صورتی نئونی",
+          "fa_name": "صورتی نئونی",
+          "info": "#fc6fec",
+          "sku_code": "DK4A8D908BB684B7"
+        },
+        {
+          "name": "طلایی",
+          "fa_name": "طلایی",
+          "info": "#d4af38",
+          "sku_code": "DK62AF8B02C70CA4"
+        },
+        {
+          "name": "طوسی",
+          "fa_name": "طوسی",
+          "info": "#e0e0e0",
+          "sku_code": "DK6B3A2190D2299A"
+        },
+        {
+          "name": "طوسی روشن",
+          "fa_name": "طوسی روشن",
+          "info": "#e5e5e5",
+          "sku_code": "DK9FAD06B04EC935"
+        },
+        {
+          "name": "عنابی",
+          "fa_name": "عنابی",
+          "info": "#51241f",
+          "sku_code": "DKF20849A9677736"
+        },
+        {
+          "name": "قرمز",
+          "fa_name": "قرمز",
+          "info": "#FF0000",
+          "sku_code": "DKAF9752EE7DDC8D"
+        },
+        {
+          "name": "قهوه ای",
+          "fa_name": "قهوه ای",
+          "info": "#6B4632",
+          "sku_code": "DK905E2B873D1322"
+        },
+        {
+          "name": "قهوه ای تیره",
+          "fa_name": "قهوه ای تیره",
+          "info": "#362218",
+          "sku_code": "DK608385421CA28A"
+        },
+        {
+          "name": "قهوه ای روشن",
+          "fa_name": "قهوه ای روشن",
+          "info": "#7b584c",
+          "sku_code": "DK22D6BE1FFE5E2A"
+        },
+        {
+          "name": "کروم",
+          "fa_name": "کروم",
+          "info": "#dadada",
+          "sku_code": "DK7BAEE3F6F84C51"
+        },
+        {
+          "name": "کهربایی",
+          "fa_name": "کهربایی",
+          "info": "#FFBF00",
+          "sku_code": "DKBECE43084C85F1"
+        },
+        {
+          "name": "گندمی",
+          "fa_name": "گندمی",
+          "info": "#f5deb3",
+          "sku_code": "DK94FE6CB0570AA2"
+        },
+        {
+          "name": "گیلاسی",
+          "fa_name": "گیلاسی",
+          "info": "#B71C1C",
+          "sku_code": "DKBE357D261FBC2B"
+        },
+        {
+          "name": "ماهگونی",
+          "fa_name": "ماهگونی",
+          "info": "#3f1e1f",
+          "sku_code": "DK174ADCADAE3E17"
+        },
+        {
+          "name": "مشکی",
+          "fa_name": "مشکی",
+          "info": "#000000",
+          "sku_code": "DK1E23FA388C2D96"
+        },
+        {
+          "name": "مشکی براق",
+          "fa_name": "مشکی براق",
+          "info": "#090000",
+          "sku_code": "DK08AB755F2F3C29"
+        },
+        {
+          "name": "مشکی مات",
+          "fa_name": "مشکی مات",
+          "info": "#443c3c",
+          "sku_code": "DK33A84F0FE1A484"
+        },
+        {
+          "name": "نارنجی",
+          "fa_name": "نارنجی",
+          "info": "#FFA501",
+          "sku_code": "DK23AFEDC4B10549"
+        },
+        {
+          "name": "نارنجی فلورسنت",
+          "fa_name": "نارنجی فلورسنت",
+          "info": "#FF5F1F",
+          "sku_code": "DK9126A553DC709F"
+        },
+        {
+          "name": "نارنجی کم‌رنگ",
+          "fa_name": "نارنجی کم‌رنگ",
+          "info": "#ffaf47",
+          "sku_code": "DK13EBD04E177010"
+        },
+        {
+          "name": "نقره ای",
+          "fa_name": "نقره ای",
+          "info": "#dedede",
+          "sku_code": "DK23DEC200DDB4FA"
+        },
+        {
+          "name": "نقره‌ای مات",
+          "fa_name": "نقره‌ای مات",
+          "info": "#BDBDBD",
+          "sku_code": "DKC7DAB393C540A2"
+        },
+        {
+          "name": "نوک مدادی",
+          "fa_name": "نوک مدادی",
+          "info": "#424242",
+          "sku_code": "DK1AFD80A5897A71"
+        },
+        {
+          "name": "یاسی",
+          "fa_name": "یاسی",
+          "info": "#cfa2ff",
+          "sku_code": "DK927A786D3E327E"
+        }
+      ],
+      "categories": [
+        1001,
+        1003,
+        1059
+      ]
+    },
+    {
+      "name": "Size",
+      "options": [
+        {
+          "name": "Large",
+          "fa_name": "Large",
+          "info": "",
+          "sku_code": "L"
+        },
+        {
+          "name": "Medium",
+          "fa_name": "Medium",
+          "info": "",
+          "sku_code": "M"
+        },
+        {
+          "name": "Small",
+          "fa_name": "Small",
+          "info": "",
+          "sku_code": "S"
+        }
+      ],
+      "categories": []
+    },
+    {
+      "name": "Storage",
+      "options": [
+        {
+          "name": "128 GB",
+          "fa_name": "128 GB",
+          "info": "",
+          "sku_code": "128GB"
+        },
+        {
+          "name": "256 GB",
+          "fa_name": "256 GB",
+          "info": "",
+          "sku_code": "256GB"
+        },
+        {
+          "name": "512 GB",
+          "fa_name": "512 GB",
+          "info": "",
+          "sku_code": "512GB"
+        }
+      ],
+      "categories": []
+    }
+  ]
+}
