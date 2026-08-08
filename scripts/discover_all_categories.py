@@ -21,8 +21,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from domains.catalog.integrations.digikala.discovery import discover_categories  # noqa: E402
-from domains.catalog.integrations.digikala.filesystem import read_json  # noqa: E402
+from domains.importing.integrations.digikala.discovery import discover_categories  # noqa: E402
+from domains.importing.integrations.digikala.filesystem import read_json  # noqa: E402
 
 
 def leaf_category_ids(manifest: dict) -> list[int]:

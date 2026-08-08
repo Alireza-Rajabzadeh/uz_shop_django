@@ -1,6 +1,4 @@
 from .brand_service import BrandService
-from .digikala_import_service import DigikalaImportService
-from .digikala_runtime_service import DigikalaRuntimeService
 from .category_service import CategoryService
 from .detail_service import DetailService
 from .product_service import ProductService

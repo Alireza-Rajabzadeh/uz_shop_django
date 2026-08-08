@@ -5,18 +5,18 @@ from unittest import TestCase
 
 import requests
 
-from domains.catalog.integrations.digikala.cli import main
-from domains.catalog.integrations.digikala.client import DigikalaClient, DigikalaHTTPError
-from domains.catalog.integrations.digikala.contracts import (
+from domains.importing.integrations.digikala.cli import main
+from domains.importing.integrations.digikala.client import DigikalaClient, DigikalaHTTPError
+from domains.importing.integrations.digikala.contracts import (
     ApprovedCategory,
     ListingOptions,
     ValidationError,
     load_approved_mapping,
 )
-from domains.catalog.integrations.digikala.detail import normalize_detail
-from domains.catalog.integrations.digikala.filesystem import read_json
-from domains.catalog.integrations.digikala.listing import find_total_pages
-from domains.catalog.integrations.digikala.pipeline import (
+from domains.importing.integrations.digikala.detail import normalize_detail
+from domains.importing.integrations.digikala.filesystem import read_json
+from domains.importing.integrations.digikala.listing import find_total_pages
+from domains.importing.integrations.digikala.pipeline import (
     CollectionCancelled,
     collect_details,
     collect_listings,

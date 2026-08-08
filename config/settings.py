@@ -65,6 +65,7 @@ INSTALLED_APPS = [
     "domains.notifications.apps.NotificationsConfig",
     "domains.files.apps.FilesConfig",
     "domains.catalog.apps.CatalogConfig",
+    "domains.importing.apps.ImportingConfig",
     "domains.inventory.apps.InventoryConfig",
     "domains.location.apps.LocationConfig",
     "domains.customer.apps.CustomerConfig",
@@ -82,7 +83,7 @@ CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_ACKS_LATE = True
 CELERY_TASK_REJECT_ON_WORKER_LOST = True
 CELERY_TASK_ROUTES = {
-    "catalog.digikala.*": {"queue": "digikala"},
+    "importing.digikala.*": {"queue": "digikala"},
 }
 DIGIKALA_RUNTIME_ROOT = Path(
     os.getenv("DIGIKALA_RUNTIME_ROOT", BASE_DIR / "runtime" / "digikala")

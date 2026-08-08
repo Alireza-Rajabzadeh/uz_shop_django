@@ -7,13 +7,13 @@ from uuid import UUID, uuid4
 
 from django.conf import settings
 
-from domains.catalog.integrations.digikala.contracts import (
+from domains.importing.integrations.digikala.contracts import (
     ApprovedCategory,
     load_approved_mapping,
     validate_mappings,
 )
-from domains.catalog.integrations.digikala.filesystem import read_json, write_json_atomic
-from domains.catalog.integrations.digikala.pipeline import validate_listing_document
+from domains.importing.integrations.digikala.filesystem import read_json, write_json_atomic
+from domains.importing.integrations.digikala.pipeline import validate_listing_document
 
 
 class DigikalaRuntimeService:

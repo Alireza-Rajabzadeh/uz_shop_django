@@ -56,6 +56,7 @@ core/                   Shared responses, exceptions, services, utilities
 domains/catalog/        Categories, products, variants, and media relations
 domains/customer/       Customer auth, profiles, preferences, and addresses
 domains/files/          Provider-neutral stored-file lifecycle
+domains/importing/      External-source import pipelines (Digikala, etc.)
 domains/inventory/      Warehouses, stock, and inventory strategies
 domains/location/       Countries, states, and cities
 domains/notifications/  Provider records, audit rows, and delivery workers
@@ -106,6 +107,7 @@ Root namespaces:
 - `/api/users/`
 - `/api/customer/`
 - `/api/catalog/`
+- `/api/importing/`
 - `/api/inventory/`
 - `/api/location/`
 - `/api/files/`
@@ -176,13 +178,14 @@ The seed command does not provision notification provider statuses or a default 
 
 Current catalog endpoints are administrative and permission-controlled. They are not a public storefront contract.
 
-### Digikala Catalog Import
+### Digikala Import (Importing Domain)
 
-The Digikala integration is file-backed and migration-free. The same reusable modules
-under `domains/catalog/integrations/digikala/` are called by the CLI, Celery, and the
-admin API. Keep extraction and file contracts framework-light; catalog writes belong in
-`DigikalaImportService`. Generated listing/job data lives outside the repository under
-`DIGIKALA_RUNTIME_ROOT` (gitignored `runtime/`).
+The Digikala integration lives in the `domains.importing` domain under
+`domains/importing/integrations/digikala/`. The importing domain owns the
+file-backed, migration-free pipeline: CLI, Celery tasks, and admin API.
+Catalog writes go through `DigikalaImportService`, which delegates to
+catalog services. Generated listing/job data lives outside the repository
+under `DIGIKALA_RUNTIME_ROOT` (gitignored `runtime/`).
 
 Pipeline:
 
@@ -196,7 +199,7 @@ Pipeline:
    `--chromium-path` / `--headful` / `--batch-size`).
 2. **Import CLI** — `scripts/digikala.py`: `validate --mapping ...`, then
    `listings --mapping ...` and `details --listing ...`.
-3. **Admin import** — catalog service queues listing/import jobs consumed by the Celery
+3. **Admin import** — importing service queues listing/import jobs consumed by the Celery
    `digikala` queue (concurrency one). There is no per-job cap on unique imported
    products.
 
@@ -216,8 +219,7 @@ python manage.py test core.tests
 python manage.py test domains.customer.tests
 python manage.py test domains.notifications.tests
 python manage.py test domains.catalog.tests
-python manage.py test domains.catalog.tests_digikala_core
-python manage.py test domains.catalog.tests_digikala_import
+python manage.py test domains.importing.tests
 python manage.py test domains.inventory.tests
 python manage.py test domains.files.tests
 python manage.py test domains.location.tests

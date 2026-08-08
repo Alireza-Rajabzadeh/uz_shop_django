@@ -8,7 +8,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from rest_framework.test import APITestCase
 
-from domains.catalog.integrations.digikala.filesystem import (
+from domains.importing.integrations.digikala.filesystem import (
     sha256_json,
     write_json_atomic,
 )
@@ -26,7 +26,7 @@ from domains.catalog.models import (
     ProductVariants,
     VariantOption,
 )
-from domains.catalog.services.digikala_import_service import DigikalaImportService
+from domains.importing.services.digikala_import_service import DigikalaImportService
 from domains.files.models import File
 from domains.inventory.models import InventoryStrategy
 
@@ -331,15 +331,15 @@ class DigikalaAdminAPITests(APITestCase):
         return document
 
     def test_options_and_listing_job_creation(self):
-        options = self.client.get("/api/catalog/digikala/listing-options")
+        options = self.client.get("/api/importing/digikala/listing-options")
         self.assertEqual(options.status_code, 200)
         self.assertEqual(options.data["data"]["currency"], "IRR")
 
         with patch(
-            "domains.catalog.api.digikala_views.collect_digikala_listing.apply_async"
+            "domains.importing.api.digikala_views.collect_digikala_listing.apply_async"
         ) as queued:
             response = self.client.post(
-                "/api/catalog/digikala/listings",
+                "/api/importing/digikala/listings",
                 {
                     "category_ids": [1003],
                     "products_per_category": 20,
@@ -352,22 +352,22 @@ class DigikalaAdminAPITests(APITestCase):
             )
         self.assertEqual(response.status_code, 202)
         queued.assert_called_once()
-        jobs = self.client.get("/api/catalog/digikala/jobs")
+        jobs = self.client.get("/api/importing/digikala/jobs")
         self.assertEqual(jobs.data["data"]["count"], 1)
 
     def test_generated_listing_products_and_import_job_creation(self):
         listing = self.create_listing()
         products = self.client.get(
-            f"/api/catalog/digikala/listings/{listing['listing_id']}/products"
+            f"/api/importing/digikala/listings/{listing['listing_id']}/products"
         )
         self.assertEqual(products.status_code, 200)
         self.assertEqual(products.data["data"]["results"][0]["product_id"], 12345)
 
         with patch(
-            "domains.catalog.api.digikala_views.import_digikala_products.apply_async"
+            "domains.importing.api.digikala_views.import_digikala_products.apply_async"
         ) as queued:
             response = self.client.post(
-                "/api/catalog/digikala/import-jobs",
+                "/api/importing/digikala/import-jobs",
                 {
                     "listing_id": listing["listing_id"],
                     "listing_sha256": listing["sha256"],
@@ -418,14 +418,14 @@ class DigikalaMappingAPITests(APITestCase):
         Category.objects.create(id=1004, name="Cases", status=status)
 
     def test_list_mappings(self):
-        response = self.client.get("/api/catalog/digikala/mappings")
+        response = self.client.get("/api/importing/digikala/mappings")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["data"]["count"], 1)
         self.assertEqual(response.data["data"]["results"][0]["category_id"], 1003)
 
     def test_create_mapping_auto_generates_api_url(self):
         response = self.client.post(
-            "/api/catalog/digikala/mappings",
+            "/api/importing/digikala/mappings",
             {
                 "category_id": 1004,
                 "name": "Cases",
@@ -442,7 +442,7 @@ class DigikalaMappingAPITests(APITestCase):
 
     def test_create_mapping_rejects_duplicate_category(self):
         response = self.client.post(
-            "/api/catalog/digikala/mappings",
+            "/api/importing/digikala/mappings",
             {
                 "category_id": 1003,
                 "name": "Chargers",
@@ -454,7 +454,7 @@ class DigikalaMappingAPITests(APITestCase):
 
     def test_create_mapping_rejects_duplicate_digikala_id(self):
         response = self.client.post(
-            "/api/catalog/digikala/mappings",
+            "/api/importing/digikala/mappings",
             {
                 "category_id": 1004,
                 "name": "Cases",
@@ -466,7 +466,7 @@ class DigikalaMappingAPITests(APITestCase):
 
     def test_update_mapping_regenerates_api_url(self):
         response = self.client.patch(
-            "/api/catalog/digikala/mappings/1003",
+            "/api/importing/digikala/mappings/1003",
             {"digikala_category_id": 5000},
             format="json",
         )
@@ -479,7 +479,7 @@ class DigikalaMappingAPITests(APITestCase):
 
     def test_update_mapping_custom_api_url(self):
         response = self.client.patch(
-            "/api/catalog/digikala/mappings/1003",
+            "/api/importing/digikala/mappings/1003",
             {
                 "api_url": "https://api.digikala.com/discovery/api/v2/categories/1271/products?columns_per_page=3&page=2"
             },
@@ -490,7 +490,7 @@ class DigikalaMappingAPITests(APITestCase):
 
     def test_update_mapping_rejects_mismatched_api_url(self):
         response = self.client.patch(
-            "/api/catalog/digikala/mappings/1003",
+            "/api/importing/digikala/mappings/1003",
             {
                 "api_url": "https://api.digikala.com/discovery/api/v2/categories/9999/products"
             },
@@ -500,7 +500,7 @@ class DigikalaMappingAPITests(APITestCase):
 
     def test_delete_mapping(self):
         self.client.post(
-            "/api/catalog/digikala/mappings",
+            "/api/importing/digikala/mappings",
             {
                 "category_id": 1004,
                 "name": "Cases",
@@ -508,17 +508,17 @@ class DigikalaMappingAPITests(APITestCase):
             },
             format="json",
         )
-        response = self.client.delete("/api/catalog/digikala/mappings/1003")
+        response = self.client.delete("/api/importing/digikala/mappings/1003")
         self.assertEqual(response.status_code, 200)
-        response = self.client.get("/api/catalog/digikala/mappings")
+        response = self.client.get("/api/importing/digikala/mappings")
         self.assertEqual(response.data["data"]["count"], 1)
 
     def test_delete_mapping_refuses_last_mapping(self):
-        response = self.client.delete("/api/catalog/digikala/mappings/1003")
+        response = self.client.delete("/api/importing/digikala/mappings/1003")
         self.assertEqual(response.status_code, 400)
 
     def test_mapping_category_options(self):
-        response = self.client.get("/api/catalog/digikala/mappings/category-options")
+        response = self.client.get("/api/importing/digikala/mappings/category-options")
         self.assertEqual(response.status_code, 200)
         by_id = {
             category["id"]: category

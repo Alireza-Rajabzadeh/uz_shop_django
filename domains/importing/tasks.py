@@ -1,12 +1,12 @@
 from celery import shared_task
 
-from domains.catalog.integrations.digikala import ListingOptions, collect_listings
-from domains.catalog.integrations.digikala.client import DigikalaClient
-from domains.catalog.integrations.digikala.contracts import detail_url
-from domains.catalog.integrations.digikala.detail import normalize_detail
-from domains.catalog.integrations.digikala.filesystem import write_json_atomic
-from domains.catalog.services.digikala_import_service import DigikalaImportService
-from domains.catalog.services.digikala_runtime_service import DigikalaRuntimeService
+from domains.importing.integrations.digikala import ListingOptions, collect_listings
+from domains.importing.integrations.digikala.client import DigikalaClient
+from domains.importing.integrations.digikala.contracts import detail_url
+from domains.importing.integrations.digikala.detail import normalize_detail
+from domains.importing.integrations.digikala.filesystem import write_json_atomic
+from domains.importing.services.digikala_import_service import DigikalaImportService
+from domains.importing.services.digikala_runtime_service import DigikalaRuntimeService
 
 
 def _finish_cancelled(runtime, job_id):
@@ -19,7 +19,7 @@ def _finish_cancelled(runtime, job_id):
     )
 
 
-@shared_task(name="catalog.digikala.collect_listing")
+@shared_task(name="importing.digikala.collect_listing")
 def collect_digikala_listing(job_id):
     runtime = DigikalaRuntimeService()
     request = runtime.get_request(job_id)
@@ -83,7 +83,7 @@ def collect_digikala_listing(job_id):
         raise
 
 
-@shared_task(name="catalog.digikala.import_products")
+@shared_task(name="importing.digikala.import_products")
 def import_digikala_products(job_id):
     runtime = DigikalaRuntimeService()
     request = runtime.get_request(job_id)

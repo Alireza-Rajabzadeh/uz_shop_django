@@ -23,6 +23,7 @@ urlpatterns = [
     path("api/users/", include("domains.users.users_urls")),
     path("api/customer/", include("domains.customer.urls")),
     path("api/catalog/", include("domains.catalog.api.urls")),
+    path("api/importing/", include("domains.importing.api.urls")),
     path("api/inventory/", include("domains.inventory.api.urls")),
     path("api/location/", include("domains.location.urls")),
     path("api/files/", include("domains.files.api.urls")),

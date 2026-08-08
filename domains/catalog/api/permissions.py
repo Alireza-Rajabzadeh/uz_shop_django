@@ -1,4 +1,10 @@
-from rest_framework.permissions import DjangoModelPermissions, BasePermission
+from rest_framework.permissions import DjangoModelPermissions
+
+from core.permissions import (  # noqa: F401
+    AllRequiredPermissions,
+    CustomActionPermission,
+    MethodPermission,
+)
 
 
 class CatalogModelPermissions(DjangoModelPermissions):
@@ -17,37 +23,3 @@ class CatalogModelPermissions(DjangoModelPermissions):
         if model is not None:
             return model._default_manager.all()
         return super()._queryset(view)
-
-
-class CustomActionPermission(BasePermission):
-    def has_permission(self, request, view):
-        if not request.user or not request.user.is_authenticated:
-            return False
-        perms = getattr(view, "required_permissions", None)
-        if perms is not None:
-            return any(request.user.has_perm(perm) for perm in perms)
-        perm = getattr(view, "required_permission", None)
-        if perm is None:
-            return True
-        return request.user.has_perm(perm)
-
-
-class AllRequiredPermissions(BasePermission):
-    def has_permission(self, request, view):
-        if not request.user or not request.user.is_authenticated:
-            return False
-        return all(
-            request.user.has_perm(permission)
-            for permission in getattr(view, "required_permissions", ())
-        )
-
-
-class MethodPermission(BasePermission):
-    def has_permission(self, request, view):
-        if not request.user or not request.user.is_authenticated:
-            return False
-        mapping = getattr(view, "method_permissions", {})
-        codename = mapping.get(request.method)
-        if codename:
-            return request.user.has_perm(codename)
-        return True

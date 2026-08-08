@@ -4,20 +4,20 @@ from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
+from core.permissions import (
+    AllRequiredPermissions,
+    CustomActionPermission,
+    MethodPermission,
+)
 from core.responses import api_response
-from domains.catalog.api.digikala_serializers import (
+from domains.importing.api.digikala_serializers import (
     DigikalaImportCreateSerializer,
     DigikalaListingCreateSerializer,
     DigikalaMappingSerializer,
     DigikalaMappingUpdateSerializer,
 )
-from domains.catalog.api.permissions import (
-    AllRequiredPermissions,
-    CustomActionPermission,
-    MethodPermission,
-)
-from domains.catalog.services.digikala_runtime_service import DigikalaRuntimeService
-from domains.catalog.tasks import collect_digikala_listing, import_digikala_products
+from domains.importing.services.digikala_runtime_service import DigikalaRuntimeService
+from domains.importing.tasks import collect_digikala_listing, import_digikala_products
 from domains.users.auth import AdminJWTAuthentication
 
 
