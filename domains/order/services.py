@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import F
+from django.db.models import F, Q as models_Q
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
@@ -274,6 +274,69 @@ class OrderService:
         )
         self.expire_lazy(orders)
         return [self._order_payload(order) for order in orders]
+
+    def list_orders_admin(self, **filters):
+        queryset = Order.objects.select_related("status", "customer")
+        status = filters.get("status")
+        if status:
+            queryset = queryset.filter(status__name=status)
+        search = (filters.get("search") or "").strip()
+        if search:
+            queryset = queryset.filter(
+                models_Q(customer__phone__icontains=search)
+                | models_Q(customer__first_name__icontains=search)
+                | models_Q(customer__last_name__icontains=search)
+            )
+        created_from = filters.get("created_from")
+        if created_from:
+            queryset = queryset.filter(created_at__date__gte=created_from)
+        created_to = filters.get("created_to")
+        if created_to:
+            queryset = queryset.filter(created_at__date__lte=created_to)
+        ordering = (filters.get("ordering") or "").strip()
+        if ordering in {"id", "-id", "created_at", "-created_at", "total_amount", "-total_amount"}:
+            queryset = queryset.order_by(ordering, "id")
+        else:
+            queryset = queryset.order_by("-created_at", "id")
+        return [
+            self._admin_order_row(order)
+            for order in queryset
+        ]
+
+    def _admin_order_row(self, order):
+        customer = order.customer
+        return {
+            "id": order.id,
+            "customer": {
+                "id": customer.id,
+                "name": f"{customer.first_name} {customer.last_name}".strip(),
+                "phone": customer.phone,
+                "customer_code": customer.customer_code,
+            },
+            "status": order.status.name,
+            "status_fa_name": order.status.fa_name,
+            "totals": {
+                "subtotal": str(order.subtotal),
+                "discount_amount": str(order.discount_amount),
+                "shipping_amount": str(order.shipping_amount),
+                "total_amount": str(order.total_amount),
+            },
+            "reservation_expires_at": (
+                order.reservation_expires_at.isoformat()
+                if order.reservation_expires_at
+                else None
+            ),
+            "created_at": order.created_at.isoformat(),
+        }
+
+    def get_order_admin(self, order_id):
+        try:
+            order = Order.objects.select_related("status", "customer").get(id=order_id)
+        except Order.DoesNotExist as exc:
+            raise self.NotFoundError("Order not found.") from exc
+        payload = self._order_payload(order)
+        payload["customer"] = self._admin_order_row(order)["customer"]
+        return payload
 
     def expire_lazy(self, orders):
         now = timezone.now()

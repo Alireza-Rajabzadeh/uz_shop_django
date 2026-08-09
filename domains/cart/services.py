@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.db import transaction
+from django.db.models import Count, Q
 from django.utils.translation import gettext as _
 
 from domains.catalog.models import ProductVariants
@@ -23,6 +24,56 @@ class CartService:
     @staticmethod
     def get_or_create_cart(customer):
         return Cart.objects.get_or_create(customer=customer)[0]
+
+    def list_admin(self, **filters):
+        queryset = Cart.objects.select_related("customer").annotate(
+            items_count=Count("items")
+        )
+        search = (filters.get("search") or "").strip()
+        if search:
+            queryset = queryset.filter(
+                Q(customer__phone__icontains=search)
+                | Q(customer__first_name__icontains=search)
+                | Q(customer__last_name__icontains=search)
+            )
+        created_from = filters.get("created_from")
+        if created_from:
+            queryset = queryset.filter(created_at__date__gte=created_from)
+        created_to = filters.get("created_to")
+        if created_to:
+            queryset = queryset.filter(created_at__date__lte=created_to)
+        ordering = (filters.get("ordering") or "").strip()
+        if ordering in {"id", "-id", "created_at", "-created_at", "items_count", "-items_count"}:
+            queryset = queryset.order_by(ordering, "id")
+        else:
+            queryset = queryset.order_by("-created_at", "id")
+        return queryset
+
+    @staticmethod
+    def _admin_cart_row(cart):
+        customer = cart.customer
+        return {
+            "id": cart.id,
+            "customer": {
+                "id": customer.id,
+                "name": f"{customer.first_name} {customer.last_name}".strip(),
+                "phone": customer.phone,
+                "customer_code": customer.customer_code,
+            },
+            "items_count": getattr(cart, "items_count", 0),
+            "has_address": bool(cart.address_info),
+            "created_at": cart.created_at.isoformat(),
+            "updated_at": cart.updated_at.isoformat(),
+        }
+
+    def cart_payload_admin(self, cart_id):
+        try:
+            cart = Cart.objects.select_related("customer").get(id=cart_id)
+        except Cart.DoesNotExist as exc:
+            raise self.ValidationError({"cart": [_("Cart not found.")]}) from exc
+        payload = self.describe_existing(cart)
+        payload["customer"] = self._admin_cart_row(cart)["customer"]
+        return payload
 
     # ───────────────────────── rendering ─────────────────────────
 

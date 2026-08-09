@@ -1,6 +1,7 @@
 from datetime import timedelta
 from decimal import Decimal
 
+from django.contrib.auth.models import User
 from django.utils import timezone
 
 from domains.catalog.models import (
@@ -36,6 +37,83 @@ from rest_framework.test import APITestCase
 
 from core.management.seeders.order import OrderSeeder
 from domains.order.services import OrderService
+
+
+class OrderAdminAPITests(APITestCase):
+    def setUp(self):
+        OrderSeeder().run()
+        self.active = CustomerStatus.objects.create(name="active", title="Active")
+        self.customer = Customer.objects.create_user(
+            phone="09120000301",
+            password="password",
+            first_name="Order",
+            last_name="Admin",
+            customer_code="CUS-ORDER-101",
+            status=self.active,
+        )
+        self.admin = User.objects.create_superuser("order-admin", password="password")
+        self.client.force_authenticate(self.admin)
+        self.status = OrderStatus.objects.get(name="payment_waiting")
+        self.order = Order.objects.create(
+            customer=self.customer,
+            status=self.status,
+            address_info={},
+            subtotal=Decimal("100.00"),
+            discount_amount=Decimal("0.00"),
+            shipping_amount=Decimal("0.00"),
+            total_amount=Decimal("100.00"),
+        )
+
+    def test_admin_list_is_paginated_and_shows_customer(self):
+        response = self.client.get("/api/order/admin/orders")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["count"], 1)
+        row = response.data["data"]["results"][0]
+        self.assertEqual(row["id"], self.order.id)
+        self.assertEqual(row["customer"]["id"], self.customer.id)
+        self.assertEqual(row["status"], "payment_waiting")
+        self.assertEqual(row["totals"]["total_amount"], "100.00")
+
+    def test_admin_list_filters_by_status_and_search(self):
+        response = self.client.get("/api/order/admin/orders", {"status": "success"})
+        self.assertEqual(response.data["data"]["count"], 0)
+        response = self.client.get(
+            "/api/order/admin/orders", {"search": "Admin"}
+        )
+        self.assertEqual(response.data["data"]["count"], 1)
+        response = self.client.get("/api/order/admin/orders", {"search": "no-match"})
+        self.assertEqual(response.data["data"]["count"], 0)
+
+    def test_admin_detail_returns_full_payload_with_customer(self):
+        response = self.client.get(f"/api/order/admin/orders/{self.order.id}")
+        self.assertEqual(response.status_code, 200)
+        data = response.data["data"]
+        self.assertEqual(data["id"], self.order.id)
+        self.assertEqual(data["customer"]["id"], self.customer.id)
+        self.assertEqual(data["items"], [])
+        self.assertEqual(data["totals"]["total_amount"], "100.00")
+
+    def test_admin_detail_missing_is_404(self):
+        response = self.client.get("/api/order/admin/orders/999999")
+        self.assertEqual(response.status_code, 404)
+
+    def test_admin_status_options(self):
+        response = self.client.get("/api/order/admin/statuses")
+        self.assertEqual(response.status_code, 200)
+        names = {row["name"] for row in response.data["data"]}
+        self.assertIn("payment_waiting", names)
+        self.assertIn("success", names)
+
+    def test_customer_principal_cannot_use_admin_endpoints(self):
+        self.client.force_authenticate(self.customer)
+        self.assertEqual(self.client.get("/api/order/admin/orders").status_code, 403)
+
+    def test_staff_without_permission_is_rejected(self):
+        staff = User.objects.create_user(
+            username="order-noperm", password="password", is_staff=True
+        )
+        self.client.force_authenticate(staff)
+        self.assertEqual(self.client.get("/api/order/admin/orders").status_code, 403)
 
 
 class OrderAPITests(APITestCase):

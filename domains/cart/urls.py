@@ -1,5 +1,6 @@
 from django.urls import path
 
+from .admin_views import AdminCartDetail, AdminCartList
 from .views import (
     CartAddressView,
     CartItemDetail,
@@ -13,6 +14,8 @@ from .views import (
 urlpatterns = [
     path("", CartView.as_view()),
     path("items", CartItemsView.as_view()),
+    path("admin/carts", AdminCartList.as_view()),
+    path("admin/carts/<int:cart_id>", AdminCartDetail.as_view()),
     path("items/<int:item_id>", CartItemDetail.as_view()),
     path("items/<int:item_id>/move-to-wishlist", CartItemMoveToWishlist.as_view()),
     path("items/<int:item_id>/move-to-preorder", CartItemMoveToPreOrder.as_view()),
