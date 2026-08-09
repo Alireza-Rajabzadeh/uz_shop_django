@@ -2,6 +2,15 @@ from django.contrib.auth import get_user_model
 from rest_framework.permissions import BasePermission, DjangoModelPermissions
 
 
+class IsCustomer(BasePermission):
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        from domains.customer.models import Customer
+
+        return isinstance(request.user, Customer)
+
+
 class AdminModelPermissions(DjangoModelPermissions):
     perms_map = {
         "GET": ["%(app_label)s.view_%(model_name)s"],

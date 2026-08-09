@@ -28,4 +28,5 @@ urlpatterns = [
     path("api/location/", include("domains.location.urls")),
     path("api/files/", include("domains.files.api.urls")),
     path("api/notifications/", include("domains.notifications.api.urls")),
+    path("api/wishlist/", include("domains.wishlist.urls")),
 ]

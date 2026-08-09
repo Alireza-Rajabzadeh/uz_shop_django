@@ -69,6 +69,7 @@ INSTALLED_APPS = [
     "domains.inventory.apps.InventoryConfig",
     "domains.location.apps.LocationConfig",
     "domains.customer.apps.CustomerConfig",
+    "domains.wishlist.apps.WishlistConfig",
     "core",
     "domains.users",
 ]
