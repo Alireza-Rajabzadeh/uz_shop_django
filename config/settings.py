@@ -72,6 +72,7 @@ INSTALLED_APPS = [
     "domains.wishlist.apps.WishlistConfig",
     "domains.preorder.apps.PreOrderConfig",
     "domains.cart.apps.CartConfig",
+    "domains.order.apps.OrderConfig",
     "core",
     "domains.users",
 ]
@@ -108,6 +109,10 @@ if CONFIRMED_REQUEST_DEV_CODE and not CONFIRMED_REQUEST_DEV_MODE:
     raise ImproperlyConfigured(
         "CONFIRMED_REQUEST_DEV_CODE requires CONFIRMED_REQUEST_DEV_MODE=True"
     )
+
+ORDER_RESERVATION_MINUTES = int(
+    os.getenv("ORDER_RESERVATION_MINUTES", "30")
+)
 
 CACHES = {
     "default": {
