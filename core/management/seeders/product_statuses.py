@@ -4,7 +4,7 @@ from domains.catalog.models import ProductStatus
 
 class ProductStatusSeeder(BaseSeeder):
     def run(self):
-        for name in ("active", "inactive", "pending"):
+        for name in ("active", "inactive", "pending", "preorder"):
             status = ProductStatus.objects.filter(name__iexact=name).first()
             if status is None:
                 ProductStatus.objects.create(name=name)

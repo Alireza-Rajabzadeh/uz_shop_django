@@ -4,7 +4,7 @@ Live checkpoint for the incremental commerce-domain work. Each committed step to
 Git history (`git -C back log --oneline`) is the source of truth; this file mirrors it.
 
 - [x] Step 1 — Wishlist
-- [ ] Step 2 — PreOrder
+- [x] Step 2 — PreOrder
 - [ ] Step 3 — Cart
 - [ ] Step 4 — Order, payments, reservation
 

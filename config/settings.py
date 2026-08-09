@@ -70,6 +70,7 @@ INSTALLED_APPS = [
     "domains.location.apps.LocationConfig",
     "domains.customer.apps.CustomerConfig",
     "domains.wishlist.apps.WishlistConfig",
+    "domains.preorder.apps.PreOrderConfig",
     "core",
     "domains.users",
 ]
