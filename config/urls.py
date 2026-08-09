@@ -30,4 +30,5 @@ urlpatterns = [
     path("api/notifications/", include("domains.notifications.api.urls")),
     path("api/wishlist/", include("domains.wishlist.urls")),
     path("api/preorder/", include("domains.preorder.urls")),
+    path("api/cart/", include("domains.cart.urls")),
 ]

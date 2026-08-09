@@ -5,7 +5,7 @@ Git history (`git -C back log --oneline`) is the source of truth; this file mirr
 
 - [x] Step 1 — Wishlist
 - [x] Step 2 — PreOrder
-- [ ] Step 3 — Cart
+- [x] Step 3 — Cart
 - [ ] Step 4 — Order, payments, reservation
 
 ## Resume rules
