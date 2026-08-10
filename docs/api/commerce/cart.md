@@ -97,8 +97,41 @@ POST /api/cart/items
 - `quantity` optional (default 1), must be ≥ 1.
 - If the variant is already in the cart, the quantity is **replaced** with the sent
   value (no duplicate rows).
-- `201` returns the item (see above).
+- `201` returns the **full current cart** (the `describe_cart` payload above), so
+  the client can update its local cart from one response.
 - `400` if quantity < 1 or variant does not exist.
+
+### Sync local cart with the backend
+
+```
+POST /api/cart/sync
+{ "items": [ { "variant_id": 12, "quantity": 2 } ] }
+```
+
+Used on cart open to reconcile a client-held (localStorage) cart against the
+catalog. For each entry the backend keeps variants that still exist (added/merged
+into the server cart with the sent quantity) and reports the ones it could not keep:
+
+```json
+{
+  "cart": { "...": "describe_cart payload" },
+  "removed": [
+    { "variant_id": 12, "product_id": null, "product_name": "",
+      "reason": "This item no longer exists.", "suggested_action": "remove" }
+  ]
+}
+```
+
+`suggested_action` is one of:
+
+- `remove` — the variant no longer exists (no follow-up possible).
+- `wishlist` — the product exists but is no longer purchasable; the client can
+  offer to move it to the wishlist.
+- `preorder` — the product now requires pre-order; the client can move it to the
+  pre-order list.
+
+The client should update its local cart from `cart` and follow up on each
+`removed` entry accordingly. Empty `items` returns the current server cart unchanged.
 
 ### Update quantity
 

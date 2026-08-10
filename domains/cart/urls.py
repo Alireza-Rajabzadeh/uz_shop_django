@@ -7,6 +7,7 @@ from .views import (
     CartItemMoveToPreOrder,
     CartItemMoveToWishlist,
     CartItemsView,
+    CartSyncView,
     CartValidateView,
     CartView,
 )
@@ -14,6 +15,7 @@ from .views import (
 urlpatterns = [
     path("", CartView.as_view()),
     path("items", CartItemsView.as_view()),
+    path("sync", CartSyncView.as_view()),
     path("admin/carts", AdminCartList.as_view()),
     path("admin/carts/<int:cart_id>", AdminCartDetail.as_view()),
     path("items/<int:item_id>", CartItemDetail.as_view()),

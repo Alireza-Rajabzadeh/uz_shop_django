@@ -176,7 +176,7 @@ class CartAPITests(APITestCase):
             format="json",
         )
         self.assertEqual(second.status_code, 201)
-        self.assertEqual(second.data["data"]["quantity"], 5)
+        self.assertEqual(second.data["data"]["items"][0]["quantity"], 5)
         self.assertEqual(CartItem.objects.count(), 1)
 
     def test_add_requires_positive_quantity(self):
@@ -200,7 +200,7 @@ class CartAPITests(APITestCase):
         product = self.make_product(self.active_status)
         variant = self.make_variant(product)
         added = self.add_item(variant, quantity=3)
-        item_id = added.data["data"]["id"]
+        item_id = added.data["data"]["items"][0]["id"]
 
         patch = self.client.patch(
             f"/api/cart/items/{item_id}", {"quantity": 7}, format="json"
@@ -286,7 +286,7 @@ class CartAPITests(APITestCase):
         product = self.make_product(self.active_status)
         variant = self.make_variant(product)
         item = self.add_item(variant)
-        item_id = item.data["data"]["id"]
+        item_id = item.data["data"]["items"][0]["id"]
 
         move = self.client.post(f"/api/cart/items/{item_id}/move-to-wishlist")
         self.assertEqual(move.status_code, 200)
@@ -298,7 +298,7 @@ class CartAPITests(APITestCase):
         variant = self.make_variant(product)
         Wishlist.objects.create(customer=self.customer, product=product)
         item = self.add_item(variant)
-        item_id = item.data["data"]["id"]
+        item_id = item.data["data"]["items"][0]["id"]
 
         move = self.client.post(f"/api/cart/items/{item_id}/move-to-wishlist")
         self.assertEqual(move.status_code, 200)
@@ -308,7 +308,7 @@ class CartAPITests(APITestCase):
         product = self.make_product(self.preorder_status)
         variant = self.make_variant(product)
         item = self.add_item(variant)
-        item_id = item.data["data"]["id"]
+        item_id = item.data["data"]["items"][0]["id"]
 
         move = self.client.post(f"/api/cart/items/{item_id}/move-to-preorder")
         self.assertEqual(move.status_code, 200)
@@ -319,12 +319,99 @@ class CartAPITests(APITestCase):
         product = self.make_product(self.active_status)
         variant = self.make_variant(product)
         item = self.add_item(variant)
-        item_id = item.data["data"]["id"]
+        item_id = item.data["data"]["items"][0]["id"]
 
         move = self.client.post(f"/api/cart/items/{item_id}/move-to-preorder")
         self.assertEqual(move.status_code, 400)
         self.assertIn("product", move.data["errors"])
         self.assertTrue(CartItem.objects.filter(id=item_id).exists())
+
+    # ─────────────── sync ───────────────
+
+    def sync_items(self, items):
+        return self.client.post("/api/cart/sync", {"items": items}, format="json")
+
+    def test_add_returns_full_cart(self):
+        product = self.make_product(self.active_status)
+        variant = self.make_variant(product)
+        response = self.client.post(
+            "/api/cart/items",
+            {"variant_id": variant.id, "quantity": 2},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        data = response.data["data"]
+        self.assertIn("items", data)
+        self.assertEqual(len(data["items"]), 1)
+        self.assertEqual(data["items"][0]["variant_id"], variant.id)
+        self.assertEqual(data["items"][0]["quantity"], 2)
+
+    def test_sync_keeps_existing_variants(self):
+        product = self.make_product(self.active_status)
+        variant = self.make_variant(product)
+        response = self.sync_items([{"variant_id": variant.id, "quantity": 3}])
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["removed"], [])
+        cart = response.data["data"]["cart"]
+        self.assertEqual(len(cart["items"]), 1)
+        self.assertEqual(cart["items"][0]["quantity"], 3)
+        self.assertTrue(CartItem.objects.filter(cart__customer=self.customer).exists())
+
+    def test_sync_merges_quantity(self):
+        product = self.make_product(self.active_status)
+        variant = self.make_variant(product)
+        self.sync_items([{"variant_id": variant.id, "quantity": 2}])
+        response = self.sync_items([{"variant_id": variant.id, "quantity": 5}])
+        cart = response.data["data"]["cart"]
+        self.assertEqual(len(cart["items"]), 1)
+        self.assertEqual(cart["items"][0]["quantity"], 5)
+        self.assertEqual(CartItem.objects.count(), 1)
+
+    def test_sync_reports_missing_variant(self):
+        response = self.sync_items([{"variant_id": 999999, "quantity": 1}])
+        removed = response.data["data"]["removed"]
+        self.assertEqual(len(removed), 1)
+        self.assertEqual(removed[0]["variant_id"], 999999)
+        self.assertEqual(removed[0]["suggested_action"], "remove")
+        self.assertIsNone(removed[0]["product_id"])
+        self.assertEqual(response.data["data"]["cart"]["items"], [])
+
+    def test_sync_reports_preorder_product(self):
+        product = self.make_product(self.preorder_status)
+        variant = self.make_variant(product)
+        response = self.sync_items([{"variant_id": variant.id, "quantity": 1}])
+        removed = response.data["data"]["removed"]
+        self.assertEqual(len(removed), 1)
+        self.assertEqual(removed[0]["product_id"], product.id)
+        self.assertEqual(removed[0]["suggested_action"], "preorder")
+        self.assertEqual(response.data["data"]["cart"]["items"], [])
+
+    def test_sync_reports_inactive_product(self):
+        product = self.make_product(self.active_status)
+        variant = self.make_variant(product)
+        product.status = self.inactive_status
+        product.save(update_fields=["status"])
+        response = self.sync_items([{"variant_id": variant.id, "quantity": 1}])
+        removed = response.data["data"]["removed"]
+        self.assertEqual(len(removed), 1)
+        self.assertEqual(removed[0]["product_id"], product.id)
+        self.assertEqual(removed[0]["suggested_action"], "wishlist")
+        self.assertEqual(response.data["data"]["cart"]["items"], [])
+
+    def test_sync_keeps_out_of_stock_active_product(self):
+        product = self.make_product(self.active_status)
+        variant = self.make_variant(product, available=0, quantity=0)
+        response = self.sync_items([{"variant_id": variant.id, "quantity": 1}])
+        self.assertEqual(response.data["data"]["removed"], [])
+        cart = response.data["data"]["cart"]
+        self.assertEqual(len(cart["items"]), 1)
+        self.assertEqual(cart["items"][0]["status"], "out_of_stock")
+
+    def test_sync_empty_items_returns_current_cart(self):
+        response = self.sync_items([])
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["removed"], [])
+        self.assertEqual(response.data["data"]["cart"]["items"], [])
 
     # ─────────────── address ───────────────
 
@@ -354,7 +441,7 @@ class CartAPITests(APITestCase):
         variant = self.make_variant(product)
         item = self.add_item(variant)
         self.add_item(variant)
-        item_id = item.data["data"]["id"]
+        item_id = item.data["data"]["items"][0]["id"]
 
         response = self.client.put(
             "/api/cart/address",

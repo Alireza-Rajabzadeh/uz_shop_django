@@ -237,6 +237,67 @@ class CartService:
         return self._render_item(item)
 
     @transaction.atomic
+    def sync(self, customer, items):
+        """Reconcile the client's local cart against the catalog.
+
+        Variants that still exist are kept (added/merged into the server cart).
+        Items that no longer exist or can no longer be bought in the cart are
+        reported back with a suggested action the client can follow up on.
+        """
+        cart = self.get_or_create_cart(customer)
+        variant_ids = [entry["variant_id"] for entry in items]
+        variants = {
+            row.id: row
+            for row in ProductVariants.objects.filter(pk__in=variant_ids).select_related(
+                "product", "product__status"
+            )
+        }
+        removed = []
+        for entry in items:
+            variant_id = entry["variant_id"]
+            quantity = entry.get("quantity", 1)
+            variant = variants.get(variant_id)
+            if variant is None:
+                removed.append({
+                    "variant_id": variant_id,
+                    "product_id": None,
+                    "product_name": "",
+                    "reason": _("This item no longer exists."),
+                    "suggested_action": "remove",
+                })
+                continue
+            product = variant.product
+            product_status = product.status.name.casefold()
+            if product_status == "preorder":
+                removed.append({
+                    "variant_id": variant_id,
+                    "product_id": product.id,
+                    "product_name": product.name,
+                    "reason": _("This product is now only available for pre-order."),
+                    "suggested_action": "preorder",
+                })
+                continue
+            if product_status != "active":
+                removed.append({
+                    "variant_id": variant_id,
+                    "product_id": product.id,
+                    "product_name": product.name,
+                    "reason": _("This item is no longer available for purchase."),
+                    "suggested_action": "wishlist",
+                })
+                continue
+            item, created = CartItem.objects.get_or_create(
+                cart=cart, variant=variant, defaults={"quantity": quantity}
+            )
+            if not created:
+                item.quantity = quantity
+                item.save()
+        return {
+            "cart": self.describe_existing(cart),
+            "removed": removed,
+        }
+
+    @transaction.atomic
     def update_quantity(self, customer, item_id, quantity):
         if quantity < 1:
             raise self.ValidationError({"quantity": [_("Quantity must be greater than zero.")]})

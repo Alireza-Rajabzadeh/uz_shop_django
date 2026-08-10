@@ -6,7 +6,11 @@ from core.permissions import IsCustomer
 from core.responses import api_response
 
 from .address import AddressInfoService, CartAddressWriteSerializer
-from .serializers import CartItemAddSerializer, CartItemQuantitySerializer
+from .serializers import (
+    CartItemAddSerializer,
+    CartItemQuantitySerializer,
+    CartSyncSerializer,
+)
 from .services import CartService
 
 
@@ -28,13 +32,14 @@ class CartItemsView(APIView):
         serializer = CartItemAddSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         quantity = serializer.validated_data.get("quantity", 1)
+        service = CartService()
         try:
-            item = CartService().add(
+            service.add(
                 request.user, serializer.validated_data["variant_id"], quantity
             )
         except CartService.ValidationError as exc:
             _map_errors(exc)
-        return api_response(True, _("Added to cart."), item, status_code=201)
+        return api_response(True, _("Added to cart."), service.describe_cart(request.user), status_code=201)
 
 
 class CartItemDetail(APIView):
@@ -101,6 +106,18 @@ class CartItemMoveToPreOrder(APIView):
                 raise NotFound(exc.errors["item"][0]) from exc
             raise ValidationError(exc.errors) from exc
         return api_response(True, _("Moved to pre-order list."), result)
+
+
+class CartSyncView(APIView):
+    permission_classes = [IsCustomer]
+
+    def post(self, request):
+        serializer = CartSyncSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = CartService().sync(
+            request.user, serializer.validated_data.get("items", [])
+        )
+        return api_response(True, _("Cart synchronized."), result)
 
 
 class CartValidateView(APIView):
