@@ -1,5 +1,6 @@
 from django.utils.translation import gettext as _
 from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 
 from core.permissions import IsCustomer
@@ -54,21 +55,32 @@ class CartItemDetail(APIView):
     def patch(self, request, item_id):
         serializer = CartItemQuantitySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        service = CartService()
         try:
-            item = CartService().update_quantity(
+            service.update_quantity(
                 request.user, item_id, serializer.validated_data["quantity"]
             )
         except CartService.ValidationError as exc:
             _map_errors(exc)
-        return api_response(True, _("Quantity updated."), item)
+        return api_response(True, _("Quantity updated."), service.describe_cart(request.user))
 
     def delete(self, request, item_id):
         self._get_item(request, item_id)
+        service = CartService()
         try:
-            CartService().remove(request.user, item_id)
+            service.remove(request.user, item_id)
         except CartService.ValidationError as exc:
             raise NotFound(exc.errors["item"][0]) from exc
-        return api_response(True, _("Removed from cart."), None)
+        return api_response(True, _("Removed from cart."), service.describe_cart(request.user))
+
+
+class CartClearView(APIView):
+    permission_classes = [IsCustomer]
+
+    def post(self, request):
+        service = CartService()
+        service.clear(request.user)
+        return api_response(True, _("Cart cleared."), service.describe_cart(request.user))
 
 
 class CartAddressView(APIView):
@@ -121,7 +133,10 @@ class CartSyncView(APIView):
 
 
 class CartValidateView(APIView):
-    permission_classes = [IsCustomer]
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [AllowAny()]
+        return [IsCustomer()]
 
     def get(self, request):
         data = CartService().describe_cart(request.user)
@@ -143,3 +158,37 @@ class CartValidateView(APIView):
             ],
         }
         return api_response(True, "", summary)
+
+    def post(self, request):
+        """Validate a single variant/quantity without persisting a cart."""
+        serializer = CartItemAddSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payload = CartService().validate_variant(
+            serializer.validated_data["variant_id"],
+            serializer.validated_data.get("quantity", 1),
+        )
+        return api_response(True, "", payload)
+
+
+class CartValidateItemsView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        """Bulk-validate a guest cart without persisting anything."""
+        serializer = CartSyncSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        items = CartService().validate_items(serializer.validated_data.get("items", []))
+        return api_response(True, "", {"items": items})
+
+
+class CartMergeView(APIView):
+    permission_classes = [IsCustomer]
+
+    def post(self, request):
+        """Merge a guest cart into the customer's persisted cart."""
+        serializer = CartSyncSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = CartService().merge(
+            request.user, serializer.validated_data.get("items", [])
+        )
+        return api_response(True, _("Cart merged."), result)

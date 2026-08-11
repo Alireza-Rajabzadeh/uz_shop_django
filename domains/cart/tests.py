@@ -22,7 +22,7 @@ from domains.inventory.models import (
 from domains.location.models import City, Country, State
 from domains.preorder.models import PreOrder
 from domains.wishlist.models import Wishlist
-from rest_framework.test import APITestCase
+from rest_framework.test import APIClient, APITestCase
 
 
 class CartAdminAPITests(APITestCase):
@@ -206,7 +206,7 @@ class CartAPITests(APITestCase):
             f"/api/cart/items/{item_id}", {"quantity": 7}, format="json"
         )
         self.assertEqual(patch.status_code, 200)
-        self.assertEqual(patch.data["data"]["quantity"], 7)
+        self.assertEqual(patch.data["data"]["items"][0]["quantity"], 7)
 
         zero = self.client.patch(
             f"/api/cart/items/{item_id}", {"quantity": 0}, format="json"
@@ -215,6 +215,7 @@ class CartAPITests(APITestCase):
 
         delete = self.client.delete(f"/api/cart/items/{item_id}")
         self.assertEqual(delete.status_code, 200)
+        self.assertEqual(delete.data["data"]["items"], [])
         self.assertEqual(CartItem.objects.filter(cart__customer=self.customer).count(), 0)
 
     def test_remove_missing_item_is_404(self):
@@ -412,6 +413,126 @@ class CartAPITests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["data"]["removed"], [])
         self.assertEqual(response.data["data"]["cart"]["items"], [])
+
+    # ─────────────── clear / merge / guest validation ───────────────
+
+    def test_clear_returns_empty_full_cart(self):
+        product = self.make_product(self.active_status)
+        variant = self.make_variant(product)
+        self.add_item(variant, quantity=2)
+
+        response = self.client.post("/api/cart/clear")
+        self.assertEqual(response.status_code, 200)
+        data = response.data["data"]
+        self.assertEqual(data["items"], [])
+        self.assertEqual(data["totals"]["total_amount"], "0.00")
+        self.assertFalse(CartItem.objects.filter(cart__customer=self.customer).exists())
+
+    def test_merge_adds_guest_items(self):
+        product = self.make_product(self.active_status)
+        variant = self.make_variant(product)
+        response = self.client.post(
+            "/api/cart/merge",
+            {"items": [{"variant_id": variant.id, "quantity": 3}]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        cart = response.data["data"]["cart"]
+        self.assertEqual(len(cart["items"]), 1)
+        self.assertEqual(cart["items"][0]["quantity"], 3)
+        self.assertTrue(CartItem.objects.filter(cart__customer=self.customer).exists())
+
+    def test_merge_reports_unavailable_guest_items(self):
+        response = self.client.post(
+            "/api/cart/merge",
+            {"items": [{"variant_id": 999999, "quantity": 1}]},
+            format="json",
+        )
+        removed = response.data["data"]["removed"]
+        self.assertEqual(len(removed), 1)
+        self.assertEqual(removed[0]["variant_id"], 999999)
+        self.assertEqual(removed[0]["suggested_action"], "remove")
+
+    def test_guest_validate_single_item(self):
+        product = self.make_product(self.active_status)
+        variant = self.make_variant(product)
+        anon = APIClient()
+        response = anon.post(
+            "/api/cart/validate",
+            {"variant_id": variant.id, "quantity": 2},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.data["data"]
+        self.assertTrue(data["valid"])
+        self.assertEqual(data["variant_id"], variant.id)
+        self.assertEqual(data["quantity"], 2)
+        self.assertEqual(data["effective_price"], "100.00")
+        self.assertFalse(data["quantity_capped"])
+
+    def test_guest_validate_caps_quantity_to_inventory(self):
+        product = self.make_product(self.active_status)
+        variant = self.make_variant(product, available=3)
+        anon = APIClient()
+        response = anon.post(
+            "/api/cart/validate",
+            {"variant_id": variant.id, "quantity": 5},
+            format="json",
+        )
+        data = response.data["data"]
+        self.assertTrue(data["valid"])
+        self.assertEqual(data["quantity"], 3)
+        self.assertEqual(data["requested_quantity"], 5)
+        self.assertTrue(data["quantity_capped"])
+
+    def test_guest_validate_missing_variant_is_invalid(self):
+        anon = APIClient()
+        response = anon.post(
+            "/api/cart/validate",
+            {"variant_id": 999999, "quantity": 1},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.data["data"]
+        self.assertFalse(data["valid"])
+        self.assertEqual(data["status"], "variant_unavailable")
+        self.assertEqual(data["suggested_action"], "remove")
+
+    def test_guest_validate_does_not_persist_cart(self):
+        product = self.make_product(self.active_status)
+        variant = self.make_variant(product)
+        anon = APIClient()
+        anon.post(
+            "/api/cart/validate",
+            {"variant_id": variant.id, "quantity": 1},
+            format="json",
+        )
+        self.assertEqual(Cart.objects.count(), 0)
+
+    def test_guest_bulk_validate_items(self):
+        product = self.make_product(self.active_status)
+        variant = self.make_variant(product)
+        anon = APIClient()
+        response = anon.post(
+            "/api/cart/validate-items",
+            {
+                "items": [
+                    {"variant_id": variant.id, "quantity": 1},
+                    {"variant_id": 999999, "quantity": 2},
+                ]
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        items = response.data["data"]["items"]
+        self.assertEqual(len(items), 2)
+        self.assertTrue(items[0]["valid"])
+        self.assertFalse(items[1]["valid"])
+        self.assertEqual(Cart.objects.count(), 0)
+
+    def test_anonymous_get_validate_rejected(self):
+        anon = APIClient()
+        self.assertEqual(anon.get("/api/cart/validate").status_code, 401)
 
     # ─────────────── address ───────────────
 

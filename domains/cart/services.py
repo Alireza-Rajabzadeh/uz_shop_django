@@ -138,12 +138,10 @@ class CartService:
             status, action, valid = "variant_unavailable", "remove", False
             reason = "This item is no longer available for purchase."
 
-        unit_price = variant.price
-        effective_price = self.variant_service.calculate_discounted_price(variant)
-        unit_discount = max(unit_price - effective_price, Decimal("0"))
         two_places = Decimal("0.01")
-        effective_price = effective_price.quantize(two_places)
-        unit_discount = unit_discount.quantize(two_places)
+        pricing = self._variant_pricing(variant)
+        effective_price = Decimal(pricing["effective_price"])
+        unit_discount = Decimal(pricing["unit_discount_amount"])
         return {
             "id": item.id,
             "variant_id": item.variant_id,
@@ -153,14 +151,7 @@ class CartService:
             "product_status": product.status.name,
             "sku": variant.sku,
             "combination_key": variant.combination_key,
-            "unit_price": str(unit_price),
-            "discount_type": variant.discount_type,
-            "discount_value": (
-                str(variant.discount_value)
-                if variant.discount_value is not None else None
-            ),
-            "effective_price": str(effective_price),
-            "unit_discount_amount": str(unit_discount),
+            **pricing,
             "line_discount": str((unit_discount * item.quantity).quantize(two_places)),
             "line_total": str((effective_price * item.quantity).quantize(two_places)),
             "inventory_strategy": {
@@ -183,6 +174,113 @@ class CartService:
             "status": status,
             "reason": reason,
             "suggested_action": action,
+        }
+
+    @staticmethod
+    def _variant_pricing(variant):
+        unit_price = variant.price
+        effective_price = VariantService().calculate_discounted_price(variant)
+        unit_discount = max(unit_price - effective_price, Decimal("0"))
+        two_places = Decimal("0.01")
+        return {
+            "unit_price": str(unit_price),
+            "discount_type": variant.discount_type,
+            "discount_value": (
+                str(variant.discount_value)
+                if variant.discount_value is not None else None
+            ),
+            "effective_price": str(effective_price.quantize(two_places)),
+            "unit_discount_amount": str(unit_discount.quantize(two_places)),
+        }
+
+    def _variant_payload(self, variant, quantity, *, cap_quantity=False):
+        product = variant.product
+        product_status = product.status.name.casefold()
+        available = variant.available_item_count
+        requested_quantity = quantity
+        quantity_capped = False
+
+        if cap_quantity and product_status == "active" and 0 < available < quantity:
+            quantity = available
+            quantity_capped = True
+        enough_stock = available >= quantity
+
+        if product_status == "active" and enough_stock:
+            status, action, valid = "available", "none", True
+            reason = (
+                _("Requested quantity exceeds available stock; reduced to {count}.").format(
+                    count=quantity
+                )
+                if quantity_capped else ""
+            )
+        elif product_status == "active":
+            status, action, valid = "out_of_stock", "move_to_wishlist", False
+            reason = _("Requested quantity exceeds available stock.")
+        elif product_status == "preorder":
+            status, action, valid = "pre_orderable", "move_to_preorder", False
+            reason = _("This product is now only available for pre-order.")
+        else:
+            status, action, valid = "variant_unavailable", "remove", False
+            reason = _("This item is no longer available for purchase.")
+
+        return {
+            "variant_id": variant.id,
+            "requested_quantity": requested_quantity,
+            "quantity": quantity,
+            "quantity_capped": quantity_capped,
+            "product_id": product.id,
+            "product_name": product.name,
+            "product_status": product.status.name,
+            "sku": variant.sku,
+            "combination_key": variant.combination_key,
+            **self._variant_pricing(variant),
+            "inventory_strategy": {
+                "id": variant.inventory_strategy_id,
+                "code": variant.inventory_strategy.code,
+                "name": variant.inventory_strategy.name,
+            },
+            "available": available,
+            "selections": [
+                {
+                    "attribute_id": selection.attribute_id,
+                    "attribute": selection.attribute.name,
+                    "option_id": selection.option_id,
+                    "option": selection.option.name,
+                }
+                for selection in variant.selections.all()
+            ],
+            "purchasable": product_status == "active",
+            "valid": valid,
+            "status": status,
+            "reason": reason,
+            "suggested_action": action,
+        }
+
+    @staticmethod
+    def _unavailable_payload(variant_id, quantity):
+        return {
+            "variant_id": variant_id,
+            "requested_quantity": quantity,
+            "quantity": 0,
+            "quantity_capped": False,
+            "product_id": None,
+            "product_name": "",
+            "product_status": "",
+            "sku": "",
+            "combination_key": "",
+            "unit_price": "0.00",
+            "discount_type": None,
+            "discount_value": None,
+            "effective_price": "0.00",
+            "unit_discount_amount": "0.00",
+            "inventory_strategy": None,
+            "available": 0,
+            "selections": [],
+            "purchasable": False,
+            "valid": False,
+            "status": "variant_unavailable",
+            "reason": _("This item is no longer available."),
+            "suggested_action": "remove",
         }
 
     @staticmethod
@@ -310,6 +408,44 @@ class CartService:
     def remove(self, customer, item_id):
         item = self._get_item(customer, item_id)
         item.delete()
+
+    def validate_variant(self, variant_id, quantity=1):
+        """Validate a variant and requested quantity without a cart.
+
+        Used by the guest flow; nothing is persisted.
+        """
+        if quantity < 1:
+            raise self.ValidationError({"quantity": [_("Quantity must be greater than zero.")]})
+        try:
+            variant = ProductVariants.objects.select_related(
+                "product", "product__status", "inventory_strategy"
+            ).prefetch_related("selections__attribute", "selections__option").get(id=variant_id)
+        except ProductVariants.DoesNotExist:
+            return self._unavailable_payload(variant_id, quantity)
+        queryset = ProductVariants.objects.filter(pk=variant.id).select_related(
+            "product", "product__status", "inventory_strategy"
+        ).prefetch_related("selections__attribute", "selections__option")
+        variant = self.inventory_service.annotate_variant_summaries(queryset)[0]
+        return self._variant_payload(variant, quantity, cap_quantity=True)
+
+    def validate_items(self, items):
+        return [
+            self.validate_variant(entry["variant_id"], entry.get("quantity", 1))
+            for entry in items
+        ]
+
+    @transaction.atomic
+    def clear(self, customer):
+        CartItem.objects.filter(cart__customer=customer).delete()
+
+    def merge(self, customer, items):
+        """Merge a guest cart into the customer's persisted cart.
+
+        Delegates to the same reconciling rules used by sync: valid purchasable
+        variants are added/merged, and items that can no longer be bought are
+        reported back so the client can follow up.
+        """
+        return self.sync(customer, items)
 
     def set_address(self, customer, address_data):
         info = AddressInfoService().build(customer, address_data)
