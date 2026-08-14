@@ -34,7 +34,7 @@ class Order(models.Model):
     total_amount = models.DecimalField(max_digits=15, decimal_places=2)
     reservation_expires_at = models.DateTimeField(null=True, blank=True)
     successful_payment = models.OneToOneField(
-        "OrderPayment",
+        "payments.Payment",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,

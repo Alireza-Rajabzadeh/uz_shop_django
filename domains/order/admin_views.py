@@ -1,5 +1,5 @@
 from django.utils.translation import gettext as _
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.views import APIView
 
@@ -55,3 +55,40 @@ class AdminOrderStatusList(AdminAPIView):
     def get(self, request):
         statuses = OrderStatus.objects.order_by("id")
         return api_response(True, "", AdminOrderStatusSerializer(statuses, many=True).data)
+
+
+class AdminOrderActionPermissions(AdminModelPermissions):
+    perms_map = {
+        "GET": ["%(app_label)s.view_%(model_name)s"],
+        "OPTIONS": [],
+        "HEAD": [],
+        "POST": ["%(app_label)s.change_%(model_name)s"],
+    }
+
+
+class AdminOrderActions(AdminAPIView):
+    model = Order
+    permission_classes = [AdminOrderActionPermissions]
+
+    def get(self, request, order_id):
+        try:
+            actions = order_service.available_actions(order_id, actor="admin")
+        except OrderService.NotFoundError as exc:
+            raise NotFound(_("Order not found.")) from exc
+        return api_response(data={"actions": actions})
+
+
+class AdminOrderExecuteAction(AdminAPIView):
+    model = Order
+    permission_classes = [AdminOrderActionPermissions]
+
+    def post(self, request, order_id, action_code):
+        try:
+            order = order_service.execute_action(
+                order_id, action_code, actor="admin", admin=request.user
+            )
+        except OrderService.NotFoundError as exc:
+            raise NotFound(_("Order not found.")) from exc
+        except OrderService.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
+        return api_response(data=order_service.get_order_admin(order.id))

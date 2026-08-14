@@ -4,12 +4,12 @@ from .models import (
     Order,
     OrderItem,
     OrderItemReservation,
-    OrderPayment,
-    OrderPaymentChannel,
-    OrderPaymentChannelSupportMethod,
-    OrderPaymentMethod,
+    OrderHistory,
     OrderStatus,
+    OrderAction,
+    OrderStatusAction,
 )
+from domains.payments.models import Payment
 
 
 class OrderItemInline(admin.TabularInline):
@@ -18,30 +18,63 @@ class OrderItemInline(admin.TabularInline):
     readonly_fields = ["variant", "sku", "quantity", "unit_price", "final_price"]
 
 
-class OrderPaymentInline(admin.TabularInline):
-    model = OrderPayment
+class PaymentInline(admin.TabularInline):
+    model = Payment
     extra = 0
+    readonly_fields = [
+        "payment_method", "payment_channel", "amount", "status", "ref_number",
+        "resource_account_number", "extra_data", "created_at", "updated_at",
+    ]
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(OrderStatus)
 class OrderStatusAdmin(admin.ModelAdmin):
     list_display = ["id", "name", "fa_name"]
+    search_fields = ["name", "fa_name", "description"]
 
 
-@admin.register(OrderPaymentMethod)
-class OrderPaymentMethodAdmin(admin.ModelAdmin):
-    list_display = ["id", "name", "fa_name", "available"]
+@admin.register(OrderAction)
+class OrderActionAdmin(admin.ModelAdmin):
+    list_display = ["id", "code", "name", "fa_name", "admin", "customer", "set_status"]
+    list_filter = ["admin", "customer"]
+    search_fields = ["code", "name", "fa_name"]
 
 
-@admin.register(OrderPaymentChannel)
-class OrderPaymentChannelAdmin(admin.ModelAdmin):
-    list_display = ["id", "name", "fa_name", "account_number", "card_number", "owner_name"]
+@admin.register(OrderStatusAction)
+class OrderStatusActionAdmin(admin.ModelAdmin):
+    list_display = ["id", "order_status", "order_action"]
+    list_select_related = ["order_status", "order_action"]
 
 
-@admin.register(OrderPaymentChannelSupportMethod)
-class OrderPaymentChannelSupportMethodAdmin(admin.ModelAdmin):
-    list_display = ["payment_channel", "payment_method"]
-    list_select_related = ["payment_channel", "payment_method"]
+@admin.register(OrderHistory)
+class OrderHistoryAdmin(admin.ModelAdmin):
+    list_display = ["id", "order", "action", "user_id", "user_model", "description", "created_at"]
+    list_select_related = ["order", "action"]
+    readonly_fields = [
+        "order",
+        "action",
+        "user_id",
+        "user_model",
+        "before_values",
+        "after_values",
+        "description",
+        "created_at",
+    ]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(Order)
@@ -49,15 +82,9 @@ class OrderAdmin(admin.ModelAdmin):
     list_display = ["id", "customer", "status", "total_amount", "reservation_expires_at", "created_at"]
     list_select_related = ["customer", "status"]
     search_fields = ["customer__phone"]
-    inlines = [OrderItemInline, OrderPaymentInline]
+    inlines = [OrderItemInline, PaymentInline]
 
 
 @admin.register(OrderItemReservation)
 class OrderItemReservationAdmin(admin.ModelAdmin):
     list_display = ["id", "order_item", "inventory_type", "inventory_id", "quantity"]
-
-
-@admin.register(OrderPayment)
-class OrderPaymentAdmin(admin.ModelAdmin):
-    list_display = ["id", "order", "payment_method", "status", "amount", "ref_number", "created_at"]
-    list_select_related = ["order", "payment_method"]

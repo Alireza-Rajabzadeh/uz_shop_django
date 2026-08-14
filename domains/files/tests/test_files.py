@@ -8,6 +8,7 @@ from rest_framework.test import APITestCase
 
 from domains.files.models import File, FileStatus
 from domains.files.services import FileService
+from domains.payments.models import PaymentChannel
 
 
 IN_MEMORY_STORAGES = {
@@ -87,6 +88,29 @@ class FileServiceTests(TestCase):
         failed.save(update_fields=["status"])
 
         self.assertEqual(list(self.service.orphans()), [available])
+
+    def test_payment_channel_logo_is_not_an_orphan(self):
+        logo = self.upload()
+        PaymentChannel.objects.create(
+            code="file-test-channel",
+            name="File test channel",
+            logo_file=logo,
+        )
+
+        self.assertNotIn(logo, self.service.orphans())
+
+    def test_delete_detaches_payment_channel_logo(self):
+        logo = self.upload()
+        channel = PaymentChannel.objects.create(
+            code="deleted-logo-channel",
+            name="Deleted logo channel",
+            logo_file=logo,
+        )
+
+        self.service.delete(logo)
+
+        channel.refresh_from_db()
+        self.assertIsNone(channel.logo_file)
 
     def test_migrate_to_alias_copies_verifies_switches_and_removes_source(self):
         file = self.upload()

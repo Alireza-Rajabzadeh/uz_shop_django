@@ -18,6 +18,10 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 
+from domains.order.views import OrderListCreateView
+from domains.preorder.views import PreOrderListCreate
+from domains.wishlist.views import WishlistListCreate
+
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/users/", include("domains.users.users_urls")),
@@ -28,8 +32,12 @@ urlpatterns = [
     path("api/location/", include("domains.location.urls")),
     path("api/files/", include("domains.files.api.urls")),
     path("api/notifications/", include("domains.notifications.api.urls")),
+    path("api/payments/", include("domains.payments.urls")),
+    path("api/wishlist", WishlistListCreate.as_view()),
     path("api/wishlist/", include("domains.wishlist.urls")),
+    path("api/preorder", PreOrderListCreate.as_view()),
     path("api/preorder/", include("domains.preorder.urls")),
     path("api/cart/", include("domains.cart.urls")),
+    path("api/order", OrderListCreateView.as_view()),
     path("api/order/", include("domains.order.urls")),
 ]

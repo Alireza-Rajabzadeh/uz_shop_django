@@ -10,18 +10,15 @@ from django.utils.translation import gettext as _
 from domains.cart.services import CartService
 from domains.catalog.models import ProductVariants
 from domains.inventory.enums.SerializedStockStatusEnum import SerializedStockStatusEnum
-from domains.inventory.models import SerializedStock, WarehouseStock
+from domains.inventory.models import SerializedStock, SerializedStockStatus, WarehouseStock
 
-from .models import PAYMENT_SUCCESS
 from .models import (
     Order,
     OrderItem,
     OrderItemReservation,
-    OrderPayment,
-    OrderPaymentChannel,
-    OrderPaymentChannelSupportMethod,
-    OrderPaymentMethod,
+    OrderHistory,
     OrderStatus,
+    OrderStatusAction,
 )
 
 
@@ -34,12 +31,11 @@ class OrderService:
     class NotFoundError(Exception):
         pass
 
-    STATUS_PAYMENT_WAITING = "payment_waiting"
-    STATUS_SUCCESS = "success"
-    STATUS_FAILED = "failed"
-    STATUS_EXPIRED = "expired"
-
-    MANUAL_METHODS = ("card_to_card", "deposit_to_account")
+    STATUS_PAYMENT_PENDING = "payment_pending"
+    STATUS_PAID = "paid"
+    STATUS_PAYMENT_FAILED = "payment_failed"
+    STATUS_CANCELLED = "cancelled"
+    STATUS_PAYMENT_EXPIRED = "payment_expired"
 
     two_places = Decimal("0.01")
 
@@ -141,7 +137,7 @@ class OrderService:
         if validation_errors:
             raise self.ValidationError({"items": validation_errors})
 
-        status = self._status(self.STATUS_PAYMENT_WAITING)
+        status = self._status(self.STATUS_PAYMENT_PENDING)
         order = Order.objects.create(
             customer=customer,
             status=status,
@@ -246,15 +242,17 @@ class OrderService:
 
     def _get_customer_order(self, customer, order_id):
         try:
-            return Order.objects.select_related("status").get(
-                id=order_id, customer=customer
+            return (
+                Order.objects.select_related("status")
+                .prefetch_related("status__status_actions__order_action")
+                .get(id=order_id, customer=customer)
             )
         except Order.DoesNotExist as exc:
             raise self.NotFoundError("Order not found.") from exc
 
     def _expire_if_stale(self, order):
         if (
-            order.status.name == self.STATUS_PAYMENT_WAITING
+            order.status.name == self.STATUS_PAYMENT_PENDING
             and order.reservation_expires_at is not None
             and order.reservation_expires_at <= timezone.now()
         ):
@@ -263,20 +261,26 @@ class OrderService:
     def get_order(self, customer, order_id):
         order = self._get_customer_order(customer, order_id)
         self._expire_if_stale(order)
-        return self._order_payload(order)
+        return self._customer_order_payload(order)
 
     def list_orders(self, customer):
         orders = list(
             Order.objects.select_related("status")
             .filter(customer=customer)
-            .prefetch_related("items__inventory_strategy", "payments__payment_method")
+            .prefetch_related(
+                "items__inventory_strategy",
+                "payments__payment_method",
+                "status__status_actions__order_action",
+            )
             .order_by("-created_at")
         )
         self.expire_lazy(orders)
-        return [self._order_payload(order) for order in orders]
+        return [self._customer_order_payload(order) for order in orders]
 
     def list_orders_admin(self, **filters):
-        queryset = Order.objects.select_related("status", "customer")
+        queryset = Order.objects.select_related("status", "customer").prefetch_related(
+            "status__status_actions__order_action"
+        )
         status = filters.get("status")
         if status:
             queryset = queryset.filter(status__name=status)
@@ -313,8 +317,12 @@ class OrderService:
                 "phone": customer.phone,
                 "customer_code": customer.customer_code,
             },
-            "status": order.status.name,
-            "status_fa_name": order.status.fa_name,
+            "status": {
+                "id": order.status.id,
+                "name": order.status.name,
+                "fa_name": order.status.fa_name,
+            },
+            "available_actions": self._status_actions_payload(order, actor="admin"),
             "totals": {
                 "subtotal": str(order.subtotal),
                 "discount_amount": str(order.discount_amount),
@@ -331,11 +339,43 @@ class OrderService:
 
     def get_order_admin(self, order_id):
         try:
-            order = Order.objects.select_related("status", "customer").get(id=order_id)
+            order = (
+                Order.objects.select_related("status", "customer")
+                .prefetch_related("status__status_actions__order_action")
+                .get(id=order_id)
+            )
         except Order.DoesNotExist as exc:
             raise self.NotFoundError("Order not found.") from exc
         payload = self._order_payload(order)
+        payload["status"] = {
+            "id": order.status.id,
+            "name": order.status.name,
+            "fa_name": order.status.fa_name,
+        }
+        payload["available_actions"] = self._status_actions_payload(
+            order, actor="admin"
+        )
         payload["customer"] = self._admin_order_row(order)["customer"]
+        payload["history"] = [
+            {
+                "id": entry.id,
+                "action": {
+                    "id": entry.action.id,
+                    "code": entry.action.code,
+                    "name": entry.action.name,
+                    "fa_name": entry.action.fa_name,
+                },
+                "user_id": entry.user_id,
+                "user_model": entry.user_model,
+                "before_values": entry.before_values,
+                "after_values": entry.after_values,
+                "description": entry.description,
+                "created_at": entry.created_at.isoformat(),
+            }
+            for entry in order.history.select_related("action").order_by(
+                "-created_at", "-id"
+            )
+        ]
         return payload
 
     def expire_lazy(self, orders):
@@ -343,7 +383,7 @@ class OrderService:
         stale = [
             order
             for order in orders
-            if order.status.name == self.STATUS_PAYMENT_WAITING
+            if order.status.name == self.STATUS_PAYMENT_PENDING
             and order.reservation_expires_at is not None
             and order.reservation_expires_at <= now
         ]
@@ -357,22 +397,23 @@ class OrderService:
                     Order.objects.select_for_update()
                     .select_related("status")
                     .filter(
-                        status__name=self.STATUS_PAYMENT_WAITING,
+                        status__name=self.STATUS_PAYMENT_PENDING,
                         reservation_expires_at__lte=timezone.now(),
                     )
                 )
         if not orders:
             return []
         with transaction.atomic():
-            expired = self._status(self.STATUS_EXPIRED)
+            expired = self._status(self.STATUS_PAYMENT_EXPIRED)
             for order in orders:
-                self._release_reservations(order)
+                self.release_reservations(order)
                 order.status = expired
                 order.reservation_expires_at = None
                 order.save(update_fields=["status", "reservation_expires_at"])
         return orders
 
-    def _release_reservations(self, order):
+    def release_reservations(self, order):
+        """Return an order's reserved stock back to the sellable pool."""
         for order_item in order.items.prefetch_related("reservations"):
             for reservation in order_item.reservations.all():
                 if reservation.inventory_type == "warehouse_stock":
@@ -384,124 +425,179 @@ class OrderService:
                         reserved=False
                     )
 
-    @transaction.atomic
-    def cancel_order(self, customer, order_id):
-        order = Order.objects.select_for_update().select_related("status").filter(
-            id=order_id, customer=customer
-        ).first()
+    def consume_reservations(self, order):
+        """Convert an order's reserved stock into a sale."""
+        sold_status = None
+        for order_item in order.items.prefetch_related("reservations"):
+            for reservation in order_item.reservations.all():
+                if reservation.inventory_type == "warehouse_stock":
+                    WarehouseStock.objects.filter(id=reservation.inventory_id).update(
+                        reserved=F("reserved") - reservation.quantity,
+                        sellable=F("sellable") - reservation.quantity,
+                    )
+                elif reservation.inventory_type == "serialized_stock":
+                    if sold_status is None:
+                        sold_status, _ = SerializedStockStatus.objects.get_or_create(
+                            code="sold", defaults={"name": "sold"}
+                        )
+                    SerializedStock.objects.filter(id=reservation.inventory_id).update(
+                        reserved=False,
+                        sellable=False,
+                        status_id=sold_status.id,
+                    )
+
+    @staticmethod
+    def _action_payload(assignment):
+        action = assignment.order_action
+        target = action.set_status
+        return {
+            "id": action.id,
+            "code": action.code,
+            "name": action.name,
+            "fa_name": action.fa_name,
+            "admin": action.admin,
+            "customer": action.customer,
+            "set_status": (
+                {"id": target.id, "name": target.name, "fa_name": target.fa_name}
+                if target is not None
+                else None
+            ),
+        }
+
+    def available_actions(self, order_id, *, actor, customer=None):
+        if actor not in {"admin", "customer"}:
+            raise ValueError("Unknown order action actor.")
+        filters = {"id": order_id}
+        if actor == "customer":
+            filters["customer"] = customer
+        order = Order.objects.select_related("status").filter(**filters).first()
         if order is None:
             raise self.NotFoundError("Order not found.")
-        if order.status.name != self.STATUS_PAYMENT_WAITING:
-            raise self.ValidationError({
-                "order": [_("This order cannot be cancelled.")]
-            })
-        self._release_reservations(order)
-        order.status = self._status(self.STATUS_FAILED)
-        order.reservation_expires_at = None
-        order.save(update_fields=["status", "reservation_expires_at"])
-        return order
-
-    # ───────────────────────── payments ─────────────────────────
-
-    def payment_methods_payload(self):
-        return [
-            {
-                "id": method.id,
-                "name": method.name,
-                "fa_name": method.fa_name,
-                "channels": [
-                    {
-                        "id": support.payment_channel.id,
-                        "name": support.payment_channel.name,
-                        "fa_name": support.payment_channel.fa_name,
-                        "account_number": support.payment_channel.account_number,
-                        "card_number": support.payment_channel.card_number,
-                        "owner_name": support.payment_channel.owner_name,
-                    }
-                    for support in method.supported_channels.select_related(
-                        "payment_channel"
-                    ).order_by("payment_channel_id")
-                ],
-            }
-            for method in OrderPaymentMethod.objects.filter(available=True)
-            .prefetch_related("supported_channels__payment_channel")
-            .order_by("id")
-        ]
+        assignments = OrderStatusAction.objects.filter(
+            order_status=order.status,
+            **{f"order_action__{actor}": True},
+        ).select_related("order_action", "order_action__set_status")
+        return [self._action_payload(assignment) for assignment in assignments]
 
     @transaction.atomic
-    def confirm_manual_payment(
-        self,
-        customer,
-        order_id,
-        *,
-        payment_method_name,
-        payment_channel_id,
-        ref_number=None,
-        resource_account_number=None,
-    ):
+    def execute_action(self, order_id, action_code, *, actor, customer=None, admin=None):
+        if actor not in {"admin", "customer"}:
+            raise ValueError("Unknown order action actor.")
+        if actor == "admin" and admin is None:
+            raise ValueError("Admin actor requires an admin user.")
+        filters = {"id": order_id}
+        if actor == "customer":
+            filters["customer"] = customer
         order = (
-            Order.objects.select_for_update().select_related("status")
-            .filter(id=order_id, customer=customer)
+            Order.objects.select_for_update()
+            .select_related("status")
+            .filter(**filters)
             .first()
         )
         if order is None:
             raise self.NotFoundError("Order not found.")
-
-        # Idempotent: a finalized order returns its current state.
-        if order.status.name == self.STATUS_SUCCESS:
-            return order
-        if order.status.name == self.STATUS_EXPIRED:
-            raise self.ValidationError({
-                "order": [_("The order reservation has expired.")]
-            })
-        if order.status.name != self.STATUS_PAYMENT_WAITING:
-            raise self.ValidationError({"order": [_("This order cannot be paid.")]})
-        if payment_method_name not in self.MANUAL_METHODS:
-            raise self.ValidationError({
-                "payment_method": [
-                    _("This payment method is not available for manual payment.")
-                ]
-            })
-
-        method = OrderPaymentMethod.objects.filter(name=payment_method_name).first()
-        if method is None or not method.available:
-            raise self.ValidationError({
-                "payment_method": [_("This payment method is not available.")]
-            })
-        channel = OrderPaymentChannel.objects.filter(id=payment_channel_id).first()
-        if channel is None:
-            raise self.ValidationError({
-                "payment_channel": [_("This payment channel is not available.")]
-            })
-        if not OrderPaymentChannelSupportMethod.objects.filter(
-            payment_channel=channel, payment_method=method
-        ).exists():
-            raise self.ValidationError({
-                "payment_channel": [
-                    _("This channel does not support the selected payment method.")
-                ]
-            })
-
-        payment = OrderPayment.objects.create(
-            order=order,
-            payment_method=method,
-            payment_channel=channel,
-            amount=order.total_amount,
-            status=PAYMENT_SUCCESS,
-            ref_number=ref_number or "",
-            resource_account_number=resource_account_number,
+        assignment = (
+            OrderStatusAction.objects.select_related(
+                "order_action", "order_action__set_status"
+            )
+            .filter(order_status=order.status, order_action__code=action_code)
+            .first()
         )
-        order.status = self._status(self.STATUS_SUCCESS)
-        order.reservation_expires_at = None
-        order.successful_payment = payment
-        order.save(update_fields=[
-            "status",
-            "reservation_expires_at",
-            "successful_payment",
-        ])
+        if assignment is None:
+            raise self.ValidationError({
+                "action": [_('This action is not available for the current order status.')]
+            })
+        action = assignment.order_action
+        if not getattr(action, actor):
+            raise self.ValidationError({
+                "action": [_('This actor is not allowed to execute the action.')]
+            })
+
+        tracked_before = {
+            "status_id": order.status_id,
+            "reservation_expires_at": (
+                order.reservation_expires_at.isoformat()
+                if order.reservation_expires_at is not None
+                else None
+            ),
+        }
+        update_fields = []
+        if action.code == "cancel":
+            self.release_reservations(order)
+            if order.reservation_expires_at is not None:
+                order.reservation_expires_at = None
+                update_fields.append("reservation_expires_at")
+        if action.set_status is not None and action.set_status_id != order.status_id:
+            order.status = action.set_status
+            update_fields.append("status")
+        if update_fields:
+            order.save(update_fields=[*update_fields, "updated_at"])
+            tracked_after = {
+                "status_id": order.status_id,
+                "reservation_expires_at": (
+                    order.reservation_expires_at.isoformat()
+                    if order.reservation_expires_at is not None
+                    else None
+                ),
+            }
+            changed_fields = {
+                field
+                for field, before_value in tracked_before.items()
+                if before_value != tracked_after[field]
+            }
+            if changed_fields:
+                user = admin if actor == "admin" else customer
+                OrderHistory.objects.create(
+                    order=order,
+                    action=action,
+                    user_id=user.pk if user is not None else None,
+                    user_model=user._meta.label if user is not None else None,
+                    before_values={
+                        field: tracked_before[field] for field in changed_fields
+                    },
+                    after_values={
+                        field: tracked_after[field] for field in changed_fields
+                    },
+                    description=(
+                        f"Order action '{action.name}' executed by {actor}."
+                    ),
+                )
         return order
 
+    def cancel_order(self, customer, order_id):
+        return self.execute_action(
+            order_id,
+            "cancel",
+            actor="customer",
+            customer=customer,
+        )
+
     # ───────────────────────── serialization ─────────────────────────
+
+    @staticmethod
+    def _status_actions_payload(order, *, actor):
+        return [
+            {
+                "id": assignment.order_action.id,
+                "code": assignment.order_action.code,
+                "name": assignment.order_action.name,
+                "fa_name": assignment.order_action.fa_name,
+            }
+            for assignment in order.status.status_actions.all()
+            if getattr(assignment.order_action, actor)
+        ]
+
+    def _customer_order_payload(self, order):
+        payload = self._order_payload(order)
+        payload["status"] = {
+            "id": order.status.id,
+            "name": order.status.name,
+            "fa_name": order.status.fa_name,
+        }
+        payload["available_actions"] = self._status_actions_payload(
+            order, actor="customer"
+        )
+        return payload
 
     def _order_payload(self, order):
         items = [
@@ -535,9 +631,9 @@ class OrderService:
             successful_payment = order.successful_payment
             payment = {
                 "id": successful_payment.id,
-                "payment_method": successful_payment.payment_method.name,
+                "payment_method": successful_payment.payment_method.code,
                 "payment_channel": (
-                    successful_payment.payment_channel.name
+                    successful_payment.payment_channel.code
                     if successful_payment.payment_channel
                     else None
                 ),
@@ -548,12 +644,32 @@ class OrderService:
         payments = [
             {
                 "id": p.id,
-                "payment_method": p.payment_method.name,
+                "payment_method": p.payment_method.code,
+                "payment_method_name": p.payment_method.name,
+                "payment_method_fa_name": p.payment_method.fa_name,
+                "payment_channel": p.payment_channel.code if p.payment_channel else None,
+                "payment_channel_name": p.payment_channel.name if p.payment_channel else None,
+                "payment_channel_fa_name": p.payment_channel.fa_name if p.payment_channel else None,
                 "status": p.status,
                 "amount": str(p.amount),
                 "ref_number": p.ref_number,
+                "resource_account_number": p.resource_account_number,
+                "documents": [
+                    {
+                        "id": document.id,
+                        "file_id": str(document.file_id),
+                        "original_name": document.file.original_name,
+                        "content_type": document.file.content_type,
+                        "url": self._file_url(document.file),
+                    }
+                    for document in p.documents.all()
+                ],
             }
-            for p in order.payments.select_related("payment_method").order_by("id")
+            for p in order.payments.select_related(
+                "payment_method", "payment_channel"
+            ).prefetch_related(
+                "documents__file__status"
+            ).order_by("id")
         ]
         return {
             "id": order.id,
@@ -575,3 +691,12 @@ class OrderService:
             "payments": payments,
             "created_at": order.created_at.isoformat(),
         }
+
+    @staticmethod
+    def _file_url(file):
+        from domains.files.services import FileService
+
+        try:
+            return FileService().url(file)
+        except FileService.Error:
+            return None

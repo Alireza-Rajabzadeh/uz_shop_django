@@ -77,10 +77,18 @@ class FileService:
             uploaded_file.seek(0)
         return checksum.hexdigest(), size
 
-    def upload(self, uploaded_file, *, storage_alias="default", metadata=None, created_by=None):
+    def upload(
+        self, uploaded_file, *, storage_alias="default", metadata=None,
+        created_by=None, object_prefix="files",
+    ):
         if metadata is not None and not isinstance(metadata, dict):
             raise self.Error("File metadata must be a JSON object.")
         storage = self._storage(storage_alias)
+        object_prefix = object_prefix.strip("/")
+        if not object_prefix or any(
+            part in {"", ".", ".."} for part in object_prefix.split("/")
+        ):
+            raise self.Error("Invalid managed file object prefix.")
         file_id = uuid.uuid4()
         extension = self._extension(uploaded_file.name)
         content_type = (
@@ -93,7 +101,10 @@ class FileService:
             id=file_id,
             status=self._status(self.STATUS_PENDING),
             storage_alias=storage_alias,
-            object_key=f"files/{file_id}.{extension}" if extension else f"files/{file_id}",
+            object_key=(
+                f"{object_prefix}/{file_id}.{extension}"
+                if extension else f"{object_prefix}/{file_id}"
+            ),
             original_name=Path(uploaded_file.name).name[:255],
             file_type=self._file_type(content_type),
             content_type=content_type[:255],
@@ -180,6 +191,8 @@ class FileService:
                 locked_file = File.objects.select_for_update(of=("self",)).get(pk=file.pk)
                 storage = self._storage(locked_file.storage_alias)
                 locked_file.product_files.all().delete()
+                locked_file.payment_channel_logos.update(logo_file=None)
+                locked_file.payment_method_icons.update(icon_file=None)
                 locked_file.status = self._status(self.STATUS_DELETED)
                 locked_file.deleted_at = locked_file.deleted_at or timezone.now()
                 locked_file.save(update_fields=["status", "deleted_at", "updated_at"])
@@ -234,7 +247,12 @@ class FileService:
             file_type=file_type,
             storage_alias=storage_alias,
             ordering=ordering,
-        ).filter(product_files__isnull=True)
+        ).filter(
+            product_files__isnull=True,
+            payment_channel_logos__isnull=True,
+            payment_method_icons__isnull=True,
+            payment_documents__isnull=True,
+        )
 
     @transaction.atomic
     def migrate_to_alias(self, file, target_alias):

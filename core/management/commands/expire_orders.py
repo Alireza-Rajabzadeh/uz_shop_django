@@ -4,7 +4,7 @@ from domains.order.services import OrderService
 
 
 class Command(BaseCommand):
-    help = "Expire payment_waiting orders whose reservation has passed"
+    help = "Expire payment_pending orders whose reservation has passed"
 
     def handle(self, *args, **options):
         orders = OrderService().expire_orders()

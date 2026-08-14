@@ -73,6 +73,7 @@ INSTALLED_APPS = [
     "domains.preorder.apps.PreOrderConfig",
     "domains.cart.apps.CartConfig",
     "domains.order.apps.OrderConfig",
+    "domains.payments.apps.PaymentsConfig",
     "core",
     "domains.users",
 ]

@@ -6,10 +6,10 @@ are rejected.
 Order lifecycle:
 
 ```
-payment_waiting --(manual payment confirmed)--> success
+payment_pending --(manual payment confirmed)--> paid
        │
-       ├--(customer cancel)--------------------> failed
-       └--(reservation expired)----------------> expired
+       ├--(customer cancel)--------------------> cancelled
+       └--(reservation expired)----------------> payment_expired
 ```
 
 `successful_payment`/`payments` show the accounting record. `online` and `credit`
@@ -35,7 +35,7 @@ the cart. Server-side:
    - **serialized** strategy: concrete serial rows are flipped to `reserved`.
 5. `reservation_expires_at = now + ORDER_RESERVATION_MINUTES` (default 30).
 
-`201` returns the full order payload (starts in `payment_waiting`).
+`201` returns the full order payload (starts in `payment_pending`).
 
 `400` `{ "address": [...] }` if no address, `{ "cart": [...] }` if empty,
 `{ "items": [...] }` listing each problematic SKU otherwise.
@@ -45,7 +45,19 @@ the cart. Server-side:
 ```json
 {
   "id": 1,
-  "status": "payment_waiting",
+  "status": {
+    "id": 110,
+    "name": "payment_pending",
+    "fa_name": "در انتظار پرداخت"
+  },
+  "available_actions": [
+    {
+      "id": 1,
+      "code": "cancel",
+      "name": "Cancel order",
+      "fa_name": "لغو سفارش"
+    }
+  ],
   "address_info": { "...cart address snapshot..." },
   "items": [
     {
@@ -90,29 +102,14 @@ GET /api/order/<order_id>
 ```
 
 List returns `{ "count", "results": [ order, ... ] }` newest-first. Both lazily expire
-`payment_waiting` orders whose `reservation_expires_at` has passed, releasing their
-stock reservations and flipping status to `expired`. `404` for another customer's order.
+`payment_pending` orders whose `reservation_expires_at` has passed, releasing their
+stock reservations and flipping status to `payment_expired`. `404` for another customer's order.
 
-## Payment methods
+## Payments
 
-```
-GET /api/order/payment-methods
-```
-
-```json
-{
-  "methods": [
-    {
-      "id": 1, "name": "card_to_card", "fa_name": "کارت به کارت",
-      "channels": [ { "id": 1, "name": "Mellat card-to-card", "fa_name": "...", "account_number": null, "card_number": "6104...", "owner_name": "UzShop" } ]
-    },
-    { "id": 2, "name": "deposit_to_account", "fa_name": "واریز به حساب", "channels": [ ... ] }
-  ]
-}
-```
-
-`online` and `credit` are also listed (seeded `available=True`) but have **no pay
-endpoint** yet.
+Payment models and business rules are owned by the Payments domain. Order owns the
+customer-facing order payment routes and delegates to `PaymentService`. See
+[`payment.md`](payment.md) for the customer and administrative contracts.
 
 ## Confirm manual payment
 
@@ -123,11 +120,11 @@ POST /api/order/<order_id>/pay
 
 - `payment_method` must be `card_to_card` or `deposit_to_account`; `payment_channel_id`
   must be a channel that **supports** that method (`400` otherwise).
-- Creates a `success` `OrderPayment`, sets order status `success`, clears
+- Creates a `successful` payment, sets order status `paid`, clears
   `reservation_expires_at`, and links `successful_payment`.
-- **Idempotent:** calling again on an already-`success` order returns the current
+- **Idempotent:** calling again on an already-`paid` order returns the current
   order unchanged (no duplicate payment row).
-- `400` if the order is not `payment_waiting` (e.g. cancelled or already paid);
+- `400` if the order is not `payment_pending` (e.g. cancelled or already paid);
   `404` if the order does not belong to the customer.
 
 ## Cancel
@@ -137,21 +134,71 @@ POST /api/order/<order_id>/cancel
 ```
 
 Releases all stock reservations (normal `reserved` decremented / serialized rows
-freed) and sets status `failed`. Allowed only while `payment_waiting`
+freed) and sets status `cancelled`. Allowed only while `payment_pending`
 (`400` otherwise, `404` if not the customer's order).
+
+## Actions
+
+Available actions are embedded in customer and admin order responses. They are assigned
+to the order's current status in `order_status_actions` and filtered by the action's
+customer/admin actor flags. Each embedded action contains `id`, `code`, `name`, and
+`fa_name`; clients use `code` as the stable execution identifier.
+
+```
+GET  /api/order/<order_id>/actions
+POST /api/order/<order_id>/actions/<action_code>
+GET  /api/order/admin/orders/<order_id>/actions
+POST /api/order/admin/orders/<order_id>/actions/<action_code>
+```
+
+Customer routes require ownership. Admin discovery requires `order.view_order`; admin
+execution requires `order.change_order`. Executing `cancel` also releases inventory
+reservations and clears `reservation_expires_at`. The dedicated customer cancel route
+remains available and delegates to the same action workflow.
+
+Every action that changes an order creates an `order_history` audit row in the same
+database transaction. The row stores the action, only the order fields whose values
+changed, an actor-aware description, and its creation time. Admin order detail responses
+include these entries under `history`, newest first:
+
+```json
+{
+  "history": [
+    {
+      "id": 10,
+      "action": {
+        "id": 1,
+        "code": "cancel",
+        "name": "Cancel order",
+        "fa_name": "لغو سفارش"
+      },
+      "before_values": {
+        "status_id": 110,
+        "reservation_expires_at": "2026-08-13T12:00:00+00:00"
+      },
+      "after_values": {
+        "status_id": 500,
+        "reservation_expires_at": null
+      },
+      "description": "Order action 'Cancel order' executed by customer.",
+      "created_at": "2026-08-13T11:30:00+00:00"
+    }
+  ]
+}
+```
 
 ## Expiry job
 
-`python manage.py expire_orders` expires all stale `payment_waiting` orders and
+`python manage.py expire_orders` expires all stale `payment_pending` orders and
 releases their stock. Detail/list reads also expire lazily, so no background worker
 is strictly required. `ORDER_RESERVATION_MINUTES` (default 30) controls the window.
 
 ## Order flow (for frontend)
 
 1. Build cart, set address (`PUT /api/cart/address`), run `GET /api/cart/validate`.
-2. `POST /api/order/` → order `payment_waiting` with a reservation deadline.
+2. `POST /api/order/` → order `payment_pending` with a reservation deadline.
 3. `GET /api/order/payment-methods` for the channel to display.
 4. After the customer pays manually, `POST /api/order/<id>/pay` with the method
    and channel (`ref_number` + optional `resource_account_number`).
-5. Order becomes `success`. Poll `GET /api/order/<id>` for confirmation; handle
-   `expired` if the reservation lapsed before payment.
+5. Order becomes `paid`. Poll `GET /api/order/<id>` for confirmation; handle
+   `payment_expired` if the reservation lapsed before payment.
