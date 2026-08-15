@@ -74,6 +74,7 @@ INSTALLED_APPS = [
     "domains.cart.apps.CartConfig",
     "domains.order.apps.OrderConfig",
     "domains.payments.apps.PaymentsConfig",
+    "domains.content.apps.ContentConfig",
     "core",
     "domains.users",
 ]

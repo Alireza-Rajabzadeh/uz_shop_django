@@ -54,6 +54,7 @@ Gunicorn does not reload bind-mounted code. Restart the `django` service before 
 config/                 Settings, root URLs, Celery, ASGI, WSGI
 core/                   Shared responses, exceptions, services, utilities
 domains/catalog/        Categories, products, variants, and media relations
+domains/content/        Landing pages, component configuration, reusable SEO records
 domains/customer/       Customer auth, profiles, preferences, and addresses
 domains/files/          Provider-neutral stored-file lifecycle
 domains/importing/      External-source import pipelines (Digikala, etc.)

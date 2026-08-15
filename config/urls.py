@@ -33,6 +33,7 @@ urlpatterns = [
     path("api/files/", include("domains.files.api.urls")),
     path("api/notifications/", include("domains.notifications.api.urls")),
     path("api/payments/", include("domains.payments.urls")),
+    path("api/content/", include("domains.content.urls")),
     path("api/wishlist", WishlistListCreate.as_view()),
     path("api/wishlist/", include("domains.wishlist.urls")),
     path("api/preorder", PreOrderListCreate.as_view()),
