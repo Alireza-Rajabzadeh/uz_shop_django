@@ -166,3 +166,6 @@ msgstr "{name} باید یک عدد متناهی باشد."
 #: domains/catalog/services/product_service.py
 msgid "Each product detail can only be submitted once."
 msgstr "هر جزئیات محصول فقط یک بار قابل ارسال است."
+
+msgid "No active payment channel is available."
+msgstr "در حال حاضر کانال پرداخت فعالی وجود ندارد."

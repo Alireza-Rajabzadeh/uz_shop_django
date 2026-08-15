@@ -26,6 +26,20 @@ class PaymentService:
     MANUAL_METHODS = ("card_to_card", "deposit_to_account")
 
     @staticmethod
+    def has_available_channel():
+        methods = PaymentMethod.objects.filter(is_active=True).prefetch_related(
+            "supported_channels__payment_channel"
+        )
+        for method in methods:
+            for support in method.supported_channels.all():
+                available, _ = PaymentService.method_availability(
+                    method, support.payment_channel
+                )
+                if available:
+                    return True
+        return False
+
+    @staticmethod
     def method_availability(method, channel=None):
         if not method.is_active:
             return False, "Payment method is inactive."

@@ -465,7 +465,14 @@ class OrderAPITests(APITestCase):
         data = response.data["data"]
         self.assertEqual(
             data["status"],
-            {"id": 110, "name": "payment_pending", "fa_name": "در انتظار پرداخت"},
+            {
+                "id": 110,
+                "name": "payment_pending",
+                "fa_name": "در انتظار پرداخت",
+                "description": (
+                    "سفارش ایجاد شده اما پرداخت آن هنوز توسط مشتری انجام نشده است."
+                ),
+            },
         )
         self.assertEqual(
             data["available_actions"],
@@ -524,6 +531,20 @@ class OrderAPITests(APITestCase):
         response = self.checkout()
         self.assertEqual(response.status_code, 400)
         self.assertIn("items", response.data["errors"])
+
+    def test_checkout_rejects_when_no_active_payment_channel(self):
+        product = self.make_product()
+        variant = self.make_normal_variant(product)
+        self.add_to_cart(variant)
+        self.card_channel.is_active = False
+        self.card_channel.save()
+
+        response = self.checkout()
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("payment", response.data["errors"])
+        self.assertFalse(Order.objects.exists())
+        stock = WarehouseStock.objects.get(variant=variant)
+        self.assertEqual(stock.reserved, 0)
 
     def test_checkout_for_serialized_reserves_rows(self):
         in_stock = SerializedStockStatus.objects.get(code="in_stock")

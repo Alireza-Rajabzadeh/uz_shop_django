@@ -138,3 +138,6 @@ msgstr "User account is inactive."
 #: backend/domains/users/services/auth_service.py:18
 msgid "You do not have permission to access this resource."
 msgstr "You do not have permission to access this resource."
+
+msgid "No active payment channel is available."
+msgstr "No active payment channel is available."

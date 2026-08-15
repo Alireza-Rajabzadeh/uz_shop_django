@@ -9,6 +9,7 @@ from django.utils.translation import gettext as _
 
 from domains.cart.services import CartService
 from domains.catalog.models import ProductVariants
+from domains.payments.services import PaymentService
 from domains.inventory.enums.SerializedStockStatusEnum import SerializedStockStatusEnum
 from domains.inventory.models import SerializedStock, SerializedStockStatus, WarehouseStock
 
@@ -66,6 +67,7 @@ class OrderService:
             "sku": variant.sku,
             "product_id": variant.product_id,
             "product_name": variant.product.name,
+            "product_slug": variant.product.slug,
             "combination_key": variant.combination_key,
             "selections": [
                 {
@@ -113,6 +115,10 @@ class OrderService:
         if not cart.address_info:
             raise self.ValidationError({
                 "address": [_("Set a delivery address before checkout.")]
+            })
+        if not PaymentService.has_available_channel():
+            raise self.ValidationError({
+                "payment": [_("No active payment channel is available.")]
             })
         items = list(
             cart.items.select_related(
@@ -593,6 +599,7 @@ class OrderService:
             "id": order.status.id,
             "name": order.status.name,
             "fa_name": order.status.fa_name,
+            "description": order.status.description,
         }
         payload["available_actions"] = self._status_actions_payload(
             order, actor="customer"
@@ -607,6 +614,7 @@ class OrderService:
                 "sku": item.sku,
                 "product_id": item.variant_info.get("product_id"),
                 "product_name": item.variant_info.get("product_name"),
+                "product_slug": item.variant_info.get("product_slug"),
                 "combination_key": item.variant_info.get("combination_key"),
                 "quantity": item.quantity,
                 "unit_price": str(item.unit_price),
