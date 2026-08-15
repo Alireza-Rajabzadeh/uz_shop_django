@@ -188,6 +188,15 @@ class ProductService(BaseService):
         order_field = ordering_fields.get(requested_field, "id")
         return queryset.order_by(f"-{order_field}" if descending else order_field)
 
+    def content_selector_options(self, search=None):
+        queryset = self.model.objects.all()
+        if search:
+            query = Q(name__icontains=search) | Q(description__icontains=search)
+            if search.isdigit():
+                query |= Q(id=int(search))
+            queryset = queryset.filter(query)
+        return queryset.order_by("name", "id")
+
     def list_by_category(self, category_id):
         return self.model.objects.filter(categories__id=category_id)
 

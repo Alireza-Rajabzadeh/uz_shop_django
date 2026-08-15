@@ -1,0 +1,84 @@
+{
+  "contract_version": 3,
+  "components": [
+    {
+      "key": "product_slider",
+      "name": "Product Slider",
+      "version": 1,
+      "description": "Displays a horizontal slider of products.",
+      "props": {
+        "title": { "type": "string", "required": true, "description": "Slider heading text." },
+        "sub_title": { "type": "string", "description": "Secondary heading text." },
+        "showAllLink": { "type": "link", "description": "Link shown in the 'view all' button." },
+        "variant": {
+          "type": "string",
+          "enum": ["default", "primary", "accent", "dark"],
+          "default": "default",
+          "description": "Visual variant of the slider section."
+        },
+        "items": {
+          "type": "model",
+          "cardinality": "many",
+          "required": true,
+          "min_items": 1,
+          "description": "Products selected for this slider. Landing content stores product IDs.",
+          "data_source": {
+            "resource": "products",
+            "store": "id",
+            "searchable": true
+          }
+        },
+        "backgroundColor": { "type": "string", "description": "Inline background color override." },
+        "timer": { "type": "string", "description": "Countdown target date (ISO 8601)." }
+      }
+    },
+    {
+      "key": "small_banner",
+      "name": "Small Banner",
+      "version": 1,
+      "description": "Displays a row of small linked banner cards.",
+      "props": {
+        "title": { "type": "string", "description": "Section heading text." },
+        "items": {
+          "type": "array",
+          "required": true,
+          "min_items": 1,
+          "description": "Banner entries with link, image, and title.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "link": { "type": "link", "required": true, "description": "Destination URL when the banner is clicked." },
+              "image": { "type": "image", "description": "Banner background image URL." },
+              "bgColor": { "type": "string", "description": "Fallback background color used when no image is set." },
+              "title": { "type": "string", "required": true, "description": "Banner headline." },
+              "subtitle": { "type": "string", "description": "Banner supporting text." }
+            }
+          }
+        },
+        "max": { "type": "number", "description": "Maximum number of banners to render." }
+      }
+    },
+    {
+      "key": "category_grid",
+      "name": "Category Grid",
+      "version": 1,
+      "description": "Displays a horizontally scrollable grid of category shortcuts.",
+      "props": {
+        "title": { "type": "string", "description": "Section heading text." },
+        "categories": {
+          "type": "model",
+          "cardinality": "many",
+          "required": true,
+          "min_items": 1,
+          "description": "Categories selected for this grid. Landing content stores category IDs.",
+          "data_source": {
+            "resource": "categories",
+            "store": "id",
+            "searchable": true
+          }
+        },
+        "max": { "type": "number", "description": "Maximum number of categories to render." }
+      }
+    }
+  ]
+}

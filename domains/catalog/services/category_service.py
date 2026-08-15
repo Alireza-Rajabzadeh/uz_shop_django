@@ -1,4 +1,5 @@
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 from django.utils.translation import gettext as _
 from rapidfuzz import fuzz
 from core.services.base import BaseService
@@ -90,6 +91,15 @@ class CategoryService(BaseService):
         requested_field = ordering.lstrip("-") if ordering else "id"
         order_field = ordering_fields.get(requested_field, "id")
         return queryset.order_by(f"-{order_field}" if descending else order_field)
+
+    def content_selector_options(self, search=None):
+        queryset = self.model.objects.select_related("parent")
+        if search:
+            query = Q(name__icontains=search) | Q(fa_name__icontains=search)
+            if search.isdigit():
+                query |= Q(id=int(search))
+            queryset = queryset.filter(query)
+        return queryset.order_by("name", "id")
 
     def list_statuses(self):
         return CategoryStatus.objects.order_by("id")
