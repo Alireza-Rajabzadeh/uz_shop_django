@@ -3,7 +3,7 @@ import json
 from django.utils.translation import gettext as _
 from rest_framework.exceptions import NotFound
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import BasePermission
+from rest_framework.permissions import AllowAny, BasePermission
 from rest_framework.views import APIView
 
 from core.permissions import AdminModelPermissions
@@ -13,7 +13,12 @@ from domains.users.auth import AdminJWTAuthentication
 
 from .contracts import CONTRACTS_FILE
 from .models import LandingPage
-from .serializers import LandingPageSerializer
+from .serializers import (
+    LandingPageContentSerializer,
+    LandingPageDetailSerializer,
+    LandingPageSerializer,
+)
+from .services import LandingPageContentResolver, LandingPageService
 
 
 class AdminContentAPIView(APIView):
@@ -78,14 +83,45 @@ class AdminLandingPageDetail(AdminContentAPIView):
 
     def get(self, request, landing_page_id):
         page = self.get_page(landing_page_id)
-        return api_response(data=LandingPageSerializer(page).data)
+        return api_response(data=LandingPageDetailSerializer(page).data)
 
     def patch(self, request, landing_page_id):
         page = self.get_page(landing_page_id)
         serializer = LandingPageSerializer(page, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         page = serializer.save()
-        return api_response(data=LandingPageSerializer(page).data)
+        return api_response(data=LandingPageDetailSerializer(page).data)
+
+
+class LandingPageBySlug(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    allowed_statuses = ()
+    content_field = ""
+
+    def get(self, request, slug):
+        try:
+            page = LandingPageService().get_by_slug(slug)
+        except LandingPage.DoesNotExist as exc:
+            raise NotFound(_("Landing page not found.")) from exc
+
+        if page.status not in self.allowed_statuses:
+            raise NotFound(_("Landing page not found."))
+
+        page.selected_content = LandingPageContentResolver().resolve(
+            getattr(page, self.content_field)
+        )
+        return api_response(data=LandingPageContentSerializer(page).data)
+
+
+class LandingPagePreview(LandingPageBySlug):
+    allowed_statuses = (LandingPage.Status.DRAFT, LandingPage.Status.PUBLISHED)
+    content_field = "draft_content"
+
+
+class PublicLandingPage(LandingPageBySlug):
+    allowed_statuses = (LandingPage.Status.PUBLISHED,)
+    content_field = "published_content"
 
 
 class AdminContentComponentContractList(AdminContentAPIView):

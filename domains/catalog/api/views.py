@@ -77,6 +77,7 @@ class CategoryListCreate(APIView):
             filters["status_id"] = status_id
         categories = category_service.search_categories(
             ordering=request.query_params.get("ordering"),
+            icon_state=request.query_params.get("icon_state"),
             **filters,
         )
         paginator = PageNumberPagination()

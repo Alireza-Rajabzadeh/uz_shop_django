@@ -197,6 +197,13 @@ class ProductService(BaseService):
             queryset = queryset.filter(query)
         return queryset.order_by("name", "id")
 
+    def get_authoring_content_items(self, ids):
+        products = {
+            product.id: {"id": product.id, "name": product.name}
+            for product in self.model.objects.filter(id__in=set(ids))
+        }
+        return [products[id] for id in ids if id in products]
+
     def list_by_category(self, category_id):
         return self.model.objects.filter(categories__id=category_id)
 

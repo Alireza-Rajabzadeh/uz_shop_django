@@ -78,7 +78,7 @@ class CategoryService(BaseService):
     def get_category(self, id):
         return self._get(id)
 
-    def search_categories(self, ordering=None, **filters):
+    def search_categories(self, ordering=None, icon_state=None, **filters):
         ordering_fields = {
             "id": "id",
             "name": "name",
@@ -87,6 +87,10 @@ class CategoryService(BaseService):
             "status_name": "status__name",
         }
         queryset = self.model.objects.filter(**filters).select_related("parent", "status")
+        if icon_state == "missing":
+            queryset = queryset.filter(Q(logo__isnull=True) | Q(logo=""))
+        elif icon_state == "assigned":
+            queryset = queryset.exclude(Q(logo__isnull=True) | Q(logo=""))
         descending = ordering and ordering.startswith("-")
         requested_field = ordering.lstrip("-") if ordering else "id"
         order_field = ordering_fields.get(requested_field, "id")
@@ -100,6 +104,45 @@ class CategoryService(BaseService):
                 query |= Q(id=int(search))
             queryset = queryset.filter(query)
         return queryset.order_by("name", "id")
+
+    def get_authoring_content_items(self, ids):
+        categories = {
+            category.id: {
+                "id": category.id,
+                "name": category.fa_name or category.name,
+                "image": category.logo,
+            }
+            for category in self.model.objects.filter(id__in=set(ids))
+        }
+        return [categories[id] for id in ids if id in categories]
+
+    def get_storefront_content_items(self, ids):
+        if not ids:
+            return []
+
+        categories = list(
+            self.model.objects.filter(id__in=set(ids)).select_related("status", "parent")
+        )
+        items = {}
+        for category in categories:
+            current = category
+            seen = set()
+            active = True
+            while current and current.id not in seen:
+                seen.add(current.id)
+                if current.status.name.casefold() != "active":
+                    active = False
+                    break
+                current = current.parent
+            if not active:
+                continue
+            items[category.id] = {
+                "id": category.id,
+                "name": category.fa_name or category.name,
+                "icon": category.logo,
+                "link": f"/search?category={category.id}",
+            }
+        return [items[id] for id in ids if id in items]
 
     def list_statuses(self):
         return CategoryStatus.objects.order_by("id")

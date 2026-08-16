@@ -1,6 +1,8 @@
 from django.contrib.auth.models import User
+from django.core.management import call_command
 from rest_framework.test import APITestCase
 
+from domains.catalog.category_icons import match_category_icon
 from domains.catalog.models import (
     Brand,
     Category,
@@ -344,6 +346,32 @@ class CategoryWriteTests(APITestCase):
         self.assertEqual(response.status_code, 400)
         parent.refresh_from_db()
         self.assertIsNone(parent.parent)
+
+    def test_category_icon_matching_and_assignment_leave_unknown_names_empty(self):
+        mobile = Category.objects.create(name="لوازم جانبی موبایل", status=self.status)
+        unknown = Category.objects.create(name="Unclassified", status=self.status)
+
+        self.assertEqual(match_category_icon(mobile.name), "device-mobile")
+        self.assertIsNone(match_category_icon(unknown.name))
+        call_command("assign_category_icons")
+
+        mobile.refresh_from_db()
+        unknown.refresh_from_db()
+        self.assertEqual(mobile.logo, "device-mobile")
+        self.assertIsNone(unknown.logo)
+
+    def test_category_list_filters_by_icon_assignment(self):
+        assigned = Category.objects.create(
+            name="Phones", status=self.status, logo="device-mobile"
+        )
+        missing = Category.objects.create(name="Other", status=self.status)
+
+        response = self.client.get("/api/catalog/categories", {"icon_state": "missing"})
+
+        self.assertEqual(response.status_code, 200)
+        ids = [category["id"] for category in response.data["data"]["results"]]
+        self.assertIn(missing.id, ids)
+        self.assertNotIn(assigned.id, ids)
 
     def test_name_suggestions_return_ranked_matches_and_exact_flag(self):
         category = Category.objects.create(name="Smart Phones", status=self.status)

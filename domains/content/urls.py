@@ -6,6 +6,8 @@ from .views import (
     AdminLandingPageDetail,
     AdminLandingPageList,
     AdminProductOptionList,
+    LandingPagePreview,
+    PublicLandingPage,
 )
 
 urlpatterns = [
@@ -14,4 +16,6 @@ urlpatterns = [
     path("admin/component-contracts", AdminContentComponentContractList.as_view()),
     path("admin/options/products", AdminProductOptionList.as_view()),
     path("admin/options/categories", AdminCategoryOptionList.as_view()),
+    path("landing-pages/<str:slug>/preview", LandingPagePreview.as_view()),
+    path("landing-pages/<str:slug>", PublicLandingPage.as_view()),
 ]

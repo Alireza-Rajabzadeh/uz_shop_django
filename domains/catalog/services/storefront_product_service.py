@@ -29,6 +29,48 @@ class StorefrontProductService:
         })
         return payload
 
+    def get_content_items(self, ids):
+        if not ids:
+            return []
+
+        media = ProductFile.objects.filter(
+            file__file_type="image",
+            file__status__name="available",
+            file__deleted_at__isnull=True,
+        ).select_related("file").order_by("-is_primary", "position", "id")
+        variants = self.inventory_service.annotate_variant_summaries(
+            ProductVariants.objects.select_related("inventory_strategy")
+        ).prefetch_related("selections__attribute", "selections__option").order_by("id")
+        products = (
+            Product.objects.filter(id__in=set(ids), status__name__iexact="active")
+            .select_related("brand")
+            .prefetch_related(
+                "categories__status",
+                Prefetch("product_files", queryset=media, to_attr="storefront_media"),
+                Prefetch("variants", queryset=variants, to_attr="storefront_variants"),
+            )
+        )
+
+        items = {}
+        for product in products:
+            category = self._primary_category(product)
+            if category is None or category.status.name.casefold() != "active":
+                continue
+            try:
+                self._validate_category_ancestors(category)
+            except Product.DoesNotExist:
+                continue
+            payload = self._base_payload(product)
+            items[product.id] = {
+                "id": payload["id"],
+                "slug": payload["slug"],
+                "name": payload["name"],
+                "thumbnail_url": payload["thumbnail_url"],
+                "pricing": payload["pricing"],
+                "availability": payload["availability"],
+            }
+        return [items[id] for id in ids if id in items]
+
     def _get_product(self, slug):
         media = ProductFile.objects.filter(
             file__file_type="image",
