@@ -1,5 +1,7 @@
 from copy import deepcopy
 
+from django.utils import timezone
+
 from domains.catalog.services import CategoryService, ProductService, StorefrontProductService
 
 from .contracts import load_content_contracts
@@ -7,8 +9,23 @@ from .models import LandingPage
 
 
 class LandingPageService:
+    HOME_SLUG = "home"
+
     def get_by_slug(self, slug):
         return LandingPage.objects.get(slug=slug)
+
+    def get_home_page(self):
+        return self.get_by_slug(self.HOME_SLUG)
+
+    def delete_page(self, instance):
+        instance.delete()
+
+    def publish_page(self, instance):
+        instance.published_content = instance.draft_content
+        instance.status = LandingPage.Status.PUBLISHED
+        instance.published_at = timezone.now()
+        instance.save()
+        return instance
 
 
 class LandingPageContentResolver:

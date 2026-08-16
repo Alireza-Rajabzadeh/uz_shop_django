@@ -5,14 +5,18 @@ from .views import (
     AdminContentComponentContractList,
     AdminLandingPageDetail,
     AdminLandingPageList,
+    AdminLandingPagePublish,
     AdminProductOptionList,
     LandingPagePreview,
+    PublicHomeLandingPage,
     PublicLandingPage,
 )
 
 urlpatterns = [
+    path("home", PublicHomeLandingPage.as_view()),
     path("admin/landing-pages", AdminLandingPageList.as_view()),
     path("admin/landing-pages/<int:landing_page_id>", AdminLandingPageDetail.as_view()),
+    path("admin/landing-pages/<int:landing_page_id>/publish", AdminLandingPagePublish.as_view()),
     path("admin/component-contracts", AdminContentComponentContractList.as_view()),
     path("admin/options/products", AdminProductOptionList.as_view()),
     path("admin/options/categories", AdminCategoryOptionList.as_view()),

@@ -6,7 +6,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny, BasePermission
 from rest_framework.views import APIView
 
-from core.permissions import AdminModelPermissions
+from core.permissions import AdminModelPermissions, CustomActionPermission
 from core.responses import api_response
 from domains.catalog.services import CategoryService, ProductService
 from domains.users.auth import AdminJWTAuthentication
@@ -92,6 +92,25 @@ class AdminLandingPageDetail(AdminContentAPIView):
         page = serializer.save()
         return api_response(data=LandingPageDetailSerializer(page).data)
 
+    def delete(self, request, landing_page_id):
+        page = self.get_page(landing_page_id)
+        LandingPageService().delete_page(page)
+        return api_response(data=None)
+
+
+class AdminLandingPagePublish(APIView):
+    authentication_classes = [AdminJWTAuthentication]
+    permission_classes = [CustomActionPermission]
+    required_permissions = ("content.change_landingpage",)
+
+    def post(self, request, landing_page_id):
+        try:
+            page = LandingPage.objects.get(id=landing_page_id)
+        except LandingPage.DoesNotExist as exc:
+            raise NotFound(_("Landing page not found.")) from exc
+        LandingPageService().publish_page(page)
+        return api_response(data=LandingPageDetailSerializer(page).data)
+
 
 class LandingPageBySlug(APIView):
     authentication_classes = []
@@ -122,6 +141,23 @@ class LandingPagePreview(LandingPageBySlug):
 class PublicLandingPage(LandingPageBySlug):
     allowed_statuses = (LandingPage.Status.PUBLISHED,)
     content_field = "published_content"
+
+
+class PublicHomeLandingPage(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        try:
+            page = LandingPageService().get_home_page()
+        except LandingPage.DoesNotExist as exc:
+            raise NotFound(_("Landing page not found.")) from exc
+
+        if page.status != LandingPage.Status.PUBLISHED:
+            raise NotFound(_("Landing page not found."))
+
+        page.selected_content = LandingPageContentResolver().resolve(page.published_content)
+        return api_response(data=LandingPageContentSerializer(page).data)
 
 
 class AdminContentComponentContractList(AdminContentAPIView):

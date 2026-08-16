@@ -167,6 +167,71 @@ class ContentAdminAPITests(APITestCase):
         page.refresh_from_db()
         self.assertEqual(page.title, "Home")
 
+    def test_delete_removes_landing_page(self):
+        self.user.user_permissions.add(
+            Permission.objects.get(
+                content_type__app_label="content", codename="delete_landingpage"
+            )
+        )
+        page = LandingPage.objects.create(title="Home", slug="home")
+
+        response = self.client.delete(f"/api/content/admin/landing-pages/{page.id}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(LandingPage.objects.filter(id=page.id).exists())
+
+    def test_delete_requires_delete_permission(self):
+        page = LandingPage.objects.create(title="Home", slug="home")
+
+        response = self.client.delete(f"/api/content/admin/landing-pages/{page.id}")
+
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(LandingPage.objects.filter(id=page.id).exists())
+
+    def test_publish_promotes_draft_content_and_sets_published_at(self):
+        self.user.user_permissions.add(
+            Permission.objects.get(
+                content_type__app_label="content", codename="change_landingpage"
+            )
+        )
+        draft_content = {
+            "schema_version": 1,
+            "contract_version": 3,
+            "components": [
+                {
+                    "id": "banner",
+                    "key": "small_banner",
+                    "version": 1,
+                    "props": {"items": [{"link": "/x", "title": "X"}]},
+                }
+            ],
+        }
+        page = LandingPage.objects.create(
+            title="Home", slug="home", status=LandingPage.Status.DRAFT,
+            draft_content=draft_content,
+        )
+
+        response = self.client.post(
+            f"/api/content/admin/landing-pages/{page.id}/publish"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        page.refresh_from_db()
+        self.assertEqual(page.status, LandingPage.Status.PUBLISHED)
+        self.assertEqual(page.published_content, draft_content)
+        self.assertIsNotNone(page.published_at)
+
+    def test_publish_requires_change_permission(self):
+        page = LandingPage.objects.create(title="Home", slug="home")
+
+        response = self.client.post(
+            f"/api/content/admin/landing-pages/{page.id}/publish"
+        )
+
+        self.assertEqual(response.status_code, 403)
+        page.refresh_from_db()
+        self.assertEqual(page.status, LandingPage.Status.DRAFT)
+
     def test_retrieve_resolves_saved_products_regardless_of_product_status(self):
         self.user.user_permissions.add(
             Permission.objects.get(content_type__app_label="content", codename="view_landingpage")
@@ -198,7 +263,14 @@ class ContentAdminAPITests(APITestCase):
         )
         self.assertEqual(
             response.data["data"]["resolved_draft_content"]["components"][0]["props"]["items"],
-            [{"id": product.id, "name": "Hidden product"}],
+            [{
+                "id": product.id,
+                "name": "Hidden product",
+                "thumbnail_url": None,
+                "category_name": None,
+                "category_fa_name": None,
+                "status_name": "inactive-authoring-test",
+            }],
         )
 
     def test_selector_requires_content_permission_and_returns_paginated_options(self):
@@ -306,6 +378,44 @@ class LandingPageDeliveryAPITests(APITestCase):
             self.client.get("/api/content/landing-pages/draft").status_code,
             404,
         )
+
+    def test_home_returns_published_home_landing_page_content(self):
+        LandingPage.objects.create(
+            title="Home",
+            slug=LandingPageService.HOME_SLUG,
+            status=LandingPage.Status.PUBLISHED,
+            draft_content=self.draft_content,
+            published_content=self.published_content,
+        )
+
+        response = self.client.get("/api/content/home")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["content"], self.published_content)
+        self.assertEqual(response.data["data"]["slug"], LandingPageService.HOME_SLUG)
+
+    def test_home_rejects_missing_or_unpublished_home_page(self):
+        self.assertEqual(self.client.get("/api/content/home").status_code, 404)
+
+        LandingPage.objects.create(
+            title="Home draft",
+            slug=LandingPageService.HOME_SLUG,
+            status=LandingPage.Status.DRAFT,
+            draft_content=self.draft_content,
+        )
+        self.assertEqual(self.client.get("/api/content/home").status_code, 404)
+
+    def test_home_returns_empty_components_when_published_content_is_empty(self):
+        LandingPage.objects.create(
+            title="Home",
+            slug=LandingPageService.HOME_SLUG,
+            status=LandingPage.Status.PUBLISHED,
+        )
+
+        response = self.client.get("/api/content/home")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["content"]["components"], [])
 
     def test_missing_slug_returns_not_found(self):
         response = self.client.get("/api/content/landing-pages/missing/preview")

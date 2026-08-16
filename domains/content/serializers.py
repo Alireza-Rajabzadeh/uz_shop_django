@@ -29,11 +29,22 @@ class LandingPageSerializer(serializers.ModelSerializer):
 
 
 class LandingPageContentSerializer(serializers.ModelSerializer):
-    content = serializers.JSONField(source="selected_content", read_only=True)
+    content = serializers.SerializerMethodField()
 
     class Meta:
         model = LandingPage
         fields = ["id", "title", "slug", "status", "content"]
+
+    @staticmethod
+    def _normalize_content(content):
+        if not isinstance(content, dict):
+            content = {}
+        if not isinstance(content.get("components"), list):
+            content = {**content, "components": []}
+        return content
+
+    def get_content(self, page):
+        return self._normalize_content(getattr(page, "selected_content", None))
 
 
 class LandingPageDetailSerializer(LandingPageSerializer):

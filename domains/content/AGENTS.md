@@ -70,6 +70,12 @@ Landing-page content is component-driven and stored as JSON.
 
 The client application is responsible for mapping component types from the JSON structure to actual client-side components and rendering them with the client theme.
 
+Public storefront access:
+
+- `GET /api/content/home` — the storefront home page. Resolves the landing page with slug `home` (`LandingPageService.HOME_SLUG`) and requires it to be `published`; otherwise 404. Returns the resolved `published_content`.
+- `GET /api/content/landing-pages/<slug>` — published landing page by slug.
+- `GET /api/content/landing-pages/<slug>/preview` — draft/preview landing page by slug.
+
 Keep these boundaries in mind when adding future Content-domain features.
 
 ## Models
@@ -88,4 +94,5 @@ Keep these boundaries in mind when adding future Content-domain features.
 Mounted under `/api/content/`.
 
 - `GET|POST /api/content/admin/landing-pages` — list / create landing pages. Exposed by `AdminLandingPageList` in `views.py` (JWT admin auth + `AdminModelPermissions`, so `content.view_landingpage` / `content.add_landingpage`). Serialization via `LandingPageSerializer`.
-- Currently only list + create are implemented. `published_at`, `published_content`, and draft→publish promotion, edit, delete, and preview are not wired yet. Keep the split between `draft_content` (admin edits) and `published_content` (client-facing) when adding them.
+- `GET|PATCH|DELETE /api/content/admin/landing-pages/<id>` — retrieve / update / delete a landing page (`AdminLandingPageDetail`). Delete requires `content.delete_landingpage`.
+- `POST /api/content/admin/landing-pages/<id>/publish` — promote `draft_content` to `published_content`, set status to `published`, and stamp `published_at` (`AdminLandingPagePublish`, requires `content.change_landingpage`).

@@ -22,6 +22,7 @@ from domains.catalog.models import (
 )
 from domains.inventory.models import InventoryStrategy
 from domains.inventory.services import InventoryService
+from domains.files.services import FileService
 
 
 class ProductService(BaseService):
@@ -198,11 +199,42 @@ class ProductService(BaseService):
         return queryset.order_by("name", "id")
 
     def get_authoring_content_items(self, ids):
+        list_media = ProductFile.objects.filter(
+            file__file_type="image",
+            file__status__name="available",
+            file__deleted_at__isnull=True,
+        ).select_related("file", "file__status").order_by("-is_primary", "position", "id")
         products = {
-            product.id: {"id": product.id, "name": product.name}
+            product.id: product
             for product in self.model.objects.filter(id__in=set(ids))
+            .select_related("status")
+            .prefetch_related(
+                "categories",
+                Prefetch("product_files", queryset=list_media, to_attr="list_media"),
+            )
         }
-        return [products[id] for id in ids if id in products]
+        items = []
+        for product_id in ids:
+            product = products.get(product_id)
+            if product is None:
+                continue
+            category = product.categories.order_by("id").first()
+            media = getattr(product, "list_media", [])
+            thumbnail_url = None
+            if media:
+                try:
+                    thumbnail_url = FileService().url(media[0].file)
+                except FileService.Error:
+                    thumbnail_url = None
+            items.append({
+                "id": product.id,
+                "name": product.name,
+                "thumbnail_url": thumbnail_url,
+                "category_name": category.name if category else None,
+                "category_fa_name": category.fa_name if category else None,
+                "status_name": product.status.name if product.status_id else None,
+            })
+        return items
 
     def list_by_category(self, category_id):
         return self.model.objects.filter(categories__id=category_id)
