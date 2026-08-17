@@ -236,9 +236,10 @@ Django loads `back/.env` for direct local execution. Use `.env.example` as the v
 Important groups:
 
 - PostgreSQL: `POSTGRES_*`
-- Redis: `REDIS_HOST`, `REDIS_PORT`
-- Celery: `CELERY_BROKER_URL`, normally Redis database `/1`
-- Confirmation: `CONFIRMED_REQUEST_REDIS_URL`, normally Redis database `/2`
+- Redis: `REDIS_HOST`, `REDIS_PORT`, `BACKEND_REDIS_PASSWORD`
+- Shared cache: Redis database `/0`, with `CACHE_PUBLIC_PREFIX` and `CACHE_PRIVATE_PREFIX`
+- Celery: authenticated `backend` user on Redis database `/1`, with `backend:*` keys
+- Confirmation: authenticated `backend` user on Redis database `/2`, with `backend:*` keys
 - Development confirmation: `CONFIRMED_REQUEST_DEV_MODE`, `CONFIRMED_REQUEST_DEV_CODE`
 - Notifications: `NOTIFICATIONS_ALLOW_FAKE_SMS`
 - Storage: `STORAGE_BACKEND`, `STORAGE_*`, `FILE_STORAGE_ALIASES`

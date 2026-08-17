@@ -48,7 +48,7 @@
             "type": "object",
             "properties": {
               "link": { "type": "link", "required": true, "description": "Destination URL when the banner is clicked." },
-              "image": { "type": "image", "description": "Banner background image URL." },
+              "image": { "type": "image", "ratio": "4:3", "width": 640, "height": 480, "description": "Banner background image. Recommended ratio 4:3." },
               "bgColor": { "type": "string", "description": "Fallback background color used when no image is set." },
               "title": { "type": "string", "required": true, "description": "Banner headline." },
               "subtitle": { "type": "string", "description": "Banner supporting text." }

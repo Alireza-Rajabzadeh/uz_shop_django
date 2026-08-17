@@ -14,6 +14,28 @@ from domains.catalog.search.contracts import FacetSelection, ProductSearchCriter
 FACET_PARAMETER = re.compile(r"^(detail|variant)\[(\d+)]$")
 
 
+class StorefrontStaticDataQuerySerializer(serializers.Serializer):
+    data = serializers.CharField(required=False, max_length=100)
+
+    def validate_data(self, value):
+        if value not in self.context["supported_data"]:
+            raise serializers.ValidationError("Unsupported static dataset.")
+        return value
+
+
+class StorefrontStaticCategorySerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    name = serializers.CharField()
+    icon = serializers.CharField(allow_null=True, allow_blank=True)
+    link = serializers.CharField()
+    children = serializers.SerializerMethodField()
+
+    def get_children(self, category):
+        return StorefrontStaticCategorySerializer(
+            category["children"], many=True
+        ).data
+
+
 class FacetSelectionSerializer(serializers.Serializer):
     field_id = serializers.IntegerField(min_value=1)
     value_ids = serializers.ListField(

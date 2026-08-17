@@ -144,6 +144,41 @@ class CategoryService(BaseService):
             }
         return [items[id] for id in ids if id in items]
 
+    def get_storefront_tree(self):
+        categories = list(
+            self.model.objects.order_by("id").values(
+                "id",
+                "parent_id",
+                "name",
+                "fa_name",
+                "logo",
+                "status__name",
+            )
+        )
+        nodes = {
+            category["id"]: {
+                "id": category["id"],
+                "name": category["fa_name"] or category["name"],
+                "icon": category["logo"],
+                "link": f"/search?category={category['id']}",
+                "children": [],
+            }
+            for category in categories
+            if category["status__name"].casefold() == "active"
+        }
+        roots = []
+        for category in categories:
+            node = nodes.get(category["id"])
+            if node is None:
+                continue
+            if category["parent_id"] is None:
+                roots.append(node)
+                continue
+            parent = nodes.get(category["parent_id"])
+            if parent is not None:
+                parent["children"].append(node)
+        return roots
+
     def list_statuses(self):
         return CategoryStatus.objects.order_by("id")
 

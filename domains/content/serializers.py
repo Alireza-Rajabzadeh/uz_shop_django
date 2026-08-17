@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from .contracts import empty_draft_content, validate_draft_content
-from .models import LandingPage
+from .models import LandingPage, SEORecord
 from .services import LandingPageContentResolver
 
 
@@ -55,3 +55,23 @@ class LandingPageDetailSerializer(LandingPageSerializer):
 
     def get_resolved_draft_content(self, page):
         return LandingPageContentResolver.for_authoring().resolve(page.draft_content)
+
+
+class SEORecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SEORecord
+        fields = [
+            "id",
+            "resource_type",
+            "resource_id",
+            "title",
+            "description",
+            "canonical_url",
+            "image_id",
+            "index",
+            "follow",
+            "metadata",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "resource_type", "resource_id", "created_at", "updated_at"]

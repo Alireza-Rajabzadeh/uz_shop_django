@@ -60,6 +60,14 @@ class ConfirmedRequestServiceTests(SimpleTestCase):
                 purpose="customer_login",
             )
 
+    def test_keys_use_backend_namespace(self):
+        generated = self.generate()
+
+        request_key = self.service._request_key(generated.request_id)
+
+        self.assertTrue(request_key.startswith("backend:"))
+        self.assertTrue(self.connection.exists(request_key))
+
     def test_wrong_codes_exhaust_attempts(self):
         generated = self.generate(max_attempts=2)
 

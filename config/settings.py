@@ -13,7 +13,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import os
 from datetime import timedelta
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 from django.core.exceptions import ImproperlyConfigured
 from django.utils.translation import gettext_lazy as _
@@ -40,6 +40,34 @@ def env_bool(name, default):
     if value.lower() in {"false", "0", "no"}:
         return False
     raise ImproperlyConfigured(f"{name} must be a boolean value")
+
+
+def backend_redis_url(database):
+    password = os.getenv("BACKEND_REDIS_PASSWORD")
+    if not password:
+        raise ImproperlyConfigured(
+            "BACKEND_REDIS_PASSWORD is required when an explicit Redis URL is not set"
+        )
+    host = os.getenv("REDIS_HOST", "localhost")
+    port = os.getenv("REDIS_PORT", "6379")
+    return f"redis://backend:{quote(password, safe='')}@{host}:{port}/{database}"
+
+
+def configured_backend_redis_url(name, database):
+    value = os.getenv(name)
+    if not value:
+        return backend_redis_url(database)
+    parsed = urlsplit(value)
+    if (
+        parsed.scheme not in {"redis", "rediss"}
+        or parsed.username != "backend"
+        or not parsed.password
+        or parsed.path != f"/{database}"
+    ):
+        raise ImproperlyConfigured(
+            f"{name} must authenticate as backend and use Redis database {database}"
+        )
+    return value
 
 
 SECRET_KEY = "django-insecure-!=d12q8564!7u^hd1%lbg6x0+xa!)kup$r(z3@f!w9&0@qlrn4"
@@ -79,10 +107,8 @@ INSTALLED_APPS = [
     "domains.users",
 ]
 
-CELERY_BROKER_URL = os.getenv(
-    "CELERY_BROKER_URL",
-    f"redis://{os.getenv('REDIS_HOST', 'localhost')}:{os.getenv('REDIS_PORT', '6379')}/1",
-)
+CELERY_BROKER_URL = configured_backend_redis_url("CELERY_BROKER_URL", 1)
+CELERY_BROKER_TRANSPORT_OPTIONS = {"global_keyprefix": "backend:"}
 CELERY_TASK_IGNORE_RESULT = True
 CELERY_TASK_SERIALIZER = "json"
 CELERY_ACCEPT_CONTENT = ["json"]
@@ -107,6 +133,12 @@ CATALOG_SEARCH_BACKEND = os.getenv(
 NOTIFICATIONS_ALLOW_FAKE_SMS = env_bool("NOTIFICATIONS_ALLOW_FAKE_SMS", False)
 CONFIRMED_REQUEST_DEV_CODE = os.getenv("CONFIRMED_REQUEST_DEV_CODE", "")
 CONFIRMED_REQUEST_DEV_MODE = env_bool("CONFIRMED_REQUEST_DEV_MODE", False)
+CACHE_PUBLIC_PREFIX = os.getenv("CACHE_PUBLIC_PREFIX", "public").strip()
+CACHE_PRIVATE_PREFIX = os.getenv("CACHE_PRIVATE_PREFIX", "private").strip()
+if CACHE_PUBLIC_PREFIX != "public":
+    raise ImproperlyConfigured("CACHE_PUBLIC_PREFIX must match the public Redis ACL namespace")
+if CACHE_PRIVATE_PREFIX != "private":
+    raise ImproperlyConfigured("CACHE_PRIVATE_PREFIX must match the private Redis ACL namespace")
 if CONFIRMED_REQUEST_DEV_CODE and not CONFIRMED_REQUEST_DEV_MODE:
     raise ImproperlyConfigured(
         "CONFIRMED_REQUEST_DEV_CODE requires CONFIRMED_REQUEST_DEV_MODE=True"
@@ -122,12 +154,14 @@ CACHES = {
     },
     "confirmed_requests": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": os.getenv(
-            "CONFIRMED_REQUEST_REDIS_URL",
-            f"redis://{os.getenv('REDIS_HOST', 'localhost')}:{os.getenv('REDIS_PORT', '6379')}/2",
-        ),
+        "LOCATION": configured_backend_redis_url("CONFIRMED_REQUEST_REDIS_URL", 2),
         "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient"},
-        "KEY_PREFIX": "uzshop",
+        "KEY_PREFIX": "backend",
+    },
+    "application_cache": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": configured_backend_redis_url("CACHE_REDIS_URL", 0),
+        "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient"},
     },
 }
 

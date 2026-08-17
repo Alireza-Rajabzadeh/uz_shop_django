@@ -7,7 +7,31 @@ from domains.catalog.search import StorefrontSearchService
 from domains.catalog.models import Product
 from domains.catalog.services import StorefrontProductService
 
-from .storefront_serializers import StorefrontProductSearchQuerySerializer
+from .static_data import STATIC_DATA_HANDLERS
+from .storefront_serializers import (
+    StorefrontProductSearchQuerySerializer,
+    StorefrontStaticDataQuerySerializer,
+)
+
+
+class StorefrontStaticData(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        serializer = StorefrontStaticDataQuerySerializer(
+            data=request.query_params,
+            context={"supported_data": STATIC_DATA_HANDLERS},
+        )
+        serializer.is_valid(raise_exception=True)
+        requested_data = serializer.validated_data.get("data")
+        handlers = (
+            {requested_data: STATIC_DATA_HANDLERS[requested_data]}
+            if requested_data
+            else STATIC_DATA_HANDLERS
+        )
+        data = {name: handler() for name, handler in handlers.items()}
+        return api_response(True, "", data)
 
 
 class StorefrontProductSearch(APIView):

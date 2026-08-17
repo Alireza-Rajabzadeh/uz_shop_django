@@ -40,7 +40,7 @@ class GeneratedConfirmation:
 
 class ConfirmedRequestService:
     cache_alias = "confirmed_requests"
-    key_prefix = "confirmed-request"
+    key_prefix = "backend:confirmed-request"
     code_pattern = re.compile(r"^[0-9]{6}$")
 
     generate_script = """

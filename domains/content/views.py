@@ -8,15 +8,17 @@ from rest_framework.views import APIView
 
 from core.permissions import AdminModelPermissions, CustomActionPermission
 from core.responses import api_response
+from domains.catalog.models import Product
 from domains.catalog.services import CategoryService, ProductService
 from domains.users.auth import AdminJWTAuthentication
 
 from .contracts import CONTRACTS_FILE
-from .models import LandingPage
+from .models import LandingPage, SEORecord
 from .serializers import (
     LandingPageContentSerializer,
     LandingPageDetailSerializer,
     LandingPageSerializer,
+    SEORecordSerializer,
 )
 from .services import LandingPageContentResolver, LandingPageService
 
@@ -49,6 +51,40 @@ class LandingPageAuthoringPermission(BasePermission):
             and user.is_staff
             and any(user.has_perm(permission) for permission in self.permissions)
         )
+
+
+class ResourceSEOPermission(BasePermission):
+    resource_permissions = {}
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not (
+            user
+            and user.is_authenticated
+            and user.is_active
+            and user.is_staff
+        ):
+            return False
+        permissions = self.resource_permissions.get(request.method, ())
+        return bool(permissions) and all(user.has_perm(permission) for permission in permissions)
+
+
+class LandingPageSEOPermission(ResourceSEOPermission):
+    resource_permissions = {
+        "GET": ("content.view_landingpage",),
+        "PUT": ("content.change_landingpage",),
+        "PATCH": ("content.change_landingpage",),
+        "DELETE": ("content.change_landingpage",),
+    }
+
+
+class ProductSEOPermission(ResourceSEOPermission):
+    resource_permissions = {
+        "GET": ("catalog.view_product",),
+        "PUT": ("catalog.change_product",),
+        "PATCH": ("catalog.change_product",),
+        "DELETE": ("catalog.change_product",),
+    }
 
 
 class AdminLandingPageList(AdminContentAPIView):
@@ -110,6 +146,69 @@ class AdminLandingPagePublish(APIView):
             raise NotFound(_("Landing page not found.")) from exc
         LandingPageService().publish_page(page)
         return api_response(data=LandingPageDetailSerializer(page).data)
+
+
+class AdminResourceSEOView(APIView):
+    authentication_classes = [AdminJWTAuthentication]
+    resource_type = ""
+
+    @staticmethod
+    def get_resource(resource_id):
+        raise NotImplementedError
+
+    @classmethod
+    def get_record(cls, resource_id):
+        return SEORecord.objects.filter(
+            resource_type=cls.resource_type,
+            resource_id=resource_id,
+        ).first()
+
+    def get(self, request, resource_id):
+        self.get_resource(resource_id)
+        record = self.get_record(resource_id)
+        return api_response(data=SEORecordSerializer(record).data if record else None)
+
+    def put(self, request, resource_id):
+        self.get_resource(resource_id)
+        record = self.get_record(resource_id)
+        serializer = SEORecordSerializer(record, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        record = serializer.save(
+            resource_type=self.resource_type,
+            resource_id=resource_id,
+        )
+        return api_response(data=SEORecordSerializer(record).data)
+
+    def delete(self, request, resource_id):
+        self.get_resource(resource_id)
+        record = self.get_record(resource_id)
+        if record:
+            record.delete()
+        return api_response(data=None)
+
+
+class AdminLandingPageSEO(AdminResourceSEOView):
+    permission_classes = [LandingPageSEOPermission]
+    resource_type = "landing_page"
+
+    @staticmethod
+    def get_resource(resource_id):
+        try:
+            return LandingPage.objects.get(id=resource_id)
+        except LandingPage.DoesNotExist as exc:
+            raise NotFound(_("Landing page not found.")) from exc
+
+
+class AdminProductSEO(AdminResourceSEOView):
+    permission_classes = [ProductSEOPermission]
+    resource_type = "product"
+
+    @staticmethod
+    def get_resource(resource_id):
+        try:
+            return Product.objects.get(id=resource_id)
+        except Product.DoesNotExist as exc:
+            raise NotFound(_("Product not found.")) from exc
 
 
 class LandingPageBySlug(APIView):

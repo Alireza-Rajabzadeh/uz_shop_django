@@ -1,3 +1,4 @@
+from .cache import CacheService
 from .confirmed_request import (
     ConfirmedRequestConfigurationError,
     ConfirmedRequestInvalid,
@@ -7,6 +8,7 @@ from .confirmed_request import (
 )
 
 __all__ = [
+    "CacheService",
     "ConfirmedRequestConfigurationError",
     "ConfirmedRequestInvalid",
     "ConfirmedRequestService",

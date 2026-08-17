@@ -49,6 +49,7 @@ jsonlines==4.0.0
 jsonpointer==3.1.1
 jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
+kombu==5.5.4
 linear-tsv==1.1.0
 llvmlite==0.47.0
 loguru==0.7.3

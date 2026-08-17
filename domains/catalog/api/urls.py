@@ -17,9 +17,11 @@ from .storefront import (
     StorefrontProductDetail,
     StorefrontProductQuickView,
     StorefrontProductSearch,
+    StorefrontStaticData,
 )
 
 urlpatterns = [
+    path("statics", StorefrontStaticData.as_view()),
     path("storefront/products", StorefrontProductSearch.as_view()),
     path(
         "storefront/products/<str:slug>/quick-view",
