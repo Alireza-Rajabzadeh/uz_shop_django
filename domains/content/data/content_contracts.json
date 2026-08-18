@@ -7,12 +7,27 @@
       "version": 1,
       "description": "Displays a horizontal slider of products.",
       "props": {
-        "title": { "type": "string", "required": true, "description": "Slider heading text." },
-        "sub_title": { "type": "string", "description": "Secondary heading text." },
-        "showAllLink": { "type": "link", "description": "Link shown in the 'view all' button." },
+        "title": {
+          "type": "string",
+          "required": true,
+          "description": "Slider heading text."
+        },
+        "sub_title": {
+          "type": "string",
+          "description": "Secondary heading text."
+        },
+        "showAllLink": {
+          "type": "link",
+          "description": "Link shown in the 'view all' button."
+        },
         "variant": {
           "type": "string",
-          "enum": ["default", "primary", "accent", "dark"],
+          "enum": [
+            "default",
+            "primary",
+            "accent",
+            "dark"
+          ],
           "default": "default",
           "description": "Visual variant of the slider section."
         },
@@ -28,8 +43,14 @@
             "searchable": true
           }
         },
-        "backgroundColor": { "type": "string", "description": "Inline background color override." },
-        "timer": { "type": "string", "description": "Countdown target date (ISO 8601)." }
+        "backgroundColor": {
+          "type": "string",
+          "description": "Inline background color override."
+        },
+        "timer": {
+          "type": "string",
+          "description": "Countdown target date (ISO 8601)."
+        }
       }
     },
     {
@@ -38,7 +59,10 @@
       "version": 1,
       "description": "Displays a row of small linked banner cards.",
       "props": {
-        "title": { "type": "string", "description": "Section heading text." },
+        "title": {
+          "type": "string",
+          "description": "Section heading text."
+        },
         "items": {
           "type": "array",
           "required": true,
@@ -47,15 +71,38 @@
           "items": {
             "type": "object",
             "properties": {
-              "link": { "type": "link", "required": true, "description": "Destination URL when the banner is clicked." },
-              "image": { "type": "image", "ratio": "4:3", "width": 640, "height": 480, "description": "Banner background image. Recommended ratio 4:3." },
-              "bgColor": { "type": "string", "description": "Fallback background color used when no image is set." },
-              "title": { "type": "string", "required": true, "description": "Banner headline." },
-              "subtitle": { "type": "string", "description": "Banner supporting text." }
+              "link": {
+                "type": "link",
+                "required": true,
+                "description": "Destination URL when the banner is clicked."
+              },
+              "image": {
+                "type": "image",
+                "ratio": "4:3",
+                "width": 640,
+                "height": 480,
+                "description": "Banner background image. Recommended ratio 4:3."
+              },
+              "bgColor": {
+                "type": "string",
+                "description": "Fallback background color used when no image is set."
+              },
+              "title": {
+                "type": "string",
+                "required": true,
+                "description": "Banner headline."
+              },
+              "subtitle": {
+                "type": "string",
+                "description": "Banner supporting text."
+              }
             }
           }
         },
-        "max": { "type": "number", "description": "Maximum number of banners to render." }
+        "max": {
+          "type": "number",
+          "description": "Maximum number of banners to render."
+        }
       }
     },
     {
@@ -64,7 +111,10 @@
       "version": 1,
       "description": "Displays a horizontally scrollable grid of category shortcuts.",
       "props": {
-        "title": { "type": "string", "description": "Section heading text." },
+        "title": {
+          "type": "string",
+          "description": "Section heading text."
+        },
         "categories": {
           "type": "model",
           "cardinality": "many",
@@ -77,7 +127,10 @@
             "searchable": true
           }
         },
-        "max": { "type": "number", "description": "Maximum number of categories to render." }
+        "max": {
+          "type": "number",
+          "description": "Maximum number of categories to render."
+        }
       }
     }
   ]

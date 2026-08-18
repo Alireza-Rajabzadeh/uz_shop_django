@@ -4,6 +4,9 @@ from pathlib import Path
 
 import requests
 from django.core.management.base import BaseCommand
+from rest_framework import serializers
+
+from domains.content.contracts import validate_contracts_payload
 
 CONTRACTS_PATH = Path(__file__).resolve().parent.parent.parent.parent / "domains" / "content" / "data" / "content_contracts.json"
 
@@ -28,7 +31,15 @@ class Command(BaseCommand):
             self.stderr.write(self.style.ERROR(f"Failed to fetch contracts from {url}: {exc}"))
             raise SystemExit(1)
 
-        payload = response.json()
+        try:
+            payload = response.json()
+            validate_contracts_payload(payload)
+        except (ValueError, serializers.ValidationError) as exc:
+            self.stderr.write(
+                self.style.ERROR(f"Refusing to write invalid contracts from {url}: {exc}")
+            )
+            raise SystemExit(1)
+
         CONTRACTS_PATH.parent.mkdir(parents=True, exist_ok=True)
         CONTRACTS_PATH.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
