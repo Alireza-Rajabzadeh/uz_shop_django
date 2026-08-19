@@ -18,6 +18,8 @@ ALLOWED_PROP_TYPES = {
     "model",
     "image",
     "link",
+    "rich_text",
+    "relative_link",
 }
 ALLOWED_MODEL_RESOURCES = {"products", "categories"}
 ALLOWED_CARDINALITIES = {"one", "many"}
@@ -245,6 +247,10 @@ def _validate_value(value, definition, location):
                 f"{location} uses unsupported cardinality {cardinality!r}."
             )
     elif value_type in {"string", "link", "image"}:
+        valid = isinstance(value, str)
+    elif value_type == "relative_link":
+        valid = isinstance(value, str) and value.startswith("/")
+    elif value_type == "rich_text":
         valid = isinstance(value, str)
     elif value_type == "number":
         valid = type(value) in {int, float} and math.isfinite(value)

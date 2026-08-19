@@ -13,14 +13,21 @@ from domains.catalog.services import CategoryService, ProductService
 from domains.users.auth import AdminJWTAuthentication
 
 from .contracts import CONTRACTS_FILE
-from .models import LandingPage, SEORecord
+from .models import LandingPage, Page, SEORecord
 from .serializers import (
     LandingPageContentSerializer,
     LandingPageDetailSerializer,
     LandingPageSerializer,
+    PageContentSerializer,
+    PageDetailSerializer,
+    PageSerializer,
     SEORecordSerializer,
 )
-from .services import LandingPageContentResolver, LandingPageService
+from .services import (
+    LandingPageContentResolver,
+    LandingPageService,
+    PageService,
+)
 
 
 class AdminContentAPIView(APIView):
@@ -148,6 +155,67 @@ class AdminLandingPagePublish(APIView):
         return api_response(data=LandingPageDetailSerializer(page).data)
 
 
+class AdminPageList(AdminContentAPIView):
+    model = Page
+    ordering_fields = {"id", "title", "slug", "status", "created_at", "updated_at"}
+
+    def get(self, request):
+        ordering = request.query_params.get("ordering", "-updated_at")
+        field = ordering.removeprefix("-")
+        if field not in self.ordering_fields:
+            ordering = "-updated_at"
+        queryset = Page.objects.all().order_by(ordering)
+        data = self.paginated(queryset, request, self, PageSerializer)
+        return api_response(data=data)
+
+    def post(self, request):
+        serializer = PageSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        page = serializer.save()
+        return api_response(data=PageSerializer(page).data, status_code=201)
+
+
+class AdminPageDetail(AdminContentAPIView):
+    model = Page
+
+    @staticmethod
+    def get_page(page_id):
+        try:
+            return Page.objects.get(id=page_id)
+        except Page.DoesNotExist as exc:
+            raise NotFound(_("Page not found.")) from exc
+
+    def get(self, request, page_id):
+        page = self.get_page(page_id)
+        return api_response(data=PageDetailSerializer(page).data)
+
+    def patch(self, request, page_id):
+        page = self.get_page(page_id)
+        serializer = PageSerializer(page, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        page = serializer.save()
+        return api_response(data=PageDetailSerializer(page).data)
+
+    def delete(self, request, page_id):
+        page = self.get_page(page_id)
+        PageService().delete_page(page)
+        return api_response(data=None)
+
+
+class AdminPagePublish(APIView):
+    authentication_classes = [AdminJWTAuthentication]
+    permission_classes = [CustomActionPermission]
+    required_permissions = ("content.change_page",)
+
+    def post(self, request, page_id):
+        try:
+            page = Page.objects.get(id=page_id)
+        except Page.DoesNotExist as exc:
+            raise NotFound(_("Page not found.")) from exc
+        PageService().publish_page(page)
+        return api_response(data=PageDetailSerializer(page).data)
+
+
 class AdminResourceSEOView(APIView):
     authentication_classes = [AdminJWTAuthentication]
     resource_type = ""
@@ -211,6 +279,27 @@ class AdminProductSEO(AdminResourceSEOView):
             raise NotFound(_("Product not found.")) from exc
 
 
+class PageSEOPermission(ResourceSEOPermission):
+    resource_permissions = {
+        "GET": ("content.view_page",),
+        "PUT": ("content.change_page",),
+        "PATCH": ("content.change_page",),
+        "DELETE": ("content.change_page",),
+    }
+
+
+class AdminPageSEO(AdminResourceSEOView):
+    permission_classes = [PageSEOPermission]
+    resource_type = "page"
+
+    @staticmethod
+    def get_resource(resource_id):
+        try:
+            return Page.objects.get(id=resource_id)
+        except Page.DoesNotExist as exc:
+            raise NotFound(_("Page not found.")) from exc
+
+
 class LandingPageBySlug(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
@@ -242,21 +331,52 @@ class PublicLandingPage(LandingPageBySlug):
     content_field = "published_content"
 
 
-class PublicHomeLandingPage(APIView):
+class PublicHomePage(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
 
     def get(self, request):
         try:
-            page = LandingPageService().get_home_page()
-        except LandingPage.DoesNotExist as exc:
-            raise NotFound(_("Landing page not found.")) from exc
+            page = PageService().get_home_page()
+        except Page.DoesNotExist as exc:
+            raise NotFound(_("Page not found.")) from exc
 
-        if page.status != LandingPage.Status.PUBLISHED:
-            raise NotFound(_("Landing page not found."))
+        if page.status != Page.Status.PUBLISHED:
+            raise NotFound(_("Page not found."))
 
         page.selected_content = LandingPageContentResolver().resolve(page.published_content)
-        return api_response(data=LandingPageContentSerializer(page).data)
+        return api_response(data=PageContentSerializer(page).data)
+
+
+class PageBySlug(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    allowed_statuses = ()
+    content_field = ""
+
+    def get(self, request, slug):
+        try:
+            page = PageService().get_by_slug(slug)
+        except Page.DoesNotExist as exc:
+            raise NotFound(_("Page not found.")) from exc
+
+        if page.status not in self.allowed_statuses:
+            raise NotFound(_("Page not found."))
+
+        page.selected_content = LandingPageContentResolver().resolve(
+            getattr(page, self.content_field)
+        )
+        return api_response(data=PageContentSerializer(page).data)
+
+
+class PagePreview(PageBySlug):
+    allowed_statuses = (Page.Status.DRAFT, Page.Status.PUBLISHED)
+    content_field = "draft_content"
+
+
+class PublicPage(PageBySlug):
+    allowed_statuses = (Page.Status.PUBLISHED,)
+    content_field = "published_content"
 
 
 class AdminContentComponentContractList(AdminContentAPIView):

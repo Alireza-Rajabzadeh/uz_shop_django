@@ -26,6 +26,31 @@ class LandingPage(models.Model):
         return self.title
 
 
+class Page(models.Model):
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        PUBLISHED = "published", "Published"
+        ARCHIVED = "archived", "Archived"
+
+    title = models.CharField(max_length=255)
+    slug = models.SlugField(unique=True, allow_unicode=True)
+    draft_content = models.JSONField(default=dict, blank=True)
+    published_content = models.JSONField(default=dict, blank=True)
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.DRAFT
+    )
+    published_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "content_page"
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return self.title
+
+
 class SEORecord(models.Model):
     resource_type = models.CharField(max_length=64)
     resource_id = models.BigIntegerField()

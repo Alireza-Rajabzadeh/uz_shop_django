@@ -10,8 +10,8 @@ from .contracts import (
     validate_contracts_payload,
     validate_draft_content,
 )
-from .models import LandingPage, SEORecord
-from .services import LandingPageService
+from .models import LandingPage, Page, SEORecord
+from .services import LandingPageService, PageService
 
 
 class ContractFileInvariantTests(APITestCase):
@@ -22,7 +22,7 @@ class ContractFileInvariantTests(APITestCase):
         keys = [component["key"] for component in payload["components"]]
         self.assertEqual(
             sorted(keys),
-            ["category_grid", "product_slider", "small_banner"],
+            ["category_grid", "link_list", "product_slider", "rich_text", "small_banner"],
         )
 
     def test_small_banner_image_prop_carries_ratio_metadata(self):
@@ -148,6 +148,29 @@ class DraftContentValidationTests(APITestCase):
         component["props"]["items"] = []
         with self.assertRaises(serializers.ValidationError):
             validate_draft_content(content)
+
+    def test_relative_link_must_start_with_slash(self):
+        def content_with_link(link):
+            return {
+                "schema_version": 1,
+                "contract_version": 3,
+                "components": [
+                    {
+                        "id": "links-1",
+                        "key": "link_list",
+                        "version": 1,
+                        "props": {"links": [{"title": "About", "link": link}]},
+                    }
+                ],
+            }
+
+        valid = content_with_link("/about")
+        self.assertEqual(validate_draft_content(valid), valid)
+
+        for bad in ("about", "https://example.com/about", ""):
+            with self.subTest(link=bad):
+                with self.assertRaises(serializers.ValidationError):
+                    validate_draft_content(content_with_link(bad))
 
 
 class ContentAdminAPITests(APITestCase):
@@ -681,44 +704,6 @@ class LandingPageDeliveryAPITests(APITestCase):
             404,
         )
 
-    def test_home_returns_published_home_landing_page_content(self):
-        LandingPage.objects.create(
-            title="Home",
-            slug=LandingPageService.HOME_SLUG,
-            status=LandingPage.Status.PUBLISHED,
-            draft_content=self.draft_content,
-            published_content=self.published_content,
-        )
-
-        response = self.client.get("/api/content/home")
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["data"]["content"], self.published_content)
-        self.assertEqual(response.data["data"]["slug"], LandingPageService.HOME_SLUG)
-
-    def test_home_rejects_missing_or_unpublished_home_page(self):
-        self.assertEqual(self.client.get("/api/content/home").status_code, 404)
-
-        LandingPage.objects.create(
-            title="Home draft",
-            slug=LandingPageService.HOME_SLUG,
-            status=LandingPage.Status.DRAFT,
-            draft_content=self.draft_content,
-        )
-        self.assertEqual(self.client.get("/api/content/home").status_code, 404)
-
-    def test_home_returns_empty_components_when_published_content_is_empty(self):
-        LandingPage.objects.create(
-            title="Home",
-            slug=LandingPageService.HOME_SLUG,
-            status=LandingPage.Status.PUBLISHED,
-        )
-
-        response = self.client.get("/api/content/home")
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["data"]["content"]["components"], [])
-
     def test_missing_slug_returns_not_found(self):
         response = self.client.get("/api/content/landing-pages/missing/preview")
 
@@ -785,3 +770,307 @@ class LandingPageDeliveryAPITests(APITestCase):
             page.draft_content["components"][0]["props"]["items"],
             [second_product.id, first_product.id],
         )
+
+
+class PageAdminAPITests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="page-editor", password="password", is_staff=True
+        )
+        self.user.user_permissions.add(
+            Permission.objects.get(content_type__app_label="content", codename="add_page")
+        )
+        self.client.force_authenticate(self.user)
+
+    def test_create_defaults_draft_envelope(self):
+        response = self.client.post(
+            "/api/content/admin/pages",
+            {"title": "About Us", "slug": "about-us"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["data"]["draft_content"], empty_draft_content())
+
+    def test_retrieve_page(self):
+        self.user.user_permissions.add(
+            Permission.objects.get(content_type__app_label="content", codename="view_page")
+        )
+        page = Page.objects.create(title="About Us", slug="about-us")
+
+        response = self.client.get(f"/api/content/admin/pages/{page.id}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["data"]["id"], page.id)
+        self.assertEqual(response.data["data"]["resolved_draft_content"], {})
+
+    def test_patch_page(self):
+        self.user.user_permissions.add(
+            Permission.objects.get(content_type__app_label="content", codename="change_page")
+        )
+        page = Page.objects.create(title="About Us", slug="about-us")
+        draft_content = {
+            "schema_version": 1,
+            "contract_version": 3,
+            "components": [],
+        }
+
+        response = self.client.patch(
+            f"/api/content/admin/pages/{page.id}",
+            {"title": "About Charchu", "draft_content": draft_content},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        page.refresh_from_db()
+        self.assertEqual(page.title, "About Charchu")
+        self.assertEqual(page.draft_content, draft_content)
+
+    def test_patch_requires_change_permission(self):
+        page = Page.objects.create(title="About Us", slug="about-us")
+
+        response = self.client.patch(
+            f"/api/content/admin/pages/{page.id}",
+            {"title": "Renamed"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        page.refresh_from_db()
+        self.assertEqual(page.title, "About Us")
+
+    def test_delete_removes_page(self):
+        self.user.user_permissions.add(
+            Permission.objects.get(content_type__app_label="content", codename="delete_page")
+        )
+        page = Page.objects.create(title="About Us", slug="about-us")
+
+        response = self.client.delete(f"/api/content/admin/pages/{page.id}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Page.objects.filter(id=page.id).exists())
+
+    def test_delete_requires_delete_permission(self):
+        page = Page.objects.create(title="About Us", slug="about-us")
+
+        response = self.client.delete(f"/api/content/admin/pages/{page.id}")
+
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(Page.objects.filter(id=page.id).exists())
+
+    def test_publish_promotes_draft_content_and_sets_published_at(self):
+        self.user.user_permissions.add(
+            Permission.objects.get(content_type__app_label="content", codename="change_page")
+        )
+        draft_content = {
+            "schema_version": 1,
+            "contract_version": 3,
+            "components": [],
+        }
+        page = Page.objects.create(
+            title="About Us", slug="about-us", status=Page.Status.DRAFT,
+            draft_content=draft_content,
+        )
+
+        response = self.client.post(f"/api/content/admin/pages/{page.id}/publish")
+
+        self.assertEqual(response.status_code, 200)
+        page.refresh_from_db()
+        self.assertEqual(page.status, Page.Status.PUBLISHED)
+        self.assertEqual(page.published_content, draft_content)
+        self.assertIsNotNone(page.published_at)
+
+    def test_publish_requires_change_permission(self):
+        page = Page.objects.create(title="About Us", slug="about-us")
+
+        response = self.client.post(f"/api/content/admin/pages/{page.id}/publish")
+
+        self.assertEqual(response.status_code, 403)
+        page.refresh_from_db()
+        self.assertEqual(page.status, Page.Status.DRAFT)
+
+
+class PageSEORecordAPITests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="page-editor", password="password", is_staff=True
+        )
+        self.user.user_permissions.add(
+            Permission.objects.get(content_type__app_label="content", codename="view_page")
+        )
+        self.user.user_permissions.add(
+            Permission.objects.get(content_type__app_label="content", codename="change_page")
+        )
+        self.client.force_authenticate(self.user)
+        self.page = Page.objects.create(title="About Us", slug="about-us")
+
+    def test_get_returns_null_when_no_seo_record(self):
+        response = self.client.get(f"/api/content/admin/pages/{self.page.id}/seo")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["success"])
+        self.assertIsNone(response.data["data"])
+
+    def test_put_creates_and_updates_page_seo(self):
+        response = self.client.put(
+            f"/api/content/admin/pages/{self.page.id}/seo",
+            {
+                "title": "About Us",
+                "description": "Learn about Charchu.",
+                "canonical_url": "https://example.com/about-us",
+                "index": True,
+                "follow": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        record = SEORecord.objects.get(resource_type="page", resource_id=self.page.id)
+        self.assertEqual(record.title, "About Us")
+        self.assertEqual(record.canonical_url, "https://example.com/about-us")
+
+        response = self.client.put(
+            f"/api/content/admin/pages/{self.page.id}/seo",
+            {"title": "Updated", "index": False},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        record.refresh_from_db()
+        self.assertEqual(record.title, "Updated")
+        self.assertFalse(record.index)
+        self.assertEqual(SEORecord.objects.count(), 1)
+
+    def test_delete_removes_page_seo(self):
+        SEORecord.objects.create(
+            resource_type="page", resource_id=self.page.id, title="Saved"
+        )
+
+        response = self.client.delete(f"/api/content/admin/pages/{self.page.id}/seo")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(
+            SEORecord.objects.filter(resource_type="page", resource_id=self.page.id).exists()
+        )
+
+    def test_missing_page_returns_404(self):
+        response = self.client.get("/api/content/admin/pages/99999/seo")
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_requires_page_change_permission_for_write(self):
+        viewer = User.objects.create_user(username="viewer", is_staff=True)
+        viewer.user_permissions.add(
+            Permission.objects.get(content_type__app_label="content", codename="view_page")
+        )
+        self.client.force_authenticate(viewer)
+
+        response = self.client.put(
+            f"/api/content/admin/pages/{self.page.id}/seo",
+            {"title": "Blocked"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(SEORecord.objects.exists())
+
+
+class PageDeliveryAPITests(APITestCase):
+    def setUp(self):
+        self.content = {
+            "schema_version": 1,
+            "contract_version": 3,
+            "components": [],
+        }
+
+    def test_service_retrieves_any_status_without_applying_access_rules(self):
+        archived = Page.objects.create(
+            title="Archived", slug="archived", status=Page.Status.ARCHIVED
+        )
+
+        self.assertEqual(PageService().get_by_slug("archived"), archived)
+
+    def test_preview_returns_draft_and_published_pages_with_draft_content(self):
+        for status in (Page.Status.DRAFT, Page.Status.PUBLISHED):
+            page = Page.objects.create(
+                title=status.title(),
+                slug=f"page-{status}",
+                status=status,
+                draft_content=self.content,
+            )
+
+            response = self.client.get(f"/api/content/pages/{page.slug}/preview")
+
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.data["data"]["content"], self.content)
+            self.assertEqual(response.data["data"]["slug"], page.slug)
+
+    def test_preview_rejects_archived_page(self):
+        Page.objects.create(
+            title="Archived", slug="archived", status=Page.Status.ARCHIVED
+        )
+
+        response = self.client.get("/api/content/pages/archived/preview")
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_public_returns_only_published_page_and_published_content(self):
+        published = Page.objects.create(
+            title="About Us",
+            slug="about-us",
+            status=Page.Status.PUBLISHED,
+            draft_content=self.content,
+            published_content=self.content,
+        )
+        Page.objects.create(title="Draft", slug="draft", status=Page.Status.DRAFT)
+
+        response = self.client.get(f"/api/content/pages/{published.slug}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["content"], self.content)
+        self.assertEqual(
+            self.client.get("/api/content/pages/draft").status_code,
+            404,
+        )
+
+    def test_home_returns_published_home_page_content(self):
+        Page.objects.create(
+            title="Home",
+            slug=PageService.HOME_SLUG,
+            status=Page.Status.PUBLISHED,
+            draft_content=self.content,
+            published_content=self.content,
+        )
+
+        response = self.client.get("/api/content/home")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["content"], self.content)
+        self.assertEqual(response.data["data"]["slug"], PageService.HOME_SLUG)
+
+    def test_home_rejects_missing_or_unpublished_home_page(self):
+        self.assertEqual(self.client.get("/api/content/home").status_code, 404)
+
+        Page.objects.create(
+            title="Home draft",
+            slug=PageService.HOME_SLUG,
+            status=Page.Status.DRAFT,
+            draft_content=self.content,
+        )
+        self.assertEqual(self.client.get("/api/content/home").status_code, 404)
+
+    def test_home_returns_empty_components_when_published_content_is_empty(self):
+        Page.objects.create(
+            title="Home",
+            slug=PageService.HOME_SLUG,
+            status=Page.Status.PUBLISHED,
+        )
+
+        response = self.client.get("/api/content/home")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["content"]["components"], [])
+
+    def test_missing_slug_returns_not_found(self):
+        response = self.client.get("/api/content/pages/missing")
+
+        self.assertEqual(response.status_code, 404)

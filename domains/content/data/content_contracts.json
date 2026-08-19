@@ -132,6 +132,52 @@
           "description": "Maximum number of categories to render."
         }
       }
+    },
+    {
+      "key": "rich_text",
+      "name": "Rich Text",
+      "version": 1,
+      "description": "Displays a section of rich text content.",
+      "props": {
+        "content": {
+          "type": "rich_text",
+          "required": true,
+          "description": "Rich text (Markdown) content to display."
+        }
+      }
+    },
+    {
+      "key": "link_list",
+      "name": "Link List",
+      "version": 1,
+      "description": "Displays an optional title and a list of linked entries.",
+      "props": {
+        "title": {
+          "type": "string",
+          "description": "Optional section heading text."
+        },
+        "links": {
+          "type": "array",
+          "required": true,
+          "min_items": 1,
+          "description": "Link entries with a label and destination path.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string",
+                "required": true,
+                "description": "Link label."
+              },
+              "link": {
+                "type": "relative_link",
+                "required": true,
+                "description": "Site-relative destination path starting with /."
+              }
+            }
+          }
+        }
+      }
     }
   ]
 }
