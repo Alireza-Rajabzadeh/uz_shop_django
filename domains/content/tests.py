@@ -28,6 +28,7 @@ class ContractFileInvariantTests(APITestCase):
                 "hero_slider",
                 "link_list",
                 "product_slider",
+                "promotional_product_slider",
                 "rich_text",
                 "small_banner",
                 "social_links",

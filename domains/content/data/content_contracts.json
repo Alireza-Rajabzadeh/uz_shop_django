@@ -111,6 +111,65 @@
       }
     },
     {
+      "key": "promotional_product_slider",
+      "name": "Product Slider With Promotion",
+      "version": 1,
+      "description": "A product slider with a fixed promotional image at its starting edge.",
+      "props": {
+        "title": {
+          "type": "string",
+          "required": true,
+          "description": "Slider heading text."
+        },
+        "sub_title": {
+          "type": "string",
+          "description": "Secondary heading text."
+        },
+        "showAllLink": {
+          "type": "link",
+          "description": "Link shown in the 'view all' button."
+        },
+        "variant": {
+          "type": "string",
+          "enum": ["default", "primary", "accent", "dark"],
+          "default": "default",
+          "description": "Visual variant of the slider section."
+        },
+        "items": {
+          "type": "model",
+          "cardinality": "many",
+          "required": true,
+          "min_items": 1,
+          "description": "Products selected for this slider. Landing content stores product IDs.",
+          "data_source": {
+            "resource": "products",
+            "store": "id",
+            "searchable": true
+          }
+        },
+        "leadingImage": {
+          "type": "image",
+          "required": true,
+          "ratio": "3:4",
+          "width": 600,
+          "height": 800,
+          "description": "Promotional image fixed at the starting edge while products scroll beneath it."
+        },
+        "leadingImageLink": {
+          "type": "link",
+          "description": "Optional destination for the promotional image."
+        },
+        "backgroundColor": {
+          "type": "string",
+          "description": "Inline background color override."
+        },
+        "timer": {
+          "type": "string",
+          "description": "Countdown target date (ISO 8601)."
+        }
+      }
+    },
+    {
       "key": "small_banner",
       "name": "Small Banner",
       "version": 1,
