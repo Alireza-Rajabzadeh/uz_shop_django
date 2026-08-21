@@ -10,6 +10,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from domains.business.api.serializers import BusinessWorkingDaySerializer
 from domains.business.models import BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessWorkingDay
+from domains.files.models import File, FileStatus
+from domains.files.services import FileService
 
 
 PROFILE = {"business_name": "Uz Shop", "display_name": "Uz", "legal_name": "Uz LLC", "email": "hello@example.com"}
@@ -56,6 +58,76 @@ class BusinessAPITests(APITestCase):
         token = RefreshToken.for_user(self.admin)
         token["user_type"] = "admin"
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.access_token}")
+
+    @classmethod
+    def make_file(cls, *, status="available", file_type="image"):
+        file_status, _ = FileStatus.objects.get_or_create(name=status)
+        return File.objects.create(
+            status=file_status,
+            object_key=f"business/{status}-{file_type}",
+            original_name="social-logo.png",
+            file_type=file_type,
+            content_type="image/png" if file_type == "image" else "text/plain",
+            extension="png",
+            size=10,
+            checksum=f"{status}-{file_type}",
+        )
+
+    @patch("domains.business.api.serializers.FileService.url", return_value="https://cdn.example.com/social.png")
+    def test_admin_accepts_available_image_logo_and_returns_metadata(self, _url):
+        self.authenticate()
+        logo = self.make_file()
+        response = self.client.post("/api/business/admin/social-links", {
+            "key": "instagram", "title": "Instagram", "platform": "instagram",
+            "url": "https://instagram.com/example", "logo_file_id": str(logo.id),
+        }, format="json")
+
+        self.assertEqual(response.status_code, 201)
+        self.assertNotIn("logo_file_id", response.data["data"])
+        self.assertEqual(response.data["data"]["logo_file"]["id"], str(logo.id))
+        self.assertEqual(response.data["data"]["logo_file"]["url"], "https://cdn.example.com/social.png")
+
+    def test_admin_rejects_nonavailable_and_nonimage_logo_files(self):
+        self.authenticate()
+        for logo in (self.make_file(status="failed"), self.make_file(file_type="document")):
+            response = self.client.post("/api/business/admin/social-links", {
+                "key": f"social-{logo.id}", "title": "Social", "platform": "web",
+                "url": "https://example.com", "logo_file_id": str(logo.id),
+            }, format="json")
+            self.assertEqual(response.status_code, 400)
+            self.assertIn("logo_file_id", response.data["errors"])
+
+    @patch("domains.business.api.serializers.FileService.url", return_value="https://cdn.example.com/social.png")
+    @patch("domains.business.api.views.CacheService")
+    def test_public_social_logo_url_and_null_logo(self, cache_class, _url):
+        cache_class.return_value.get_public.return_value = None
+        logo = self.make_file()
+        BusinessSocialLink.objects.create(
+            key="with-logo", title="With logo", platform="web",
+            url="https://example.com/with-logo", logo_file=logo,
+        )
+        BusinessSocialLink.objects.create(
+            key="without-logo", title="Without logo", platform="web",
+            url="https://example.com/without-logo",
+        )
+
+        response = self.client.get("/api/business/public")
+        links = {item["key"]: item for item in response.data["data"]["social_links"]}
+        self.assertEqual(links["with-logo"]["logo_url"], "https://cdn.example.com/social.png")
+        self.assertIsNone(links["without-logo"]["logo_url"])
+        self.assertNotIn("logo_file", links["with-logo"])
+        self.assertNotIn("logo_file_id", links["with-logo"])
+
+    @patch("domains.business.api.serializers.FileService.url", side_effect=FileService.Error("unavailable"))
+    def test_public_logo_url_generation_fails_gracefully(self, _url):
+        logo = self.make_file()
+        link = BusinessSocialLink.objects.create(
+            key="broken-logo", title="Broken logo", platform="web",
+            url="https://example.com/broken", logo_file=logo,
+        )
+        from domains.business.api.serializers import PublicBusinessSocialLinkSerializer
+
+        self.assertIsNone(PublicBusinessSocialLinkSerializer(link).data["logo_url"])
 
     def test_admin_crud_search_and_private_visibility(self):
         self.authenticate()

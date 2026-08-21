@@ -91,6 +91,13 @@ class BusinessSocialLink(ImmutableKeyModel):
     title = models.CharField(max_length=120)
     platform = models.CharField(max_length=80)
     url = models.URLField(max_length=500)
+    logo_file = models.ForeignKey(
+        "files.File",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="business_social_links",
+    )
     visibility = models.CharField(max_length=10, choices=Visibility.choices, default=Visibility.PUBLIC)
     status = models.CharField(max_length=10, choices=RecordStatus.choices, default=RecordStatus.ACTIVE)
     position = models.PositiveIntegerField(default=0)

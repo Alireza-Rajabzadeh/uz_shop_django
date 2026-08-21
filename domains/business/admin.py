@@ -20,7 +20,7 @@ class BusinessPhoneAdmin(admin.ModelAdmin):
 
 @admin.register(BusinessSocialLink)
 class BusinessSocialLinkAdmin(admin.ModelAdmin):
-    list_display = ("title", "platform", "visibility", "status", "position")
+    list_display = ("title", "platform", "logo_file", "visibility", "status", "position")
     list_filter = ("platform", "visibility", "status")
     search_fields = ("key", "title", "url")
 

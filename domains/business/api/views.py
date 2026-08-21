@@ -26,6 +26,8 @@ class AdminBusinessBase(APIView):
 
     def queryset(self, request):
         queryset = self.model.objects.all()
+        if self.model is BusinessSocialLink:
+            queryset = queryset.select_related("logo_file__status")
         search = request.query_params.get("search")
         if search and self.search_fields:
             query = Q()

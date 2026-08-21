@@ -1,6 +1,8 @@
 from rest_framework import serializers
 
 from domains.business.models import BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessWorkingDay
+from domains.files.models import File
+from domains.files.services import FileService
 
 
 class ImmutableKeySerializer(serializers.ModelSerializer):
@@ -36,16 +38,61 @@ class PublicBusinessPhoneSerializer(serializers.ModelSerializer):
 
 
 class BusinessSocialLinkSerializer(ImmutableKeySerializer):
+    logo_file_id = serializers.PrimaryKeyRelatedField(
+        source="logo_file",
+        queryset=File.objects.select_related("status"),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
+    logo_file = serializers.SerializerMethodField()
+
     class Meta:
         model = BusinessSocialLink
-        fields = "__all__"
+        fields = [
+            "id", "key", "title", "platform", "url", "logo_file_id",
+            "logo_file", "visibility", "status", "position", "created_at", "updated_at",
+        ]
         read_only_fields = ["id", "created_at", "updated_at"]
+
+    def validate_logo_file_id(self, value):
+        if value is not None and (
+            value.status.name != FileService.STATUS_AVAILABLE or value.file_type != "image"
+        ):
+            raise serializers.ValidationError("Select an available image file.")
+        return value
+
+    def get_logo_file(self, obj):
+        file = obj.logo_file
+        if file is None:
+            return None
+        try:
+            url = FileService().url(file)
+        except FileService.Error:
+            url = None
+        return {
+            "id": str(file.id),
+            "original_name": file.original_name,
+            "content_type": file.content_type,
+            "file_type": file.file_type,
+            "url": url,
+        }
 
 
 class PublicBusinessSocialLinkSerializer(serializers.ModelSerializer):
+    logo_url = serializers.SerializerMethodField()
+
     class Meta:
         model = BusinessSocialLink
-        fields = ["key", "title", "platform", "url", "position"]
+        fields = ["key", "title", "platform", "url", "logo_url", "position"]
+
+    def get_logo_url(self, obj):
+        if obj.logo_file is None:
+            return None
+        try:
+            return FileService().url(obj.logo_file)
+        except FileService.Error:
+            return None
 
 
 class BusinessWorkingDaySerializer(serializers.ModelSerializer):
