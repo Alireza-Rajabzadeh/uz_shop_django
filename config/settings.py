@@ -90,6 +90,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "django.contrib.postgres",
     "rest_framework",
+    "domains.business.apps.BusinessConfig",
     "domains.notifications.apps.NotificationsConfig",
     "domains.files.apps.FilesConfig",
     "domains.catalog.apps.CatalogConfig",

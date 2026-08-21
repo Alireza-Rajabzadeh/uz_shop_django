@@ -25,6 +25,7 @@ from domains.wishlist.views import WishlistListCreate
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/users/", include("domains.users.users_urls")),
+    path("api/business/", include("domains.business.api.urls")),
     path("api/customer/", include("domains.customer.urls")),
     path("api/catalog/", include("domains.catalog.api.urls")),
     path("api/importing/", include("domains.importing.api.urls")),
