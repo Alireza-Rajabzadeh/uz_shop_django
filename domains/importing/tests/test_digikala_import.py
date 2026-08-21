@@ -27,6 +27,7 @@ from domains.catalog.models import (
     VariantOption,
 )
 from domains.importing.services.digikala_import_service import DigikalaImportService
+from domains.importing.models import ExternalProductIdentity
 from domains.files.models import File
 from domains.inventory.models import InventoryStrategy
 
@@ -128,11 +129,17 @@ class DigikalaImportServiceTests(TestCase):
     def test_import_creates_complete_pending_catalog_structure_without_stock(self):
         result = self.service.import_product(self.detail(), [self.category.id])
 
-        product = Product.objects.get(slug="digikala-12345")
+        product = Product.objects.get(slug="شارژر-تست")
         self.assertEqual(result["status"], "created")
         self.assertEqual(product.status.name, "pending")
         self.assertEqual(product.brand.name, "Test Brand")
         self.assertEqual(product.brand.fa_name, "برند تست")
+        self.assertEqual(product.description, "")
+        self.assertTrue(
+            ExternalProductIdentity.objects.filter(
+                provider="digikala", external_id="12345", product=product
+            ).exists()
+        )
         self.assertEqual(list(product.categories.values_list("id", flat=True)), [1003])
         definition = CategoryDetail.objects.get(name="توان خروجی")
         self.assertEqual(definition.type, "text")
@@ -163,9 +170,10 @@ class DigikalaImportServiceTests(TestCase):
 
     def test_refresh_updates_source_fields_and_preserves_local_state(self):
         self.service.import_product(self.detail(), [self.category.id])
-        product = Product.objects.get(slug="digikala-12345")
+        product = Product.objects.get(slug="شارژر-تست")
         product.status = self.active_product_status
-        product.save(update_fields=["status"])
+        product.description = "توضیحات محلی"
+        product.save(update_fields=["status", "description"])
         product.categories.add(self.manual_category)
 
         result = self.service.import_product(
@@ -177,6 +185,8 @@ class DigikalaImportServiceTests(TestCase):
         variant = ProductVariants.objects.get(product=product)
         self.assertEqual(result["status"], "updated")
         self.assertEqual(product.name, "شارژر تازه")
+        self.assertEqual(product.slug, "شارژر-تست")
+        self.assertEqual(product.description, "توضیحات محلی")
         self.assertEqual(product.status, self.active_product_status)
         self.assertEqual(
             set(product.categories.values_list("id", flat=True)), {1003, 3001}
@@ -209,9 +219,9 @@ class DigikalaImportServiceTests(TestCase):
 
         self.service.import_product(detail, [self.category.id])
 
-        product = Product.objects.get(slug="digikala-12345")
+        product = Product.objects.get(slug="شارژر")
         self.assertEqual(product.name, "شارژر")
-        self.assertEqual(product.description, "خرید شارژر از")
+        self.assertEqual(product.description, "")
         self.assertEqual(product.brand.name, "Arya Brand")
         self.assertEqual(product.brand.fa_name, "برند آریا")
         definition = CategoryDetail.objects.get(name="توان خروجی")
@@ -236,14 +246,34 @@ class DigikalaImportServiceTests(TestCase):
         self.service.import_product(detail, [self.category.id])
 
         self.assertEqual(
-            Product.objects.get(slug="digikala-12345").name,
+            Product.objects.get(slug="business-charger").name,
             "Business Charger",
+        )
+
+    def test_import_lazily_links_legacy_source_slug_without_renaming_it(self):
+        legacy = self.service.product_service.create_product(
+            name="Legacy Product", description="Local description"
+        )
+        legacy.slug = "digikala-12345"
+        legacy.save(update_fields=["slug"])
+
+        result = self.service.import_product(self.detail(), [self.category.id])
+
+        legacy.refresh_from_db()
+        self.assertEqual(result["status"], "updated")
+        self.assertEqual(legacy.slug, "digikala-12345")
+        self.assertEqual(legacy.description, "Local description")
+        self.assertEqual(Product.objects.count(), 1)
+        self.assertTrue(
+            ExternalProductIdentity.objects.filter(
+                provider="digikala", external_id="12345", product=legacy
+            ).exists()
         )
 
     def test_import_without_media_download_keeps_source_urls_only(self):
         self.service.import_product(self.detail(), [self.category.id])
 
-        product = Product.objects.get(slug="digikala-12345")
+        product = Product.objects.get(slug="شارژر-تست")
         self.assertEqual(File.objects.count(), 0)
         self.assertEqual(ProductFile.objects.filter(product=product).count(), 0)
 
@@ -259,7 +289,7 @@ class DigikalaImportServiceTests(TestCase):
             detail, [self.category.id], download_media=True, media_client=client
         )
 
-        product = Product.objects.get(slug="digikala-12345")
+        product = Product.objects.get(slug="شارژر-تست")
         self.assertEqual(result["media_attached"], 2)
         self.assertEqual(File.objects.count(), 2)
         relations = list(
@@ -297,7 +327,7 @@ class DigikalaImportServiceTests(TestCase):
             detail, [self.category.id], download_media=True, media_client=client
         )
 
-        product = Product.objects.get(slug="digikala-12345")
+        product = Product.objects.get(slug="شارژر-تست")
         self.assertEqual(result["media_attached"], 0)
         self.assertEqual(File.objects.count(), 2)
         self.assertEqual(ProductFile.objects.filter(product=product).count(), 2)
@@ -313,7 +343,7 @@ class DigikalaImportServiceTests(TestCase):
             detail, [self.category.id], download_media=True, media_client=client
         )
 
-        product = Product.objects.get(slug="digikala-12345")
+        product = Product.objects.get(slug="شارژر-تست")
         self.assertEqual(result["status"], "created")
         self.assertEqual(result["media_attached"], 1)
         self.assertTrue(

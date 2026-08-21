@@ -29,6 +29,7 @@ from domains.catalog.services.product_service import ProductService
 from domains.catalog.services.variant_attribute_service import VariantAttributeService
 from domains.files.models import File
 from domains.files.services import FileService
+from domains.importing.models import ExternalProductIdentity
 
 
 class DigikalaImportService:
@@ -565,24 +566,40 @@ class DigikalaImportService:
         )
         if not name:
             raise self.Error("The product has no usable title.")
-        description = self._sanitize_display_text(detail.get("description"))
-        slug = self.source_slug(source_id)
-        product = Product.objects.select_for_update().filter(slug=slug).first()
+        identity = (
+            ExternalProductIdentity.objects.select_for_update()
+            .select_related("product")
+            .filter(provider=self.SOURCE_PREFIX, external_id=str(source_id))
+            .first()
+        )
+        product = identity.product if identity else None
+        if product is None:
+            product = Product.objects.select_for_update().filter(
+                slug=self.source_slug(source_id)
+            ).first()
+            if product is not None:
+                ExternalProductIdentity.objects.create(
+                    provider=self.SOURCE_PREFIX,
+                    external_id=str(source_id),
+                    product=product,
+                )
         created = product is None
         if created:
             product = self.product_service.create_product(
                 name=name,
                 brand=brand,
-                description=description,
+                description="",
             )
-            product.slug = slug
-            product.save(update_fields=["slug"])
+            ExternalProductIdentity.objects.create(
+                provider=self.SOURCE_PREFIX,
+                external_id=str(source_id),
+                product=product,
+            )
         else:
             self.product_service.update_product(
                 product,
                 name=name,
                 brand=brand,
-                description=description,
             )
         previous_primary_id = self.product_service._primary_category_id(product)
         current_categories = list(product.categories.all())
