@@ -561,6 +561,8 @@ class DigikalaImportService:
         if not categories:
             raise self.Error("At least one local category is required.")
         brand = self._resolve_brand(detail.get("brand"), warnings)
+        if brand:
+            self.brand_service.ensure_categories(brand, categories)
         name = self._limited(detail.get("title_fa"), 250) or self._limited(
             detail.get("title_en"), 250
         )

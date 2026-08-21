@@ -130,15 +130,27 @@ class ProductStatusSerializer(serializers.ModelSerializer):
 
 
 class BrandSerializer(serializers.ModelSerializer):
+    categories = serializers.SerializerMethodField()
+
+    @staticmethod
+    def get_categories(brand):
+        return [
+            {"id": category.id, "name": category.name, "fa_name": category.fa_name}
+            for category in brand.categories.all()
+        ]
+
     class Meta:
         model = Brand
-        fields = ["id", "name", "fa_name", "slug"]
+        fields = ["id", "name", "fa_name", "slug", "categories"]
 
 
 class BrandWriteSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=150)
     fa_name = serializers.CharField(
         max_length=150, required=False, allow_blank=True, allow_null=True
+    )
+    category_ids = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all(), many=True, required=False
     )
 
 

@@ -3,7 +3,7 @@ from django.db.models.deletion import ProtectedError
 from django.utils.translation import gettext as _
 
 from core.services.base import BaseService
-from domains.catalog.models import Brand
+from domains.catalog.models import Brand, BrandCategory
 
 
 class BrandService(BaseService):
@@ -33,17 +33,20 @@ class BrandService(BaseService):
         return normalized_name
 
     @transaction.atomic
-    def create_brand(self, *, name, fa_name=None):
+    def create_brand(self, *, name, fa_name=None, category_ids=None):
         name = self._validate_name(name)
         try:
-            return self._create(name=name, fa_name=fa_name)
+            brand = self._create(name=name, fa_name=fa_name)
+            self.replace_categories(brand, category_ids or [])
+            return brand
         except IntegrityError as exc:
             raise self.ValidationError(
                 {"name": [_("A brand with this name already exists.")]}
             ) from exc
 
     @transaction.atomic
-    def update_brand(self, instance, *, name, fa_name=None):
+    def update_brand(self, instance, *, name=None, fa_name=None, category_ids=None):
+        name = name if name is not None else instance.name
         name = self._validate_name(name, instance)
         instance.name = name
         instance.fa_name = fa_name
@@ -54,7 +57,24 @@ class BrandService(BaseService):
             raise self.ValidationError(
                 {"name": [_("A brand with this name already exists.")]}
             ) from exc
+        if category_ids is not None:
+            self.replace_categories(instance, category_ids)
         return instance
+
+    @staticmethod
+    def replace_categories(brand, categories):
+        BrandCategory.objects.filter(brand=brand).delete()
+        BrandCategory.objects.bulk_create(
+            [BrandCategory(brand=brand, category=category) for category in categories],
+            ignore_conflicts=True,
+        )
+
+    @staticmethod
+    def ensure_categories(brand, categories):
+        BrandCategory.objects.bulk_create(
+            [BrandCategory(brand=brand, category=category) for category in categories],
+            ignore_conflicts=True,
+        )
 
     def delete_brand(self, instance):
         try:
@@ -73,7 +93,7 @@ class BrandService(BaseService):
             "name": "name",
             "fa_name": "fa_name",
         }
-        queryset = self.model.objects.filter(**filters)
+        queryset = self.model.objects.prefetch_related("categories").filter(**filters)
         descending = ordering and ordering.startswith("-")
         requested = ordering.lstrip("-") if ordering else "name"
         field = ordering_map.get(requested, "name")

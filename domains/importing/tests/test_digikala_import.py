@@ -134,6 +134,10 @@ class DigikalaImportServiceTests(TestCase):
         self.assertEqual(product.status.name, "pending")
         self.assertEqual(product.brand.name, "Test Brand")
         self.assertEqual(product.brand.fa_name, "برند تست")
+        self.assertEqual(
+            list(product.brand.categories.values_list("id", flat=True)),
+            [self.category.id],
+        )
         self.assertEqual(product.description, "")
         self.assertTrue(
             ExternalProductIdentity.objects.filter(

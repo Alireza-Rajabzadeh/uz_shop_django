@@ -1,4 +1,4 @@
-from .brand import Brand
+from .brand import Brand, BrandCategory
 from .category import Category, CategoryStatus
 from .category_detail import CategoryDetail, CategoryDetailOption
 from .category_detail_relation import CategoryDetailRelation

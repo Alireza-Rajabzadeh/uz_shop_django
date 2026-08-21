@@ -25,6 +25,12 @@ class Brand(models.Model):
     name = models.CharField(max_length=150)
     fa_name = models.CharField(max_length=150, blank=True, null=True)
     slug = models.SlugField(max_length=150, unique=True, editable=False)
+    categories = models.ManyToManyField(
+        "Category",
+        through="BrandCategory",
+        related_name="brands",
+        blank=True,
+    )
 
     def __str__(self):
         return self.name
@@ -39,3 +45,25 @@ class Brand(models.Model):
                 suffix += 1
             self.slug = candidate
         super().save(*args, **kwargs)
+
+
+class BrandCategory(models.Model):
+    brand = models.ForeignKey(
+        Brand,
+        on_delete=models.CASCADE,
+        related_name="category_assignments",
+    )
+    category = models.ForeignKey(
+        "Category",
+        on_delete=models.CASCADE,
+        related_name="brand_assignments",
+    )
+
+    class Meta:
+        db_table = "catalog_brand_category"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["brand", "category"],
+                name="catalog_brand_category_unique",
+            ),
+        ]

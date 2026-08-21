@@ -1,6 +1,6 @@
 from django.contrib import admin
 from unfold.admin import ModelAdmin
-from .models.brand import Brand
+from .models.brand import Brand, BrandCategory
 from .models.category import Category, CategoryStatus
 from .models.category_detail import CategoryDetail, CategoryDetailOption
 from .models.category_detail_relation import CategoryDetailRelation
@@ -17,10 +17,17 @@ from .models.variant_attribute import (
 from .services.detail_service import DetailService
 
 
+class BrandCategoryInline(admin.TabularInline):
+    model = BrandCategory
+    extra = 1
+    autocomplete_fields = ["category"]
+
+
 @admin.register(Brand)
 class BrandAdmin(ModelAdmin):
     list_display = ["name", "fa_name"]
     search_fields = ["name", "fa_name"]
+    inlines = [BrandCategoryInline]
 
 
 class CategoryDetailRelationInline(admin.TabularInline):
