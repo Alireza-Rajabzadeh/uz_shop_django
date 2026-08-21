@@ -170,11 +170,59 @@
                 "description": "Link label."
               },
               "link": {
-                "type": "relative_link",
+                "type": "link",
                 "required": true,
-                "description": "Site-relative destination path starting with /."
+                "description": "Internal path, HTTP(S) URL, email, or telephone destination."
               }
             }
+          }
+        }
+      }
+    },
+    {
+      "key": "business_contact",
+      "name": "Business Contact",
+      "version": 1,
+      "description": "Displays public business contact details. Empty phone_keys preserves backend ordering; explicit keys use the selected key order.",
+      "props": {
+        "phone_keys": {
+          "type": "array",
+          "default": [],
+          "description": "Optional ordered public phone keys.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "show_email": {
+          "type": "boolean",
+          "default": true
+        },
+        "show_address": {
+          "type": "boolean",
+          "default": true
+        },
+        "show_working_hours": {
+          "type": "boolean",
+          "default": false
+        },
+        "show_availability": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    {
+      "key": "social_links",
+      "name": "Social Links",
+      "version": 1,
+      "description": "Displays public social links. Empty social_keys preserves backend ordering; explicit keys use the selected key order.",
+      "props": {
+        "social_keys": {
+          "type": "array",
+          "default": [],
+          "description": "Optional ordered public social-link keys.",
+          "items": {
+            "type": "string"
           }
         }
       }
