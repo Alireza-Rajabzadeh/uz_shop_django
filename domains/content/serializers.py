@@ -22,6 +22,7 @@ class LandingPageSerializer(serializers.ModelSerializer):
             "published_content",
             "status",
             "published_at",
+            "cache_ttl",
             "created_at",
             "updated_at",
         ]
@@ -74,6 +75,7 @@ class PageSerializer(serializers.ModelSerializer):
             "published_content",
             "status",
             "published_at",
+            "cache_ttl",
             "created_at",
             "updated_at",
         ]

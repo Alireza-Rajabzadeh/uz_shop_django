@@ -30,13 +30,27 @@ class CacheService:
             logger.warning("Discarding malformed cached JSON.", exc_info=True)
             return None
 
-    def put_public(self, key, data):
-        return self._put(self._cache_key(settings.CACHE_PUBLIC_PREFIX, key), data)
+    def get_public(self, key):
+        return self.get(self._cache_key(settings.CACHE_PUBLIC_PREFIX, key))
+
+    def put_public(self, key, data, ttl=None):
+        cache_key = self._cache_key(settings.CACHE_PUBLIC_PREFIX, key)
+        if ttl is None:
+            return self._put(cache_key, data)
+        return self._put(cache_key, data, ttl=ttl)
 
     def put_private(self, key, data):
         return self._put(self._cache_key(settings.CACHE_PRIVATE_PREFIX, key), data)
 
-    def _put(self, cache_key, data):
+    def delete_public(self, key):
+        try:
+            self.connection.delete(self._cache_key(settings.CACHE_PUBLIC_PREFIX, key))
+        except Exception:
+            logger.warning("Cache delete failed.", exc_info=True)
+            return False
+        return True
+
+    def _put(self, cache_key, data, ttl=None):
         value = json.dumps(
             data,
             cls=DjangoJSONEncoder,
@@ -45,7 +59,10 @@ class CacheService:
             separators=(",", ":"),
         )
         try:
-            self.connection.set(cache_key, value)
+            if ttl is not None and ttl > 0:
+                self.connection.set(cache_key, value, ex=ttl)
+            else:
+                self.connection.set(cache_key, value)
         except Exception:
             logger.warning("Cache write failed.", exc_info=True)
             return False

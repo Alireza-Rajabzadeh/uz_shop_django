@@ -15,6 +15,7 @@ class LandingPage(models.Model):
         max_length=16, choices=Status.choices, default=Status.DRAFT
     )
     published_at = models.DateTimeField(null=True, blank=True)
+    cache_ttl = models.PositiveIntegerField(default=300)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -40,6 +41,7 @@ class Page(models.Model):
         max_length=16, choices=Status.choices, default=Status.DRAFT
     )
     published_at = models.DateTimeField(null=True, blank=True)
+    cache_ttl = models.PositiveIntegerField(default=300)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

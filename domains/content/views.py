@@ -8,11 +8,13 @@ from rest_framework.views import APIView
 
 from core.permissions import AdminModelPermissions, CustomActionPermission
 from core.responses import api_response
+from core.services import CacheService
 from domains.catalog.models import Product
 from domains.catalog.services import CategoryService, ProductService
 from domains.users.auth import AdminJWTAuthentication
 
 from .contracts import CONTRACTS_FILE
+from .cache import HOME_CACHE_KEY, landing_page_cache_key, page_cache_key
 from .models import LandingPage, Page, SEORecord
 from .serializers import (
     LandingPageContentSerializer,
@@ -330,12 +332,26 @@ class PublicLandingPage(LandingPageBySlug):
     allowed_statuses = (LandingPage.Status.PUBLISHED,)
     content_field = "published_content"
 
+    def get(self, request, slug):
+        key = landing_page_cache_key(slug)
+        cached = CacheService().get_public(key)
+        if cached is not None:
+            return api_response(data=cached)
+        response = super().get(request, slug)
+        page = LandingPage.objects.only("cache_ttl").get(slug=slug)
+        if page.cache_ttl > 0:
+            CacheService().put_public(key, response.data["data"], ttl=page.cache_ttl)
+        return response
+
 
 class PublicHomePage(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
 
     def get(self, request):
+        cached = CacheService().get_public(HOME_CACHE_KEY)
+        if cached is not None:
+            return api_response(data=cached)
         try:
             page = PageService().get_home_page()
         except Page.DoesNotExist as exc:
@@ -345,7 +361,10 @@ class PublicHomePage(APIView):
             raise NotFound(_("Page not found."))
 
         page.selected_content = LandingPageContentResolver().resolve(page.published_content)
-        return api_response(data=PageContentSerializer(page).data)
+        data = PageContentSerializer(page).data
+        if page.cache_ttl > 0:
+            CacheService().put_public(HOME_CACHE_KEY, data, ttl=page.cache_ttl)
+        return api_response(data=data)
 
 
 class PageBySlug(APIView):
@@ -377,6 +396,17 @@ class PagePreview(PageBySlug):
 class PublicPage(PageBySlug):
     allowed_statuses = (Page.Status.PUBLISHED,)
     content_field = "published_content"
+
+    def get(self, request, slug):
+        key = page_cache_key(slug)
+        cached = CacheService().get_public(key)
+        if cached is not None:
+            return api_response(data=cached)
+        response = super().get(request, slug)
+        page = Page.objects.only("cache_ttl").get(slug=slug)
+        if page.cache_ttl > 0:
+            CacheService().put_public(key, response.data["data"], ttl=page.cache_ttl)
+        return response
 
 
 class AdminContentComponentContractList(AdminContentAPIView):

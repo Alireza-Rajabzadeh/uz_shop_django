@@ -35,6 +35,12 @@ class CacheServiceTests(SimpleTestCase):
 
         self.assertIsNone(result)
 
+    def test_public_read_uses_configured_prefix(self):
+        self.connection.get.return_value = b'{"ok":true}'
+
+        self.assertEqual(self.service.get_public("content:home"), {"ok": True})
+        self.connection.get.assert_called_once_with("public:content:home")
+
     def test_public_and_private_writes_use_configured_prefixes(self):
         self.assertTrue(self.service.put_public("categories", {"name": "کالا"}))
         self.assertTrue(self.service.put_private("some_cache", [1, 2]))
@@ -68,6 +74,19 @@ class CacheServiceTests(SimpleTestCase):
             result = self.service.put_public("categories", [])
 
         self.assertFalse(result)
+
+    def test_public_write_can_set_positive_ttl(self):
+        self.assertTrue(self.service.put_public("content:home", {}, ttl=300))
+
+        self.connection.set.assert_called_once_with("public:content:home", "{}", ex=300)
+
+    def test_public_delete_is_prefixed_and_fails_open(self):
+        self.assertTrue(self.service.delete_public("content:home"))
+        self.connection.delete.assert_called_once_with("public:content:home")
+
+        self.connection.delete.side_effect = ConnectionError("offline")
+        with self.assertLogs("core.services.cache", level="WARNING"):
+            self.assertFalse(self.service.delete_public("content:home"))
 
     def test_serialization_errors_are_not_hidden_as_redis_failures(self):
         with self.assertRaises(TypeError):
