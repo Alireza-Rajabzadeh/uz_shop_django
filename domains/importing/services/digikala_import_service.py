@@ -1,5 +1,6 @@
 import hashlib
 import json
+import re
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -36,6 +37,11 @@ class DigikalaImportService:
     SOURCE_PREFIX = "digikala"
     DEFAULT_ATTRIBUTE = "Variant"
     DEFAULT_OPTION = "Default"
+    SOURCE_LABEL_PATTERNS = (
+        re.compile(r"(?<![A-Za-z0-9])digi[\s_-]*kala(?![A-Za-z0-9])", re.IGNORECASE),
+        re.compile(r"(?<![A-Za-z0-9])dk(?![A-Za-z0-9])", re.IGNORECASE),
+        re.compile(r"دیجی[\s‌_-]*کالا"),
+    )
 
     class Error(Exception):
         pass
@@ -55,9 +61,17 @@ class DigikalaImportService:
     def _normalize(value):
         return " ".join(str(value or "").split())
 
+    @classmethod
+    def _sanitize_display_text(cls, value):
+        value = cls._normalize(value)
+        for pattern in cls.SOURCE_LABEL_PATTERNS:
+            value = pattern.sub(" ", value)
+        value = cls._normalize(value)
+        return value.strip(" -–—_|,:;،؛/\\()[]{}")
+
     @staticmethod
     def _limited(value, limit):
-        value = DigikalaImportService._normalize(value)
+        value = DigikalaImportService._sanitize_display_text(value)
         if len(value) <= limit:
             return value
         digest = hashlib.sha256(value.encode()).hexdigest()[:8]
@@ -187,7 +201,7 @@ class DigikalaImportService:
         if isinstance(value, list):
             parts = [DigikalaImportService._display_value(item) for item in value]
             return "، ".join(part for part in parts if part)
-        return DigikalaImportService._normalize(value)
+        return DigikalaImportService._sanitize_display_text(value)
 
     def _detail_items(self, detail, categories, warnings):
         items = []
@@ -245,10 +259,10 @@ class DigikalaImportService:
     def _named(value):
         if not isinstance(value, dict):
             return None
-        title_fa = DigikalaImportService._normalize(
+        title_fa = DigikalaImportService._sanitize_display_text(
             value.get("title_fa") or value.get("title") or value.get("name")
         )
-        title_en = DigikalaImportService._normalize(value.get("title_en"))
+        title_en = DigikalaImportService._sanitize_display_text(value.get("title_en"))
         if not title_fa and not title_en:
             return None
         info = DigikalaImportService._normalize(
@@ -267,7 +281,7 @@ class DigikalaImportService:
         for theme in variant.get("themes", []):
             if not isinstance(theme, dict):
                 continue
-            attribute_name = self._normalize(
+            attribute_name = self._sanitize_display_text(
                 theme.get("title")
                 or theme.get("name")
                 or theme.get("label")
@@ -286,7 +300,7 @@ class DigikalaImportService:
                 option = {
                     "id": None,
                     "code": None,
-                    "title_fa": self._normalize(raw_option),
+                    "title_fa": self._sanitize_display_text(raw_option),
                     "title_en": "",
                 }
             if attribute_name and option:
@@ -546,10 +560,12 @@ class DigikalaImportService:
         if not categories:
             raise self.Error("At least one local category is required.")
         brand = self._resolve_brand(detail.get("brand"), warnings)
-        name = self._limited(detail.get("title_fa") or detail.get("title_en"), 250)
+        name = self._limited(detail.get("title_fa"), 250) or self._limited(
+            detail.get("title_en"), 250
+        )
         if not name:
             raise self.Error("The product has no usable title.")
-        description = self._normalize(detail.get("description"))
+        description = self._sanitize_display_text(detail.get("description"))
         slug = self.source_slug(source_id)
         product = Product.objects.select_for_update().filter(slug=slug).first()
         created = product is None

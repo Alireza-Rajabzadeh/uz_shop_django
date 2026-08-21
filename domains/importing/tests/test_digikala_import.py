@@ -186,6 +186,60 @@ class DigikalaImportServiceTests(TestCase):
         self.assertEqual(Product.objects.count(), 1)
         self.assertEqual(ProductVariants.objects.count(), 1)
 
+    def test_import_removes_source_branding_from_business_text(self):
+        detail = self.detail(title="دیجی‌کالا شارژر DK")
+        detail["description"] = "Digikala - خرید شارژر از دیجی کالا"
+        detail["brand"] = {
+            "code": "digi-kala",
+            "title_fa": "دیجی کالا برند آریا",
+            "title_en": "DK Arya Brand",
+        }
+        detail["specifications"][0]["attributes"] = [
+            {
+                "title": "Digikala توان خروجی",
+                "values": ["DK 20 وات از دیجی‌کالا"],
+            }
+        ]
+        detail["variants"][0]["color"] = {
+            "id": 1,
+            "title_fa": "دیجی کالا مشکی",
+            "title_en": "DK Black",
+        }
+        detail["variants"] = detail["variants"][:1]
+
+        self.service.import_product(detail, [self.category.id])
+
+        product = Product.objects.get(slug="digikala-12345")
+        self.assertEqual(product.name, "شارژر")
+        self.assertEqual(product.description, "خرید شارژر از")
+        self.assertEqual(product.brand.name, "Arya Brand")
+        self.assertEqual(product.brand.fa_name, "برند آریا")
+        definition = CategoryDetail.objects.get(name="توان خروجی")
+        self.assertEqual(
+            ProductDetails.objects.get(product=product, detail=definition).value,
+            "20 وات از",
+        )
+        option = VariantOption.objects.get(variant_selections__variant__product=product)
+        self.assertEqual(option.name, "Black")
+        self.assertEqual(option.fa_name, "مشکی")
+
+    def test_source_brand_sanitizer_preserves_non_source_substrings(self):
+        self.assertEqual(
+            self.service._sanitize_display_text("DKNY DigiKala دیجی‌کالا"),
+            "DKNY",
+        )
+
+    def test_import_falls_back_to_english_title_after_sanitizing(self):
+        detail = self.detail(title="دیجی کالا")
+        detail["title_en"] = "Business Charger"
+
+        self.service.import_product(detail, [self.category.id])
+
+        self.assertEqual(
+            Product.objects.get(slug="digikala-12345").name,
+            "Business Charger",
+        )
+
     def test_import_without_media_download_keeps_source_urls_only(self):
         self.service.import_product(self.detail(), [self.category.id])
 
