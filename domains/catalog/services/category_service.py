@@ -2,6 +2,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils.translation import gettext as _
 from rapidfuzz import fuzz
+from urllib.parse import quote
 from core.services.base import BaseService
 from domains.catalog.models import (
     Category,
@@ -140,7 +141,7 @@ class CategoryService(BaseService):
                 "id": category.id,
                 "name": category.fa_name or category.name,
                 "icon": category.logo,
-                "link": f"/search?category={category.id}",
+                "link": f"/search/categories/{quote(category.slug, safe='')}",
             }
         return [items[id] for id in ids if id in items]
 
@@ -151,6 +152,7 @@ class CategoryService(BaseService):
                 "parent_id",
                 "name",
                 "fa_name",
+                "slug",
                 "logo",
                 "status__name",
             )
@@ -160,7 +162,8 @@ class CategoryService(BaseService):
                 "id": category["id"],
                 "name": category["fa_name"] or category["name"],
                 "icon": category["logo"],
-                "link": f"/search?category={category['id']}",
+                "slug": category["slug"],
+                "link": f"/search/categories/{quote(category['slug'], safe='')}",
                 "children": [],
             }
             for category in categories

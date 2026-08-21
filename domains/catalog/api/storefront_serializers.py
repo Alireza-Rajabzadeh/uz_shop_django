@@ -27,6 +27,7 @@ class StorefrontStaticCategorySerializer(serializers.Serializer):
     id = serializers.IntegerField()
     name = serializers.CharField()
     icon = serializers.CharField(allow_null=True, allow_blank=True)
+    slug = serializers.CharField()
     link = serializers.CharField()
     children = serializers.SerializerMethodField()
 
@@ -50,10 +51,10 @@ class FacetSelectionSerializer(serializers.Serializer):
 class StorefrontProductSearchQuerySerializer(serializers.Serializer):
     q = serializers.CharField(required=False, allow_blank=True, max_length=200, trim_whitespace=True)
     category_ids = serializers.ListField(
-        child=serializers.IntegerField(min_value=1), required=False, default=list
+        child=serializers.CharField(), required=False, default=list
     )
     brand_ids = serializers.ListField(
-        child=serializers.IntegerField(min_value=1), required=False, default=list
+        child=serializers.CharField(), required=False, default=list
     )
     detail_filters = FacetSelectionSerializer(many=True, required=False, default=list)
     variant_filters = FacetSelectionSerializer(many=True, required=False, default=list)
@@ -106,18 +107,38 @@ class StorefrontProductSearchQuerySerializer(serializers.Serializer):
                 raise serializers.ValidationError({
                     "price_max": "Maximum price must not be below minimum price."
                 })
-        self._validate_ids(Category, attrs["category_ids"], "category")
-        self._validate_ids(Brand, attrs["brand_ids"], "brand")
+        attrs["category_ids"] = self._resolve_ids(Category, attrs["category_ids"], "category")
+        attrs["brand_ids"] = self._resolve_ids(Brand, attrs["brand_ids"], "brand")
         self._validate_facet_options(attrs["detail_filters"], detail=True)
         self._validate_facet_options(attrs["variant_filters"], detail=False)
         return attrs
 
     @staticmethod
-    def _validate_ids(model, ids, field):
-        unique_ids = set(ids)
-        found = set(model.objects.filter(id__in=unique_ids).values_list("id", flat=True))
-        if found != unique_ids:
-            raise serializers.ValidationError({field: "One or more selected values do not exist."})
+    def _resolve_ids(model, tokens, field):
+        ids = []
+        slugs = []
+        for token in tokens:
+            value = str(token).strip()
+            if value.isdigit():
+                ids.append(int(value))
+            else:
+                slugs.append(value.lower())
+        if slugs:
+            resolved = dict(
+                model.objects.filter(slug__in=slugs).values_list("slug", "id")
+            )
+            for slug in slugs:
+                if slug not in resolved:
+                    raise serializers.ValidationError({
+                        field: "One or more selected values do not exist."
+                    })
+                ids.append(resolved[slug])
+        found = set(model.objects.filter(id__in=ids).values_list("id", flat=True))
+        if found != set(ids):
+            raise serializers.ValidationError({
+                field: "One or more selected values do not exist."
+            })
+        return ids
 
     @staticmethod
     def _validate_facet_options(selections, *, detail):

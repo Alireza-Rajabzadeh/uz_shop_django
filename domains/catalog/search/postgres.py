@@ -326,11 +326,15 @@ class PostgresProductSearchBackend:
             "slug": product.slug,
             "name": product.name,
             "category": (
-                {"id": primary_category.id, "name": primary_category.name}
+                {
+                    "id": primary_category.id,
+                    "slug": primary_category.slug,
+                    "name": primary_category.name,
+                }
                 if primary_category else None
             ),
             "brand": (
-                {"id": product.brand_id, "name": product.brand.name}
+                {"id": product.brand_id, "slug": product.brand.slug, "name": product.brand.name}
                 if product.brand_id else None
             ),
             "thumbnail_url": thumbnail_url,
@@ -386,6 +390,7 @@ class PostgresProductSearchBackend:
             "values": [
                 {
                     "id": category.id,
+                    "slug": category.slug,
                     "label": category.name,
                     "parent_id": category.parent_id,
                     "count": counts[category.id],
@@ -398,7 +403,7 @@ class PostgresProductSearchBackend:
 
     def _brand_facet(self, base, criteria):
         queryset = self._apply_filters(base, criteria, "brand").exclude(brand_id__isnull=True)
-        counts = queryset.order_by().values("brand_id", "brand__name").annotate(
+        counts = queryset.order_by().values("brand_id", "brand__name", "brand__slug").annotate(
             count=Count("id", distinct=True)
         ).order_by("brand__name")
         return {
@@ -406,6 +411,7 @@ class PostgresProductSearchBackend:
             "values": [
                 {
                     "id": row["brand_id"],
+                    "slug": row["brand__slug"],
                     "label": row["brand__name"],
                     "count": row["count"],
                     "selected": row["brand_id"] in criteria.brand_ids,

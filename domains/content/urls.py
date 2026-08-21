@@ -2,6 +2,8 @@ from django.urls import path
 
 from .views import (
     AdminCategoryOptionList,
+    AdminCategorySEO,
+    AdminBrandSEO,
     AdminContentComponentContractList,
     AdminLandingPageDetail,
     AdminLandingPageList,
@@ -18,6 +20,7 @@ from .views import (
     PublicHomePage,
     PublicLandingPage,
     PublicPage,
+    PublicResourceSEO,
 )
 
 urlpatterns = [
@@ -31,6 +34,8 @@ urlpatterns = [
     path("admin/pages/<int:page_id>/publish", AdminPagePublish.as_view()),
     path("admin/pages/<int:resource_id>/seo", AdminPageSEO.as_view()),
     path("admin/products/<int:resource_id>/seo", AdminProductSEO.as_view()),
+    path("admin/categories/<int:resource_id>/seo", AdminCategorySEO.as_view()),
+    path("admin/brands/<int:resource_id>/seo", AdminBrandSEO.as_view()),
     path("admin/component-contracts", AdminContentComponentContractList.as_view()),
     path("admin/options/products", AdminProductOptionList.as_view()),
     path("admin/options/categories", AdminCategoryOptionList.as_view()),
@@ -38,4 +43,5 @@ urlpatterns = [
     path("landing-pages/<str:slug>", PublicLandingPage.as_view()),
     path("pages/<str:slug>/preview", PagePreview.as_view()),
     path("pages/<str:slug>", PublicPage.as_view()),
+    path("seo/<str:resource_type>/<str:slug>", PublicResourceSEO.as_view()),
 ]

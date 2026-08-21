@@ -101,7 +101,7 @@ class CategoryListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Category
-        fields = ["id", "name", "fa_name", "parent", "parent_name", "status", "status_name", "logo"]
+        fields = ["id", "name", "fa_name", "slug", "parent", "parent_name", "status", "status_name", "logo"]
 
 
 class CategoryNameSuggestionQuerySerializer(serializers.Serializer):
@@ -132,7 +132,7 @@ class ProductStatusSerializer(serializers.ModelSerializer):
 class BrandSerializer(serializers.ModelSerializer):
     class Meta:
         model = Brand
-        fields = ["id", "name", "fa_name"]
+        fields = ["id", "name", "fa_name", "slug"]
 
 
 class BrandWriteSerializer(serializers.Serializer):

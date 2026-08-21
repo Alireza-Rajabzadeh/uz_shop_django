@@ -1,4 +1,5 @@
 from unittest.mock import patch
+from urllib.parse import quote
 
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
@@ -39,6 +40,7 @@ class StorefrontStaticDataTests(TestCase):
         self.assertEqual([category["id"] for category in categories], [root.id])
         self.assertEqual(categories[0]["name"], "الکترونیک")
         self.assertEqual(categories[0]["icon"], "cpu")
+        self.assertEqual(categories[0]["link"], f"/search/categories/{root.slug}")
         self.assertEqual(categories[0]["children"][0]["id"], child.id)
         self.assertEqual(
             categories[0]["children"][0]["children"][0]["name"],
@@ -58,6 +60,18 @@ class StorefrontStaticDataTests(TestCase):
             category.id,
         )
         cache_service.put_public.assert_called_once()
+
+    @patch("domains.catalog.api.static_data.cache_service")
+    def test_unicode_category_link_uses_quoted_slug_path(self, cache_service):
+        category = self.create_category("گوشی موبایل")
+
+        response = self.client.get("/api/catalog/statics", {"data": "categories"})
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(
+            response.data["data"]["categories"][0]["link"],
+            f"/search/categories/{quote(category.slug, safe='')}",
+        )
 
     @override_settings(DEBUG=False)
     @patch("domains.catalog.api.static_data.cache_service")

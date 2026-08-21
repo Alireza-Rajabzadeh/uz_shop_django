@@ -9,7 +9,7 @@ from rest_framework.views import APIView
 from core.permissions import AdminModelPermissions, CustomActionPermission
 from core.responses import api_response
 from core.services import CacheService
-from domains.catalog.models import Product
+from domains.catalog.models import Brand, Category, Product
 from domains.catalog.services import CategoryService, ProductService
 from domains.users.auth import AdminJWTAuthentication
 
@@ -29,6 +29,7 @@ from .services import (
     LandingPageContentResolver,
     LandingPageService,
     PageService,
+    SEOService,
 )
 
 
@@ -93,6 +94,22 @@ class ProductSEOPermission(ResourceSEOPermission):
         "PUT": ("catalog.change_product",),
         "PATCH": ("catalog.change_product",),
         "DELETE": ("catalog.change_product",),
+    }
+
+
+class CategorySEOPermission(ResourceSEOPermission):
+    resource_permissions = {
+        "GET": ("catalog.view_category",),
+        "PUT": ("catalog.change_category",),
+        "DELETE": ("catalog.change_category",),
+    }
+
+
+class BrandSEOPermission(ResourceSEOPermission):
+    resource_permissions = {
+        "GET": ("catalog.view_brand",),
+        "PUT": ("catalog.change_brand",),
+        "DELETE": ("catalog.change_brand",),
     }
 
 
@@ -279,6 +296,41 @@ class AdminProductSEO(AdminResourceSEOView):
             return Product.objects.get(id=resource_id)
         except Product.DoesNotExist as exc:
             raise NotFound(_("Product not found.")) from exc
+
+
+class AdminCategorySEO(AdminResourceSEOView):
+    permission_classes = [CategorySEOPermission]
+    resource_type = "category"
+
+    @staticmethod
+    def get_resource(resource_id):
+        try:
+            return Category.objects.get(id=resource_id)
+        except Category.DoesNotExist as exc:
+            raise NotFound(_("Category not found.")) from exc
+
+
+class AdminBrandSEO(AdminResourceSEOView):
+    permission_classes = [BrandSEOPermission]
+    resource_type = "brand"
+
+    @staticmethod
+    def get_resource(resource_id):
+        try:
+            return Brand.objects.get(id=resource_id)
+        except Brand.DoesNotExist as exc:
+            raise NotFound(_("Brand not found.")) from exc
+
+
+class PublicResourceSEO(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request, resource_type, slug):
+        payload = SEOService.get_public_resource(resource_type, slug)
+        if payload is None:
+            raise NotFound(_("SEO resource not found."))
+        return api_response(data=payload)
 
 
 class PageSEOPermission(ResourceSEOPermission):
