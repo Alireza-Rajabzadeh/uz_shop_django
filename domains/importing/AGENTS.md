@@ -10,7 +10,6 @@ Do not rewrite existing imported rows without an explicit data-migration request
 
 ## Deferred Work
 
-- Replace source-prefixed option codes for newly created options.
 - Generate neutral variant SKUs for new imports, including when legacy source-prefixed options are reused.
 - Use neutral imported filenames and remove provider names and source URLs from exposed file metadata.
 - Add private normalized-URL fingerprints with dual-read compatibility for legacy media deduplication.

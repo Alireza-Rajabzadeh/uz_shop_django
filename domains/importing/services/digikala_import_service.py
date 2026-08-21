@@ -403,7 +403,7 @@ class DigikalaImportService:
                 option.get("title_fa"),
             )
         )
-        return "DK" + hashlib.sha256(identity.encode()).hexdigest()[:14].upper()
+        return "OP" + hashlib.sha256(identity.encode()).hexdigest()[:14].upper()
 
     def _resolve_attribute(self, name):
         name = self._limited(name, 100)

@@ -161,6 +161,8 @@ class DigikalaImportServiceTests(TestCase):
         option = VariantOption.objects.get(variant_selections__variant=variant)
         self.assertEqual(option.name, "Black")
         self.assertEqual(option.fa_name, "مشکی")
+        self.assertTrue(option.sku_code.startswith("OP"))
+        self.assertNotIn("DK", option.sku_code)
         self.assertTrue(
             CategoryVariantAttribute.objects.filter(
                 category=self.category, attribute=option.attribute
