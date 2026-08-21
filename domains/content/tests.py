@@ -22,7 +22,16 @@ class ContractFileInvariantTests(APITestCase):
         keys = [component["key"] for component in payload["components"]]
         self.assertEqual(
             sorted(keys),
-            ["category_grid", "link_list", "product_slider", "rich_text", "small_banner"],
+            [
+                "business_contact",
+                "category_grid",
+                "hero_slider",
+                "link_list",
+                "product_slider",
+                "rich_text",
+                "small_banner",
+                "social_links",
+            ],
         )
 
     def test_small_banner_image_prop_carries_ratio_metadata(self):
@@ -36,6 +45,18 @@ class ContractFileInvariantTests(APITestCase):
         self.assertEqual(image["type"], "image")
         self.assertEqual(image["ratio"], "4:3")
         self.assertEqual((image["width"], image["height"]), (640, 480))
+
+    def test_hero_slider_requires_wide_image_dimensions(self):
+        payload = load_content_contracts()
+        hero_slider = next(
+            component
+            for component in payload["components"]
+            if component["key"] == "hero_slider"
+        )
+        image = hero_slider["props"]["slides"]["items"]["properties"]["image"]
+        self.assertEqual(image["ratio"], "8:3")
+        self.assertEqual((image["width"], image["height"]), (1920, 720))
+        self.assertTrue(image["enforce_dimensions"])
 
 
 class ContractsPayloadValidationTests(APITestCase):

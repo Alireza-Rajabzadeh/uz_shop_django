@@ -2,6 +2,63 @@
   "contract_version": 3,
   "components": [
     {
+      "key": "hero_slider",
+      "name": "Hero Banner Slider",
+      "version": 1,
+      "description": "A prominent wide banner slider designed for the first section of a page.",
+      "props": {
+        "slides": {
+          "type": "array",
+          "required": true,
+          "min_items": 1,
+          "max_items": 8,
+          "description": "Hero banners. Place this component first for the strongest visual impact.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "image": {
+                "type": "image",
+                "required": true,
+                "ratio": "8:3",
+                "width": 1920,
+                "height": 720,
+                "enforce_dimensions": true,
+                "description": "Banner image. Must be 1920 x 720 pixels (8:3)."
+              },
+              "title": {
+                "type": "string",
+                "required": true,
+                "description": "Main banner heading."
+              },
+              "subtitle": {
+                "type": "string",
+                "description": "Short supporting text."
+              },
+              "link": {
+                "type": "link",
+                "description": "Optional destination URL."
+              },
+              "buttonLabel": {
+                "type": "string",
+                "default": "مشاهده",
+                "description": "Call-to-action label."
+              }
+            }
+          }
+        },
+        "autoplay": {
+          "type": "boolean",
+          "default": true,
+          "description": "Advance slides automatically."
+        },
+        "autoplayDelay": {
+          "type": "number",
+          "default": 6000,
+          "description": "Delay in milliseconds (3000-15000)."
+        }
+      }
+    },
+    {
       "key": "product_slider",
       "name": "Product Slider",
       "version": 1,

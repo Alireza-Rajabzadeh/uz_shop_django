@@ -89,7 +89,7 @@ def _validate_prop(definition, location):
             f"{location} uses unsupported contract type {value_type!r}."
         )
 
-    optional_booleans = {"required"}
+    optional_booleans = {"required", "enforce_dimensions"}
     optional_numbers = {"min_items", "max_items"}
     optional_strings = {"description", "ratio"}
     optional_positive_numbers = {"width", "height"}
