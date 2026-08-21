@@ -82,7 +82,7 @@ class ProductService(BaseService):
     @staticmethod
     def _brand_options():
         return list(
-            Brand.objects.order_by("name", "id").values("id", "name", "fa_name")
+            Brand.objects.order_by("name", "id").values("id", "name", "fa_name", "slug")
         )
 
     @staticmethod

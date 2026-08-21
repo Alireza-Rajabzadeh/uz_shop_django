@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from .contracts import empty_draft_content, validate_draft_content
 from .models import LandingPage, Page, SEORecord
-from .services import LandingPageContentResolver
+from .services import LandingPageContentResolver, SEOService
 
 
 class LandingPageSerializer(serializers.ModelSerializer):
@@ -31,10 +31,11 @@ class LandingPageSerializer(serializers.ModelSerializer):
 
 class LandingPageContentSerializer(serializers.ModelSerializer):
     content = serializers.SerializerMethodField()
+    seo = serializers.SerializerMethodField()
 
     class Meta:
         model = LandingPage
-        fields = ["id", "title", "slug", "status", "content"]
+        fields = ["id", "title", "slug", "status", "content", "seo"]
 
     @staticmethod
     def _normalize_content(content):
@@ -46,6 +47,9 @@ class LandingPageContentSerializer(serializers.ModelSerializer):
 
     def get_content(self, page):
         return self._normalize_content(getattr(page, "selected_content", None))
+
+    def get_seo(self, page):
+        return SEOService.get_for("landing_page", page.id)
 
 
 class LandingPageDetailSerializer(LandingPageSerializer):
@@ -84,15 +88,19 @@ class PageSerializer(serializers.ModelSerializer):
 
 class PageContentSerializer(serializers.ModelSerializer):
     content = serializers.SerializerMethodField()
+    seo = serializers.SerializerMethodField()
 
     class Meta:
         model = Page
-        fields = ["id", "title", "slug", "status", "content"]
+        fields = ["id", "title", "slug", "status", "content", "seo"]
 
     def get_content(self, page):
         return LandingPageContentSerializer._normalize_content(
             getattr(page, "selected_content", None)
         )
+
+    def get_seo(self, page):
+        return SEOService.get_for("page", page.id)
 
 
 class PageDetailSerializer(PageSerializer):

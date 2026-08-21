@@ -114,6 +114,7 @@ class CategoryNameSuggestionSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     name = serializers.CharField()
     fa_name = serializers.CharField(allow_null=True)
+    slug = serializers.CharField()
     parent = serializers.IntegerField(allow_null=True)
     parent_name = serializers.CharField(allow_null=True)
     status = serializers.IntegerField()
@@ -163,6 +164,7 @@ class BrandNameSuggestionSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     name = serializers.CharField()
     fa_name = serializers.CharField(allow_null=True)
+    slug = serializers.CharField()
     similarity = serializers.IntegerField(read_only=True)
     exact = serializers.BooleanField(read_only=True)
 
@@ -227,11 +229,14 @@ class VariantAttributeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = VariantAttribute
-        fields = ["id", "name", "options"]
+        fields = ["id", "name", "fa_name", "options"]
 
 
 class VariantAttributeWriteSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=100)
+    fa_name = serializers.CharField(
+        max_length=100, required=False, allow_blank=True, allow_null=True
+    )
 
 
 class VariantOptionWriteSerializer(serializers.Serializer):

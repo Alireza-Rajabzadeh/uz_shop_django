@@ -2,6 +2,7 @@ from django.contrib.auth.models import Permission, User
 from rest_framework import serializers
 from rest_framework.test import APITestCase
 
+from core.services import CacheService
 from domains.catalog.models import Category, CategoryStatus, Product, ProductStatus
 
 from .contracts import (
@@ -171,7 +172,7 @@ class DraftContentValidationTests(APITestCase):
         with self.assertRaises(serializers.ValidationError):
             validate_draft_content(content)
 
-    def test_relative_link_must_start_with_slash(self):
+    def test_link_accepts_internal_and_external_destinations(self):
         def content_with_link(link):
             return {
                 "schema_version": 1,
@@ -186,13 +187,10 @@ class DraftContentValidationTests(APITestCase):
                 ],
             }
 
-        valid = content_with_link("/about")
-        self.assertEqual(validate_draft_content(valid), valid)
-
-        for bad in ("about", "https://example.com/about", ""):
-            with self.subTest(link=bad):
-                with self.assertRaises(serializers.ValidationError):
-                    validate_draft_content(content_with_link(bad))
+        for link in ("/about", "https://example.com/about", "mailto:info@example.com"):
+            with self.subTest(link=link):
+                content = content_with_link(link)
+                self.assertEqual(validate_draft_content(content), content)
 
 
 class ContentAdminAPITests(APITestCase):
@@ -726,6 +724,47 @@ class LandingPageDeliveryAPITests(APITestCase):
             404,
         )
 
+    def test_public_landing_page_includes_its_seo_record(self):
+        page = LandingPage.objects.create(
+            title="Published",
+            slug="seo-page",
+            status=LandingPage.Status.PUBLISHED,
+            published_content=self.published_content,
+        )
+        SEORecord.objects.create(
+            resource_type="landing_page",
+            resource_id=page.id,
+            title="SEO Landing",
+            description="SEO description",
+            canonical_url="https://example.com/seo-page",
+            index=True,
+            follow=False,
+        )
+
+        response = self.client.get(f"/api/content/landing-pages/{page.slug}")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        seo = response.data["data"]["seo"]
+        self.assertEqual(seo["title"], "SEO Landing")
+        self.assertEqual(seo["description"], "SEO description")
+        self.assertEqual(seo["canonical_url"], "https://example.com/seo-page")
+        self.assertIsNone(seo["image_id"])
+        self.assertTrue(seo["index"])
+        self.assertFalse(seo["follow"])
+
+    def test_public_landing_page_returns_null_seo_without_record(self):
+        page = LandingPage.objects.create(
+            title="Published",
+            slug="no-seo-page",
+            status=LandingPage.Status.PUBLISHED,
+            published_content=self.published_content,
+        )
+
+        response = self.client.get(f"/api/content/landing-pages/{page.slug}")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertIsNone(response.data["data"]["seo"])
+
     def test_missing_slug_returns_not_found(self):
         response = self.client.get("/api/content/landing-pages/missing/preview")
 
@@ -998,6 +1037,7 @@ class PageSEORecordAPITests(APITestCase):
 
 class PageDeliveryAPITests(APITestCase):
     def setUp(self):
+        CacheService().delete_public("content:home")
         self.content = {
             "schema_version": 1,
             "contract_version": 3,
@@ -1053,6 +1093,63 @@ class PageDeliveryAPITests(APITestCase):
             self.client.get("/api/content/pages/draft").status_code,
             404,
         )
+
+    def test_public_page_includes_its_seo_record(self):
+        page = Page.objects.create(
+            title="About Us",
+            slug="about-us",
+            status=Page.Status.PUBLISHED,
+            published_content=self.content,
+        )
+        SEORecord.objects.create(
+            resource_type="page",
+            resource_id=page.id,
+            title="SEO About",
+            description="SEO description",
+            metadata={"og_type": "website"},
+        )
+
+        response = self.client.get(f"/api/content/pages/{page.slug}")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        seo = response.data["data"]["seo"]
+        self.assertEqual(seo["title"], "SEO About")
+        self.assertEqual(seo["metadata"], {"og_type": "website"})
+        self.assertIsNone(seo["canonical_url"])
+
+    def test_home_includes_its_seo_record(self):
+        home = Page.objects.create(
+            title="Home",
+            slug=PageService.HOME_SLUG,
+            status=Page.Status.PUBLISHED,
+            published_content=self.content,
+        )
+        SEORecord.objects.create(
+            resource_type="page",
+            resource_id=home.id,
+            title="Home SEO",
+            description="Home description",
+        )
+
+        response = self.client.get("/api/content/home")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        seo = response.data["data"]["seo"]
+        self.assertEqual(seo["title"], "Home SEO")
+        self.assertEqual(seo["description"], "Home description")
+
+    def test_home_returns_null_seo_without_record(self):
+        Page.objects.create(
+            title="Home",
+            slug=PageService.HOME_SLUG,
+            status=Page.Status.PUBLISHED,
+            published_content=self.content,
+        )
+
+        response = self.client.get("/api/content/home")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertIsNone(response.data["data"]["seo"])
 
     def test_home_returns_published_home_page_content(self):
         Page.objects.create(

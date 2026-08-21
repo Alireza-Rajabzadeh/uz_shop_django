@@ -79,22 +79,27 @@ class VariantAttributeService:
             }) from exc
 
     @transaction.atomic
-    def create_attribute(self, *, name):
+    def create_attribute(self, *, name, fa_name=None):
         name = self.normalize_name(name)
         try:
             with transaction.atomic():
-                return VariantAttribute.objects.create(name=name)
+                return VariantAttribute.objects.create(
+                    name=name,
+                    fa_name=self.normalize_name(fa_name) if fa_name else None,
+                )
         except IntegrityError as exc:
             raise self.ValidationError({
                 "name": [_('A variant attribute with this name already exists.')]
             }) from exc
 
     @transaction.atomic
-    def update_attribute(self, instance, *, name):
+    def update_attribute(self, instance, *, name, fa_name=None):
         instance.name = self.normalize_name(name)
+        if fa_name is not None:
+            instance.fa_name = self.normalize_name(fa_name) if fa_name else None
         try:
             with transaction.atomic():
-                instance.save(update_fields=["name"])
+                instance.save(update_fields=["name", "fa_name"])
         except IntegrityError as exc:
             raise self.ValidationError({
                 "name": [_('A variant attribute with this name already exists.')]

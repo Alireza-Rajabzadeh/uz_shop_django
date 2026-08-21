@@ -26,13 +26,28 @@ class StorefrontProductService:
             "description": product.description or "",
             "details": self._detail_payload(product.storefront_details),
             "variants": [self._variant_payload(variant) for variant in product.storefront_variants],
+            "similar_products": self._similar_products(product),
+            "suggested_products": self._suggestion_products(product),
+            "seo": self._seo_payload(product),
         })
         return payload
+
+    def _seo_payload(self, product):
+        from domains.content.services import SEOService
+        return SEOService.get_for("product", product.id)
 
     def get_content_items(self, ids):
         if not ids:
             return []
 
+        products = self._content_queryset().filter(
+            id__in=set(ids),
+            status__name__iexact="active",
+        )
+        items = self._content_items(products)
+        return [items[item_id] for item_id in ids if item_id in items]
+
+    def _content_queryset(self):
         media = ProductFile.objects.filter(
             file__file_type="image",
             file__status__name="available",
@@ -41,9 +56,8 @@ class StorefrontProductService:
         variants = self.inventory_service.annotate_variant_summaries(
             ProductVariants.objects.select_related("inventory_strategy")
         ).prefetch_related("selections__attribute", "selections__option").order_by("id")
-        products = (
-            Product.objects.filter(id__in=set(ids), status__name__iexact="active")
-            .select_related("brand")
+        return (
+            Product.objects.select_related("brand")
             .prefetch_related(
                 "categories__status",
                 Prefetch("product_files", queryset=media, to_attr="storefront_media"),
@@ -51,8 +65,9 @@ class StorefrontProductService:
             )
         )
 
+    def _content_items(self, queryset):
         items = {}
-        for product in products:
+        for product in queryset:
             category = self._primary_category(product)
             if category is None or category.status.name.casefold() != "active":
                 continue
@@ -65,11 +80,43 @@ class StorefrontProductService:
                 "id": payload["id"],
                 "slug": payload["slug"],
                 "name": payload["name"],
+                "category": payload["category"],
+                "brand": payload["brand"],
                 "thumbnail_url": payload["thumbnail_url"],
                 "pricing": payload["pricing"],
                 "availability": payload["availability"],
             }
-        return [items[id] for id in ids if id in items]
+        return items
+
+    def _similar_products(self, product, limit=15):
+        category_ids = list(product.categories.values_list("id", flat=True))
+        if not category_ids:
+            return []
+        queryset = (
+            self._content_queryset()
+            .filter(
+                categories__in=category_ids,
+                status__name__iexact="active",
+            )
+            .exclude(pk=product.pk)
+            .distinct()
+            .order_by("id")
+        )[:limit]
+        return list(self._content_items(queryset).values())
+
+    def _suggestion_products(self, product, limit=15):
+        queryset = (
+            self._content_queryset()
+            .filter(
+                status__name__iexact="active",
+                variants__discount_type__isnull=False,
+                variants__discount_value__gt=0,
+            )
+            .exclude(pk=product.pk)
+            .distinct()
+            .order_by("id")
+        )[:limit]
+        return list(self._content_items(queryset).values())
 
     def _get_product(self, slug):
         media = ProductFile.objects.filter(
@@ -133,11 +180,15 @@ class StorefrontProductService:
             "slug": product.slug,
             "name": product.name,
             "category": (
-                {"id": primary_category.id, "name": primary_category.name}
+                {
+                    "id": primary_category.id,
+                    "slug": primary_category.slug,
+                    "name": primary_category.name,
+                }
                 if primary_category else None
             ),
             "brand": (
-                {"id": product.brand_id, "name": product.brand.name}
+                {"id": product.brand_id, "slug": product.brand.slug, "name": product.brand.name}
                 if product.brand_id else None
             ),
             "media": media,
@@ -206,6 +257,7 @@ class StorefrontProductService:
                 attribute["values"][selection.option_id] = {
                     "option_id": selection.option_id,
                     "label": selection.option.name,
+                    "extra": selection.option.info or None,
                 }
         return [
             {**attribute, "values": list(attribute["values"].values())}

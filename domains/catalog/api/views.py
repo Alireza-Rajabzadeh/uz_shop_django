@@ -149,6 +149,7 @@ class CategoryNameSuggestions(APIView):
                 "id": category.id,
                 "name": category.name,
                 "fa_name": category.fa_name,
+                "slug": category.slug,
                 "parent": category.parent_id,
                 "parent_name": category.parent.name if category.parent else None,
                 "status": category.status_id,
@@ -361,6 +362,7 @@ class BrandNameSuggestions(APIView):
                 "id": brand.id,
                 "name": brand.name,
                 "fa_name": brand.fa_name,
+                "slug": brand.slug,
                 "similarity": score,
                 "exact": exact,
             }
@@ -416,7 +418,9 @@ class VariantAttributeDetail(APIView):
         serializer.is_valid(raise_exception=True)
         try:
             attribute = variant_attribute_service.update_attribute(
-                attribute, name=serializer.validated_data.get("name", attribute.name)
+                attribute,
+                name=serializer.validated_data.get("name", attribute.name),
+                fa_name=serializer.validated_data.get("fa_name"),
             )
         except VariantAttributeService.ValidationError as exc:
             raise ValidationError(exc.errors) from exc

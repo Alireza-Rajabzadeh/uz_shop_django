@@ -158,6 +158,88 @@ class StorefrontProductSearchTests(TestCase):
         self.assertEqual(detail.data["data"]["variants"][0]["id"], variant.id)
         self.assertEqual(detail.data["data"]["variants"][0]["effective_price"], 90)
 
+    def test_detail_returns_similar_products_from_shared_category(self):
+        target = self.create_product("Samsung Galaxy A55", self.samsung)
+        same_category = self.create_product("Samsung Galaxy S24", self.samsung)
+        other_category = Category.objects.create(name="Home Appliances", status=self.category_status)
+        other_product = Product.objects.create(name="Fridge", status=self.product_status)
+        other_product.categories.add(other_category)
+
+        self.create_variant(target, "blue", "100.00", [self.blue])
+        self.create_variant(same_category, "black", "200.00", [self.black])
+        self.create_variant(other_product, "blue", "50.00", [self.blue])
+
+        response = self.client.get(f"/api/catalog/storefront/products/{target.slug}")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        similar_ids = [item["id"] for item in response.data["data"]["similar_products"]]
+        self.assertIn(same_category.id, similar_ids)
+        self.assertNotIn(target.id, similar_ids)
+        self.assertNotIn(other_product.id, similar_ids)
+
+    def test_similar_products_are_capped_at_fifteen(self):
+        target = self.create_product("Samsung Galaxy A55", self.samsung)
+        for index in range(16):
+            sibling = self.create_product(f"Sibling {index}", self.samsung)
+            self.create_variant(sibling, f"s{index}", "10.00", [self.blue])
+
+        response = self.client.get(f"/api/catalog/storefront/products/{target.slug}")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertLessEqual(len(response.data["data"]["similar_products"]), 15)
+
+    def test_detail_returns_discounted_products_as_suggestions(self):
+        on_sale = self.create_product("Samsung On Sale", self.samsung)
+        regular = self.create_product("Samsung Regular", self.samsung)
+        self.create_variant(
+            on_sale,
+            "blue",
+            "100.00",
+            [self.blue],
+            discount_type="percentage",
+            discount_value="10.00",
+        )
+        self.create_variant(regular, "black", "90.00", [self.black])
+
+        response = self.client.get(f"/api/catalog/storefront/products/{regular.slug}")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        suggestion_ids = [item["id"] for item in response.data["data"]["suggested_products"]]
+        self.assertIn(on_sale.id, suggestion_ids)
+        self.assertNotIn(regular.id, suggestion_ids)
+
+    def test_detail_includes_product_seo_record(self):
+        from domains.content.models import SEORecord
+
+        product = self.create_product("Samsung Galaxy A55", self.samsung)
+        self.create_variant(product, "blue", "100.00", [self.blue])
+        SEORecord.objects.create(
+            resource_type="product",
+            resource_id=product.id,
+            title="Buy Samsung Galaxy A55",
+            description="Product SEO description",
+            canonical_url="https://example.com/products/samsung-galaxy-a55",
+        )
+
+        response = self.client.get(f"/api/catalog/storefront/products/{product.slug}")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        seo = response.data["data"]["seo"]
+        self.assertEqual(seo["title"], "Buy Samsung Galaxy A55")
+        self.assertEqual(seo["description"], "Product SEO description")
+        self.assertEqual(
+            seo["canonical_url"], "https://example.com/products/samsung-galaxy-a55"
+        )
+
+    def test_detail_returns_null_seo_without_record(self):
+        product = self.create_product("Samsung Galaxy A55", self.samsung)
+        self.create_variant(product, "blue", "100.00", [self.blue])
+
+        response = self.client.get(f"/api/catalog/storefront/products/{product.slug}")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertIsNone(response.data["data"]["seo"])
+
     def test_search_normalizes_persian_and_arabic_characters(self):
         product = self.create_product("گوشي سامسونگ", self.samsung)
         self.create_variant(product, "fa", "100.00", [self.blue])
@@ -223,6 +305,77 @@ class StorefrontProductSearchTests(TestCase):
         self.assertEqual([item["id"] for item in results], [exact.id, loose.id])
         self.assertTrue(results[0]["variant_match"]["exact_combination"])
         self.assertFalse(results[1]["variant_match"]["exact_combination"])
+
+    def test_search_filters_by_category_slug_including_descendants(self):
+        child = Category.objects.create(
+            name="Smartphones",
+            status=self.category_status,
+            parent=self.category,
+        )
+        root_product = self.create_product("Root Phone", self.samsung)
+        child_product = self.create_product("Child Phone", self.samsung)
+        child_product.categories.add(child)
+        self.create_variant(root_product, "root", "100.00", [self.blue])
+        self.create_variant(child_product, "child", "110.00", [self.black])
+
+        response = self.client.get(
+            "/api/catalog/storefront/products",
+            {"category": self.category.slug},
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        ids = {item["id"] for item in response.data["data"]["results"]}
+        self.assertEqual(ids, {root_product.id, child_product.id})
+
+    def test_search_filters_by_brand_slug(self):
+        samsung = self.create_product("Samsung Galaxy A55", self.samsung)
+        xiaomi = self.create_product("Xiaomi A55", self.xiaomi)
+        self.create_variant(samsung, "s", "100.00", [self.blue])
+        self.create_variant(xiaomi, "x", "90.00", [self.black])
+
+        response = self.client.get(
+            "/api/catalog/storefront/products",
+            {"brand": self.samsung.slug},
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(
+            [item["id"] for item in response.data["data"]["results"]],
+            [samsung.id],
+        )
+
+    def test_search_mixes_category_ids_and_slugs(self):
+        product = self.create_product("Mixed Filter Phone", self.samsung)
+        self.create_variant(product, "mixed", "100.00", [self.blue])
+
+        response = self.client.get(
+            "/api/catalog/storefront/products",
+            {"category": [str(self.category.id), self.category.slug]},
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(
+            [item["id"] for item in response.data["data"]["results"]],
+            [product.id],
+        )
+
+    def test_search_rejects_unknown_category_slug(self):
+        response = self.client.get(
+            "/api/catalog/storefront/products",
+            {"category": "does-not-exist"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("category", response.data["errors"])
+
+    def test_search_rejects_unknown_brand_slug(self):
+        response = self.client.get(
+            "/api/catalog/storefront/products",
+            {"brand": "does-not-exist"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("brand", response.data["errors"])
 
     def test_rejects_an_option_attached_to_the_wrong_dynamic_filter(self):
         other_detail = CategoryDetail.objects.create(

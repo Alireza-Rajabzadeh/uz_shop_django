@@ -25,8 +25,9 @@ class BrandCategoryInline(admin.TabularInline):
 
 @admin.register(Brand)
 class BrandAdmin(ModelAdmin):
-    list_display = ["name", "fa_name"]
+    list_display = ["name", "slug", "fa_name"]
     search_fields = ["name", "fa_name"]
+    readonly_fields = ["slug"]
     inlines = [BrandCategoryInline]
 
 
@@ -44,9 +45,10 @@ class CategoryVariantAttributeInline(admin.TabularInline):
 
 @admin.register(Category)
 class CategoryAdmin(ModelAdmin):
-    list_display = ["name", "fa_name", "parent", "status"]
+    list_display = ["name", "slug", "fa_name", "parent", "status"]
     list_filter = ["status"]
     search_fields = ["name", "fa_name"]
+    readonly_fields = ["slug"]
     inlines = [CategoryDetailRelationInline, CategoryVariantAttributeInline]
 
 
@@ -171,8 +173,8 @@ class VariantOptionInline(admin.TabularInline):
 
 @admin.register(VariantAttribute)
 class VariantAttributeAdmin(ModelAdmin):
-    list_display = ["name"]
-    search_fields = ["name"]
+    list_display = ["name", "fa_name"]
+    search_fields = ["name", "fa_name"]
     inlines = [VariantOptionInline]
 
 
