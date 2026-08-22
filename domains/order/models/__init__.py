@@ -4,6 +4,7 @@ from .order_item import OrderItem
 from .order_reservation import OrderItemReservation
 from .order_action import OrderAction, OrderStatusAction
 from .order_history import OrderHistory
+from .return_request import ReturnRequest, ReturnRequestEvidence, ReturnRequestItem
 
 __all__ = [
     "OrderStatus",
@@ -13,4 +14,7 @@ __all__ = [
     "OrderAction",
     "OrderStatusAction",
     "OrderHistory",
+    "ReturnRequest",
+    "ReturnRequestItem",
+    "ReturnRequestEvidence",
 ]

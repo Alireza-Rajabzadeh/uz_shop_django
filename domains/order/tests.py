@@ -1,9 +1,11 @@
+import json
 from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
 from django.contrib.auth.models import Permission, User
 from django.db import IntegrityError, transaction
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.utils import timezone
 
@@ -27,7 +29,15 @@ from domains.inventory.models import (
     WarehouseStock,
 )
 from domains.location.models import City, Country, State
-from domains.order.models import Order, OrderHistory, OrderItem, OrderStatus
+from domains.order.models import (
+    Order,
+    OrderHistory,
+    OrderItem,
+    OrderStatus,
+    ReturnRequest,
+    ReturnRequestEvidence,
+    ReturnRequestItem,
+)
 from domains.payments.models import (
     Payment,
     PaymentChannel,
@@ -225,6 +235,63 @@ class OrderAdminAPITests(APITestCase):
             [action["code"] for action in data["available_actions"]],
             ["cancel"],
         )
+
+    def test_admin_return_detail_and_list_summary_require_return_view_permission(self):
+        return_request = ReturnRequest.objects.create(
+            order=self.order,
+            customer=self.customer,
+            reason="Damaged",
+            refund_destination_type="card",
+            refund_destination_value="6037991234567890",
+            admin_note="Internal only",
+            customer_response="Please send the package.",
+        )
+
+        detail = self.client.get(f"/api/order/admin/orders/{self.order.id}")
+        listing = self.client.get("/api/order/admin/orders")
+
+        returned = detail.data["data"]["return_requests"][0]
+        self.assertEqual(returned["id"], return_request.id)
+        self.assertEqual(returned["admin_note"], "Internal only")
+        self.assertEqual(returned["customer_response"], "Please send the package.")
+        self.assertEqual(returned["refund_destination_masked"], "****7890")
+        self.assertEqual(returned["available_actions"], ["approve", "reject"])
+        self.assertEqual(
+            listing.data["data"]["results"][0]["return_summary"],
+            {"count": 1, "open_count": 1, "latest_status": "requested"},
+        )
+
+        staff = User.objects.create_user(username="order-viewer", is_staff=True)
+        staff.user_permissions.add(Permission.objects.get(codename="view_order"))
+        self.client.force_authenticate(staff)
+        detail = self.client.get(f"/api/order/admin/orders/{self.order.id}")
+        listing = self.client.get("/api/order/admin/orders")
+        self.assertNotIn("return_requests", detail.data["data"])
+        self.assertNotIn("return_summary", listing.data["data"]["results"][0])
+
+    def test_admin_return_action_requires_change_return_permission(self):
+        return_request = ReturnRequest.objects.create(
+            order=self.order,
+            customer=self.customer,
+            reason="Damaged",
+            refund_destination_type="card",
+            refund_destination_value="6037991234567890",
+        )
+        staff = User.objects.create_user(username="return-viewer", is_staff=True)
+        staff.user_permissions.add(
+            Permission.objects.get(codename="view_returnrequest")
+        )
+        self.client.force_authenticate(staff)
+
+        response = self.client.post(
+            f"/api/order/admin/orders/{self.order.id}/returns/{return_request.id}/actions/approve",
+            {},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        return_request.refresh_from_db()
+        self.assertEqual(return_request.status, ReturnRequest.Status.REQUESTED)
 
     def test_admin_detail_missing_is_404(self):
         response = self.client.get("/api/order/admin/orders/999999")
@@ -948,3 +1015,379 @@ class OrderAPITests(APITestCase):
         self.assertEqual([o.id for o in expired], [order_id])
         order.refresh_from_db()
         self.assertEqual(order.status.name, "payment_expired")
+
+    def create_delivered_order(self, quantity=3):
+        product = self.make_product()
+        variant = self.make_normal_variant(product)
+        self.add_to_cart(variant, quantity=quantity)
+        order_id = self.checkout().data["data"]["id"]
+        order = Order.objects.get(id=order_id)
+        order.status = OrderStatus.objects.get(name="delivered")
+        order.save(update_fields=["status"])
+        OrderHistory.objects.create(
+            order=order,
+            action=OrderAction.objects.get(code="deliver"),
+            before_values={"status_id": OrderStatus.objects.get(name="shipped").id},
+            after_values={"status_id": order.status_id},
+        )
+        return order, order.items.get()
+
+    def return_payload(self, order, order_item, quantity=1):
+        return {
+            "order_id": order.id,
+            "reason": "Damaged product",
+            "customer_note": "The box was crushed.",
+            "refund_destination_type": "card",
+            "refund_destination_value": "6037991234567890",
+            "items": [{
+                "order_item_id": order_item.id,
+                "quantity": quantity,
+                "reason": "Visible damage",
+            }],
+        }
+
+    def test_customer_can_create_return_without_changing_order(self):
+        order, order_item = self.create_delivered_order(quantity=3)
+        detail = self.client.get(f"/api/order/{order.id}")
+
+        self.assertIn(
+            "request_return",
+            [action["code"] for action in detail.data["data"]["available_actions"]],
+        )
+
+        response = self.client.post(
+            "/api/order/returns",
+            self.return_payload(order, order_item, quantity=2),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["data"]["status"], "requested")
+        self.assertEqual(response.data["data"]["items"][0]["quantity"], 2)
+        self.assertEqual(response.data["data"]["refund_destination_type"], "card")
+        self.assertEqual(response.data["data"]["refund_destination_masked"], "****7890")
+        self.assertNotIn("refund_destination_value", response.data["data"])
+        self.assertNotIn("admin_note", response.data["data"])
+        self.assertIn("customer_response", response.data["data"])
+        order.refresh_from_db()
+        order_item.refresh_from_db()
+        self.assertEqual(order.status.name, "delivered")
+        self.assertEqual(order_item.quantity, 3)
+
+    @patch("domains.files.services.file_service.FileService._storage")
+    def test_customer_can_create_multipart_return_with_ordered_evidence(self, storage):
+        storage.return_value.save.side_effect = lambda key, uploaded: key
+        storage.return_value.url.side_effect = lambda key: f"https://files.example/{key}"
+        order, order_item = self.create_delivered_order()
+        payload = self.return_payload(order, order_item)
+        payload["items"] = json.dumps(payload["items"])
+        payload["images"] = [
+            SimpleUploadedFile("first.jpg", b"first", content_type="image/jpeg"),
+            SimpleUploadedFile("second.webp", b"second", content_type="image/webp"),
+        ]
+
+        response = self.client.post("/api/order/returns", payload, format="multipart")
+
+        self.assertEqual(response.status_code, 201, response.data)
+        evidence = response.data["data"]["evidence"]
+        self.assertEqual([item["position"] for item in evidence], [0, 1])
+        self.assertEqual([item["original_name"] for item in evidence], ["first.jpg", "second.webp"])
+        self.assertTrue(evidence[0]["url"].startswith("https://files.example/orders/"))
+        self.assertEqual(ReturnRequestEvidence.objects.count(), 2)
+
+    def test_return_rejects_too_many_or_invalid_images(self):
+        order, order_item = self.create_delivered_order()
+        payload = self.return_payload(order, order_item)
+        payload["items"] = json.dumps(payload["items"])
+        payload["images"] = [
+            SimpleUploadedFile(f"{index}.gif", b"image", content_type="image/gif")
+            for index in range(6)
+        ]
+
+        response = self.client.post("/api/order/returns", payload, format="multipart")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(ReturnRequest.objects.exists())
+
+    def test_customer_order_suggests_successful_payment_source_not_channel(self):
+        order, _ = self.create_delivered_order()
+        payment = Payment.objects.create(
+            order=order,
+            payment_method=self.card_to_card,
+            payment_channel=self.card_channel,
+            amount=order.total_amount,
+            status=Payment.Status.SUCCESSFUL,
+            resource_account_number="6037991234567890",
+        )
+        order.successful_payment = payment
+        order.save(update_fields=["successful_payment"])
+
+        response = self.client.get(f"/api/order/{order.id}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data["data"]["refund_destination_suggestion"],
+            {"type": "card", "value": "6037991234567890"},
+        )
+        self.assertNotEqual(
+            response.data["data"]["refund_destination_suggestion"]["value"],
+            self.card_channel.card_number,
+        )
+
+    def test_return_requires_delivered_order(self):
+        product = self.make_product()
+        variant = self.make_normal_variant(product)
+        self.add_to_cart(variant)
+        order = Order.objects.get(id=self.checkout().data["data"]["id"])
+
+        response = self.client.post(
+            "/api/order/returns",
+            self.return_payload(order, order.items.get()),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(ReturnRequest.objects.exists())
+
+    def test_expired_return_window_hides_action_and_rejects_create(self):
+        order, order_item = self.create_delivered_order()
+        delivered = order.history.get(action__code="deliver")
+        OrderHistory.objects.filter(id=delivered.id).update(
+            created_at=timezone.now() - timedelta(days=3, seconds=1)
+        )
+
+        detail = self.client.get(f"/api/order/{order.id}")
+        create = self.client.post(
+            "/api/order/returns",
+            self.return_payload(order, order_item),
+            format="json",
+        )
+
+        self.assertNotIn(
+            "request_return",
+            [action["code"] for action in detail.data["data"]["available_actions"]],
+        )
+        self.assertEqual(create.status_code, 400)
+
+    def test_order_detail_includes_return_request_state(self):
+        order, order_item = self.create_delivered_order()
+        created = self.client.post(
+            "/api/order/returns",
+            self.return_payload(order, order_item),
+            format="json",
+        ).data["data"]
+
+        detail = self.client.get(f"/api/order/{order.id}")
+
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(detail.data["data"]["return_requests"][0]["id"], created["id"])
+        self.assertEqual(detail.data["data"]["return_requests"][0]["status"], "requested")
+
+    def test_admin_processes_return_without_mutating_order_or_item(self):
+        order, order_item = self.create_delivered_order(quantity=3)
+        created = self.client.post(
+            "/api/order/returns",
+            self.return_payload(order, order_item, quantity=2),
+            format="json",
+        ).data["data"]
+        return_request = ReturnRequest.objects.get(id=created["id"])
+        ReturnRequest.objects.filter(id=return_request.id).update(
+            admin_note="Preserve me"
+        )
+        original_order_status = order.status_id
+        original_item_quantity = order_item.quantity
+        admin = User.objects.create_superuser("return-admin", password="password")
+        self.client.force_authenticate(admin)
+        url = (
+            f"/api/order/admin/orders/{order.id}/returns/{return_request.id}/actions"
+        )
+
+        approve = self.client.post(
+            f"{url}/approve", {"customer_response": "Return accepted."}, format="json"
+        )
+        invalid_status = self.client.post(f"{url}/complete", {}, format="json")
+        invalid_action = self.client.post(f"{url}/unknown", {}, format="json")
+        received = self.client.post(
+            f"{url}/received", {"admin_note": None}, format="json"
+        )
+        completed = self.client.post(f"{url}/complete", {}, format="json")
+
+        self.assertEqual(approve.status_code, 200, approve.data)
+        self.assertEqual(invalid_status.status_code, 400)
+        self.assertEqual(invalid_action.status_code, 400)
+        self.assertEqual(received.status_code, 200, received.data)
+        self.assertEqual(completed.status_code, 200, completed.data)
+        return_request.refresh_from_db()
+        order.refresh_from_db()
+        order_item.refresh_from_db()
+        self.assertEqual(return_request.status, ReturnRequest.Status.COMPLETED)
+        self.assertIsNotNone(return_request.approved_at)
+        self.assertIsNotNone(return_request.received_at)
+        self.assertIsNotNone(return_request.completed_at)
+        self.assertIsNone(return_request.admin_note)
+        self.assertEqual(return_request.customer_response, "Return accepted.")
+        self.assertEqual(order.status_id, original_order_status)
+        self.assertEqual(order_item.quantity, original_item_quantity)
+        self.assertFalse(
+            OrderHistory.objects.filter(order=order).exclude(action__code="deliver").exists()
+        )
+
+        self.client.force_authenticate(self.customer)
+        customer_detail = self.client.get(f"/api/order/{order.id}").data["data"]
+        customer_return = customer_detail["return_requests"][0]
+        self.assertNotIn("admin_note", customer_return)
+        self.assertEqual(customer_return["customer_response"], "Return accepted.")
+
+    def test_active_return_blocks_another_request_until_processed(self):
+        order, order_item = self.create_delivered_order(quantity=3)
+        first = self.client.post(
+            "/api/order/returns",
+            self.return_payload(order, order_item),
+            format="json",
+        )
+
+        detail_while_active = self.client.get(f"/api/order/{order.id}")
+        second = self.client.post(
+            "/api/order/returns",
+            self.return_payload(order, order_item),
+            format="json",
+        )
+
+        self.assertEqual(first.status_code, 201)
+        self.assertNotIn(
+            "request_return",
+            [
+                action["code"]
+                for action in detail_while_active.data["data"]["available_actions"]
+            ],
+        )
+        self.assertEqual(second.status_code, 400)
+
+        ReturnRequest.objects.filter(id=first.data["data"]["id"]).update(
+            status=ReturnRequest.Status.COMPLETED,
+            completed_at=timezone.now(),
+        )
+        detail_after_completion = self.client.get(f"/api/order/{order.id}")
+
+        self.assertIn(
+            "request_return",
+            [
+                action["code"]
+                for action in detail_after_completion.data["data"]["available_actions"]
+            ],
+        )
+
+    def test_generic_return_action_does_not_change_order_status(self):
+        order, _ = self.create_delivered_order()
+
+        response = self.client.post(f"/api/order/{order.id}/actions/request_return")
+
+        self.assertEqual(response.status_code, 400)
+        order.refresh_from_db()
+        self.assertEqual(order.status.name, "delivered")
+
+    def test_return_rejects_item_from_another_order_atomically(self):
+        order, order_item = self.create_delivered_order()
+        other_order, other_item = self.create_delivered_order()
+        payload = self.return_payload(order, order_item)
+        payload["items"].append({"order_item_id": other_item.id, "quantity": 1})
+
+        response = self.client.post("/api/order/returns", payload, format="json")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(ReturnRequest.objects.exists())
+        self.assertNotEqual(order.id, other_order.id)
+
+    def test_return_rejects_duplicate_items(self):
+        order, order_item = self.create_delivered_order()
+        payload = self.return_payload(order, order_item)
+        payload["items"].append({"order_item_id": order_item.id, "quantity": 1})
+
+        response = self.client.post("/api/order/returns", payload, format="json")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(ReturnRequest.objects.exists())
+
+    def test_active_and_completed_returns_reduce_available_quantity(self):
+        order, order_item = self.create_delivered_order(quantity=5)
+        for status, quantity in (("approved", 2), ("completed", 2)):
+            existing = ReturnRequest.objects.create(
+                order=order,
+                customer=self.customer,
+                status=status,
+                reason="Existing return",
+            )
+            ReturnRequestItem.objects.create(
+                return_request=existing,
+                order_item=order_item,
+                quantity=quantity,
+            )
+
+        rejected = self.client.post(
+            "/api/order/returns",
+            self.return_payload(order, order_item, quantity=2),
+            format="json",
+        )
+        ReturnRequest.objects.filter(status="approved").update(
+            status="completed",
+            completed_at=timezone.now(),
+        )
+        accepted = self.client.post(
+            "/api/order/returns",
+            self.return_payload(order, order_item, quantity=1),
+            format="json",
+        )
+
+        self.assertEqual(rejected.status_code, 400)
+        self.assertEqual(accepted.status_code, 201)
+
+    def test_rejected_and_cancelled_returns_do_not_reduce_quantity(self):
+        order, order_item = self.create_delivered_order(quantity=2)
+        for status in ("rejected", "cancelled"):
+            existing = ReturnRequest.objects.create(
+                order=order,
+                customer=self.customer,
+                status=status,
+                reason="Inactive return",
+            )
+            ReturnRequestItem.objects.create(
+                return_request=existing,
+                order_item=order_item,
+                quantity=2,
+            )
+
+        response = self.client.post(
+            "/api/order/returns",
+            self.return_payload(order, order_item, quantity=2),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+
+    def test_return_list_and_detail_are_customer_scoped(self):
+        order, order_item = self.create_delivered_order()
+        created = self.client.post(
+            "/api/order/returns",
+            self.return_payload(order, order_item),
+            format="json",
+        ).data["data"]
+        other_customer = Customer.objects.create_user(
+            phone="09120000302",
+            password="password",
+            customer_code="CUS-ORDER-002",
+            status=self.active,
+        )
+        self.client.force_authenticate(other_customer)
+
+        listing = self.client.get("/api/order/returns")
+        detail = self.client.get(f"/api/order/returns/{created['id']}")
+        foreign_create = self.client.post(
+            "/api/order/returns",
+            self.return_payload(order, order_item),
+            format="json",
+        )
+
+        self.assertEqual(listing.status_code, 200)
+        self.assertEqual(listing.data["data"]["count"], 0)
+        self.assertEqual(detail.status_code, 404)
+        self.assertEqual(foreign_create.status_code, 404)

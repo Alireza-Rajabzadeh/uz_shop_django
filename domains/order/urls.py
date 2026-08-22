@@ -6,6 +6,7 @@ from .admin_views import (
     AdminOrderExecuteAction,
     AdminOrderList,
     AdminOrderStatusList,
+    AdminReturnAction,
 )
 from .views import (
     OrderCancelView,
@@ -15,6 +16,8 @@ from .views import (
     OrderListCreateView,
     OrderPaymentMethodsView,
     OrderExecuteActionView,
+    ReturnRequestDetailView,
+    ReturnRequestListCreateView,
 )
 
 urlpatterns = [
@@ -23,11 +26,17 @@ urlpatterns = [
     path("admin/orders/<int:order_id>", AdminOrderDetail.as_view()),
     path("admin/orders/<int:order_id>/actions", AdminOrderActions.as_view()),
     path(
+        "admin/orders/<int:order_id>/returns/<int:return_request_id>/actions/<str:action_code>",
+        AdminReturnAction.as_view(),
+    ),
+    path(
         "admin/orders/<int:order_id>/actions/<str:action_code>",
         AdminOrderExecuteAction.as_view(),
     ),
     path("admin/statuses", AdminOrderStatusList.as_view()),
     path("payment-methods", OrderPaymentMethodsView.as_view()),
+    path("returns", ReturnRequestListCreateView.as_view()),
+    path("returns/<int:return_request_id>", ReturnRequestDetailView.as_view()),
     path("<int:order_id>", OrderDetailView.as_view()),
     path("<int:order_id>/pay", OrderConfirmPaymentView.as_view()),
     path("<int:order_id>/actions", OrderActionsView.as_view()),

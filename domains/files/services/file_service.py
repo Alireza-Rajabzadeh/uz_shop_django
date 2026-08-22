@@ -193,6 +193,7 @@ class FileService:
                 locked_file.product_files.all().delete()
                 locked_file.payment_channel_logos.update(logo_file=None)
                 locked_file.payment_method_icons.update(icon_file=None)
+                locked_file.return_request_evidence.all().delete()
                 locked_file.status = self._status(self.STATUS_DELETED)
                 locked_file.deleted_at = locked_file.deleted_at or timezone.now()
                 locked_file.save(update_fields=["status", "deleted_at", "updated_at"])
@@ -252,6 +253,7 @@ class FileService:
             payment_channel_logos__isnull=True,
             payment_method_icons__isnull=True,
             payment_documents__isnull=True,
+            return_request_evidence__isnull=True,
         )
 
     @transaction.atomic

@@ -1,5 +1,6 @@
 from django.utils.translation import gettext as _
 from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.views import APIView
 
 from core.permissions import IsCustomer
@@ -7,7 +8,8 @@ from core.responses import api_response
 from domains.payments.serializers import ConfirmPaymentSerializer
 from domains.payments.services import PaymentService
 
-from .services import OrderService
+from .serializers import ReturnRequestCreateSerializer, ReturnRequestSerializer
+from .services import OrderService, ReturnRequestService
 
 
 def _map_errors(exc):
@@ -128,3 +130,52 @@ class OrderCancelView(APIView):
             _("Order cancelled."),
             OrderService()._customer_order_payload(order),
         )
+
+
+class ReturnRequestListCreateView(APIView):
+    permission_classes = [IsCustomer]
+
+    def get(self, request):
+        queryset = ReturnRequestService().list(request.user)
+        paginator = PageNumberPagination()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        data = {
+            "count": paginator.page.paginator.count,
+            "next": paginator.get_next_link(),
+            "previous": paginator.get_previous_link(),
+            "results": ReturnRequestSerializer(page, many=True).data,
+        }
+        return api_response(data=data)
+
+    def post(self, request):
+        serializer = ReturnRequestCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            return_request = ReturnRequestService().create(
+                request.user,
+                **serializer.validated_data,
+            )
+        except ReturnRequestService.NotFoundError as exc:
+            raise NotFound(str(exc)) from exc
+        except ReturnRequestService.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
+        return api_response(
+            True,
+            _("Return request created."),
+            ReturnRequestSerializer(return_request).data,
+            status_code=201,
+        )
+
+
+class ReturnRequestDetailView(APIView):
+    permission_classes = [IsCustomer]
+
+    def get(self, request, return_request_id):
+        try:
+            return_request = ReturnRequestService().get(
+                request.user,
+                return_request_id,
+            )
+        except ReturnRequestService.NotFoundError as exc:
+            raise NotFound(str(exc)) from exc
+        return api_response(data=ReturnRequestSerializer(return_request).data)

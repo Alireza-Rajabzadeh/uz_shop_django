@@ -194,7 +194,7 @@ ORDER_ACTIONS = {
     4: ("pack", "Pack order", "بسته‌بندی سفارش", True, False, 240),
     5: ("ship", "Ship order", "ارسال سفارش", True, False, 310),
     6: ("deliver", "Deliver order", "تحویل سفارش", True, False, 300),
-    7: ("request_return", "Request return", "درخواست مرجوعی", False, True, 410),
+    7: ("request_return", "Request return", "درخواست مرجوعی", False, True, None),
     8: ("approve_return", "Approve return", "تأیید مرجوعی", True, False, 430),
     9: ("reject_return", "Reject return", "رد مرجوعی", True, False, 440),
     10: ("process_refund", "Process refund", "پردازش بازپرداخت", True, False, 620),

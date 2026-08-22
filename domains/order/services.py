@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import F, Q as models_Q
+from django.db.models import F, Q as models_Q, Sum
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
@@ -20,6 +20,9 @@ from .models import (
     OrderHistory,
     OrderStatus,
     OrderStatusAction,
+    ReturnRequest,
+    ReturnRequestEvidence,
+    ReturnRequestItem,
 )
 
 
@@ -267,7 +270,34 @@ class OrderService:
     def get_order(self, customer, order_id):
         order = self._get_customer_order(customer, order_id)
         self._expire_if_stale(order)
-        return self._customer_order_payload(order)
+        payload = self._customer_order_payload(order)
+        payload["return_requests"] = [
+            {
+                "id": request.id,
+                "status": request.status,
+                "reason": request.reason,
+                "customer_note": request.customer_note,
+                "customer_response": request.customer_response,
+                "refund_destination_type": request.refund_destination_type,
+                "refund_destination_masked": f"****{request.refund_destination_value[-4:]}",
+                "requested_at": request.requested_at.isoformat(),
+                "approved_at": request.approved_at.isoformat() if request.approved_at else None,
+                "received_at": request.received_at.isoformat() if request.received_at else None,
+                "completed_at": request.completed_at.isoformat() if request.completed_at else None,
+                "items": [
+                    {
+                        "order_item_id": item.order_item_id,
+                        "quantity": item.quantity,
+                        "reason": item.reason,
+                    }
+                    for item in request.items.all()
+                ],
+            }
+            for request in ReturnRequest.objects.filter(
+                order=order, customer=customer
+            ).prefetch_related("items").order_by("-requested_at", "-id")
+        ]
+        return payload
 
     def list_orders(self, customer):
         orders = list(
@@ -283,10 +313,12 @@ class OrderService:
         self.expire_lazy(orders)
         return [self._customer_order_payload(order) for order in orders]
 
-    def list_orders_admin(self, **filters):
+    def list_orders_admin(self, *, include_returns=False, **filters):
         queryset = Order.objects.select_related("status", "customer").prefetch_related(
             "status__status_actions__order_action"
         )
+        if include_returns:
+            queryset = queryset.prefetch_related("return_requests")
         status = filters.get("status")
         if status:
             queryset = queryset.filter(status__name=status)
@@ -309,13 +341,13 @@ class OrderService:
         else:
             queryset = queryset.order_by("-created_at", "id")
         return [
-            self._admin_order_row(order)
+            self._admin_order_row(order, include_returns=include_returns)
             for order in queryset
         ]
 
-    def _admin_order_row(self, order):
+    def _admin_order_row(self, order, *, include_returns=False):
         customer = order.customer
-        return {
+        payload = {
             "id": order.id,
             "customer": {
                 "id": customer.id,
@@ -342,8 +374,23 @@ class OrderService:
             ),
             "created_at": order.created_at.isoformat(),
         }
+        if include_returns:
+            returns = sorted(
+                order.return_requests.all(),
+                key=lambda item: (item.requested_at, item.id),
+                reverse=True,
+            )
+            payload["return_summary"] = {
+                "count": len(returns),
+                "open_count": sum(
+                    request.status in ReturnRequestService.ACTIVE_STATUSES
+                    for request in returns
+                ),
+                "latest_status": returns[0].status if returns else None,
+            }
+        return payload
 
-    def get_order_admin(self, order_id):
+    def get_order_admin(self, order_id, *, include_returns=True):
         try:
             order = (
                 Order.objects.select_related("status", "customer")
@@ -362,6 +409,8 @@ class OrderService:
             order, actor="admin"
         )
         payload["customer"] = self._admin_order_row(order)["customer"]
+        if include_returns:
+            payload["return_requests"] = ReturnRequestService().admin_payloads(order)
         payload["history"] = [
             {
                 "id": entry.id,
@@ -483,7 +532,12 @@ class OrderService:
             order_status=order.status,
             **{f"order_action__{actor}": True},
         ).select_related("order_action", "order_action__set_status")
-        return [self._action_payload(assignment) for assignment in assignments]
+        return [
+            self._action_payload(assignment)
+            for assignment in assignments
+            if assignment.order_action.code != "request_return"
+            or ReturnRequestService.is_eligible(order)
+        ]
 
     @transaction.atomic
     def execute_action(self, order_id, action_code, *, actor, customer=None, admin=None):
@@ -514,6 +568,10 @@ class OrderService:
                 "action": [_('This action is not available for the current order status.')]
             })
         action = assignment.order_action
+        if action.code == "request_return":
+            raise self.ValidationError({
+                "action": [_('Create a return request through the returns endpoint.')]
+            })
         if not getattr(action, actor):
             raise self.ValidationError({
                 "action": [_('This actor is not allowed to execute the action.')]
@@ -591,6 +649,10 @@ class OrderService:
             }
             for assignment in order.status.status_actions.all()
             if getattr(assignment.order_action, actor)
+            and (
+                assignment.order_action.code != "request_return"
+                or ReturnRequestService.is_eligible(order)
+            )
         ]
 
     def _customer_order_payload(self, order):
@@ -603,6 +665,19 @@ class OrderService:
         }
         payload["available_actions"] = self._status_actions_payload(
             order, actor="customer"
+        )
+        account_number = (
+            order.successful_payment.resource_account_number
+            if order.successful_payment is not None
+            else None
+        )
+        payload["refund_destination_suggestion"] = (
+            {
+                "type": "card" if account_number.isdigit() and len(account_number) == 16 else "account",
+                "value": account_number,
+            }
+            if account_number
+            else None
         )
         return payload
 
@@ -708,3 +783,269 @@ class OrderService:
             return FileService().url(file)
         except FileService.Error:
             return None
+
+
+class ReturnRequestService:
+    class ValidationError(Exception):
+        def __init__(self, errors):
+            self.errors = errors
+            super().__init__(str(errors))
+
+    class NotFoundError(Exception):
+        pass
+
+    COUNTED_STATUSES = (
+        ReturnRequest.Status.REQUESTED,
+        ReturnRequest.Status.APPROVED,
+        ReturnRequest.Status.RECEIVED,
+        ReturnRequest.Status.COMPLETED,
+    )
+    ACTIVE_STATUSES = (
+        ReturnRequest.Status.REQUESTED,
+        ReturnRequest.Status.APPROVED,
+        ReturnRequest.Status.RECEIVED,
+    )
+    RETURN_WINDOW = timedelta(days=3)
+    ACTION_TRANSITIONS = {
+        "approve": (ReturnRequest.Status.REQUESTED, ReturnRequest.Status.APPROVED),
+        "reject": (ReturnRequest.Status.REQUESTED, ReturnRequest.Status.REJECTED),
+        "received": (ReturnRequest.Status.APPROVED, ReturnRequest.Status.RECEIVED),
+        "complete": (ReturnRequest.Status.RECEIVED, ReturnRequest.Status.COMPLETED),
+    }
+
+    @classmethod
+    def available_admin_actions(cls, status):
+        return [
+            action
+            for action, (source, _target) in cls.ACTION_TRANSITIONS.items()
+            if source == status
+        ]
+
+    def admin_payloads(self, order):
+        requests = (
+            ReturnRequest.objects.filter(order=order)
+            .select_related("customer")
+            .prefetch_related("items", "evidence__file__status")
+            .order_by("-requested_at", "-id")
+        )
+        return [self.admin_payload(request) for request in requests]
+
+    def admin_payload(self, request):
+        customer = request.customer
+        return {
+            "id": request.id,
+            "status": request.status,
+            "customer": {
+                "id": customer.id,
+                "name": f"{customer.first_name} {customer.last_name}".strip(),
+                "phone": customer.phone,
+                "customer_code": customer.customer_code,
+            },
+            "reason": request.reason,
+            "customer_note": request.customer_note,
+            "admin_note": request.admin_note,
+            "customer_response": request.customer_response,
+            "refund_destination_type": request.refund_destination_type,
+            "refund_destination_masked": f"****{request.refund_destination_value[-4:]}",
+            "items": [
+                {
+                    "id": item.id,
+                    "order_item_id": item.order_item_id,
+                    "quantity": item.quantity,
+                    "reason": item.reason,
+                }
+                for item in request.items.all()
+            ],
+            "evidence": [
+                {
+                    "id": evidence.id,
+                    "file_id": str(evidence.file_id),
+                    "position": evidence.position,
+                    "original_name": evidence.file.original_name,
+                    "content_type": evidence.file.content_type,
+                    "size": evidence.file.size,
+                    "url": OrderService._file_url(evidence.file),
+                }
+                for evidence in request.evidence.all()
+            ],
+            "available_actions": self.available_admin_actions(request.status),
+            "requested_at": request.requested_at.isoformat(),
+            "approved_at": request.approved_at.isoformat() if request.approved_at else None,
+            "received_at": request.received_at.isoformat() if request.received_at else None,
+            "completed_at": request.completed_at.isoformat() if request.completed_at else None,
+            "created_at": request.created_at.isoformat(),
+            "updated_at": request.updated_at.isoformat(),
+        }
+
+    @transaction.atomic
+    def execute_admin_action(
+        self, order_id, return_request_id, action_code, *, admin_note=..., customer_response=...
+    ):
+        transition = self.ACTION_TRANSITIONS.get(action_code)
+        if transition is None:
+            raise self.ValidationError({"action": [_('Unknown return action.')]})
+        request = (
+            ReturnRequest.objects.select_for_update()
+            .filter(id=return_request_id, order_id=order_id)
+            .first()
+        )
+        if request is None:
+            raise self.NotFoundError("Return request not found.")
+        source, target = transition
+        if request.status != source:
+            raise self.ValidationError({
+                "action": [_('This action is not available for the current return status.')]
+            })
+        request.status = target
+        update_fields = ["status", "updated_at"]
+        timestamp_field = {
+            ReturnRequest.Status.APPROVED: "approved_at",
+            ReturnRequest.Status.RECEIVED: "received_at",
+            ReturnRequest.Status.COMPLETED: "completed_at",
+        }.get(target)
+        if timestamp_field:
+            setattr(request, timestamp_field, timezone.now())
+            update_fields.append(timestamp_field)
+        if admin_note is not ...:
+            request.admin_note = admin_note
+            update_fields.append("admin_note")
+        if customer_response is not ...:
+            request.customer_response = customer_response
+            update_fields.append("customer_response")
+        request.save(update_fields=update_fields)
+        return request
+
+    @classmethod
+    def delivery_time(cls, order):
+        return (
+            OrderHistory.objects.filter(order=order, action__code="deliver")
+            .order_by("-created_at", "-id")
+            .values_list("created_at", flat=True)
+            .first()
+        )
+
+    @classmethod
+    def is_eligible(cls, order, *, now=None):
+        if order.status.name != "delivered":
+            return False
+        if ReturnRequest.objects.filter(
+            order=order,
+            status__in=cls.ACTIVE_STATUSES,
+        ).exists():
+            return False
+        delivered_at = cls.delivery_time(order)
+        return bool(
+            delivered_at
+            and (now or timezone.now()) < delivered_at + cls.RETURN_WINDOW
+        )
+
+    @transaction.atomic
+    def create(
+        self, customer, *, order_id, reason, refund_destination_type,
+        refund_destination_value, customer_note=None, items, images=None,
+    ):
+        try:
+            order = (
+                Order.objects.select_for_update()
+                .select_related("status")
+                .get(id=order_id, customer=customer)
+            )
+        except Order.DoesNotExist as exc:
+            raise self.NotFoundError("Order not found.") from exc
+
+        if not self.is_eligible(order):
+            raise self.ValidationError({
+                "order_id": [_('This order is not currently eligible for return.')]
+            })
+
+        requested_by_id = {item["order_item_id"]: item for item in items}
+        order_items = list(
+            OrderItem.objects.select_for_update()
+            .filter(id__in=requested_by_id, order=order)
+            .order_by("id")
+        )
+        if len(order_items) != len(requested_by_id):
+            raise self.ValidationError({
+                "items": [_('Every order item must belong to the selected order.')]
+            })
+
+        already_returned = {
+            row["order_item_id"]: row["total"]
+            for row in ReturnRequestItem.objects.filter(
+                order_item_id__in=requested_by_id,
+                return_request__status__in=self.COUNTED_STATUSES,
+            )
+            .values("order_item_id")
+            .annotate(total=Sum("quantity"))
+        }
+        quantity_errors = []
+        for order_item in order_items:
+            requested_quantity = requested_by_id[order_item.id]["quantity"]
+            available = order_item.quantity - already_returned.get(order_item.id, 0)
+            if requested_quantity > available:
+                quantity_errors.append(
+                    _(
+                        "Order item %(item_id)s has only %(available)s available "
+                        "to return."
+                    )
+                    % {"item_id": order_item.id, "available": max(available, 0)}
+                )
+        if quantity_errors:
+            raise self.ValidationError({"items": quantity_errors})
+
+        return_request = ReturnRequest.objects.create(
+            order=order,
+            customer=customer,
+            reason=reason,
+            customer_note=customer_note,
+            refund_destination_type=refund_destination_type,
+            refund_destination_value=refund_destination_value,
+        )
+        ReturnRequestItem.objects.bulk_create([
+            ReturnRequestItem(
+                return_request=return_request,
+                order_item=order_item,
+                quantity=requested_by_id[order_item.id]["quantity"],
+                reason=requested_by_id[order_item.id].get("reason"),
+            )
+            for order_item in order_items
+        ])
+        from domains.files.services import FileService
+
+        for position, image in enumerate(images or []):
+            try:
+                file = FileService().upload(
+                    image,
+                    object_prefix=f"orders/{order.id}/returns/{return_request.id}",
+                )
+            except FileService.Error as exc:
+                raise self.ValidationError({"images": [str(exc)]}) from exc
+            ReturnRequestEvidence.objects.create(
+                return_request=return_request,
+                file=file,
+                position=position,
+            )
+        return self.get(customer, return_request.id)
+
+    @staticmethod
+    def list(customer):
+        return (
+            ReturnRequest.objects.filter(customer=customer)
+            .select_related("order")
+            .prefetch_related("items", "evidence__file__status")
+            .order_by("-requested_at", "-id")
+        )
+
+    @staticmethod
+    def get(customer, return_request_id):
+        try:
+            return (
+                ReturnRequest.objects.filter(customer=customer)
+                .select_related("order")
+                .prefetch_related("items", "evidence__file__status")
+                .get(id=return_request_id)
+            )
+        except ReturnRequest.DoesNotExist as exc:
+            raise ReturnRequestService.NotFoundError(
+                "Return request not found."
+            ) from exc
