@@ -41,7 +41,24 @@ class StateWriteSerializer(serializers.ModelSerializer):
 class CityWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = City
-        fields = ["state", "name", "fa_title"]
+        fields = ["state", "name", "fa_title", "latitude", "longitude"]
+
+    def validate(self, attrs):
+        latitude = attrs.get("latitude", getattr(self.instance, "latitude", None))
+        longitude = attrs.get("longitude", getattr(self.instance, "longitude", None))
+        if (latitude is None) != (longitude is None):
+            raise serializers.ValidationError({
+                "coordinates": "Provide both latitude and longitude, or neither."
+            })
+        if latitude is not None and not -90 <= latitude <= 90:
+            raise serializers.ValidationError({
+                "latitude": "Latitude must be between -90 and 90."
+            })
+        if longitude is not None and not -180 <= longitude <= 180:
+            raise serializers.ValidationError({
+                "longitude": "Longitude must be between -180 and 180."
+            })
+        return attrs
 
 
 class CountryReadSerializer(serializers.ModelSerializer):
@@ -88,6 +105,6 @@ class CityReadSerializer(serializers.ModelSerializer):
         model = City
         fields = [
             "id", "state", "state_name", "state_fa_title", "country", "country_name",
-            "country_fa_title", "name", "fa_title", "address_count", "warehouse_count",
-            "can_delete",
+            "country_fa_title", "name", "fa_title", "latitude", "longitude",
+            "address_count", "warehouse_count", "can_delete",
         ]

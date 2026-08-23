@@ -19,11 +19,18 @@ class LocationSeeder(BaseSeeder):
             },
         )
 
+        coordinates = {}
+        with open(DATA_DIR / "iran_city_coordinates.csv", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                coordinates[row["city_source_id"]] = (
+                    row["latitude"], row["longitude"]
+                )
+
         cities_by_province = {}
         with open(DATA_DIR / "iran_cities.csv", encoding="utf-8") as f:
             for row in csv.DictReader(f):
                 pid = row["province_id"]
-                cities_by_province.setdefault(pid, []).append(row["name"])
+                cities_by_province.setdefault(pid, []).append(row)
 
         with open(DATA_DIR / "iran_provinces.csv", encoding="utf-8") as f:
             for row in csv.DictReader(f):
@@ -33,9 +40,16 @@ class LocationSeeder(BaseSeeder):
                     name=persian_to_latin(fa_name),
                     defaults={"fa_title": fa_name},
                 )
-                for city_fa in cities_by_province.get(row["id"], []):
+                for city_row in cities_by_province.get(row["id"], []):
+                    city_coordinates = coordinates.get(city_row["id"])
+                    defaults = {"fa_title": city_row["name"]}
+                    if city_coordinates:
+                        defaults.update({
+                            "latitude": city_coordinates[0],
+                            "longitude": city_coordinates[1],
+                        })
                     City.objects.update_or_create(
                         state=state,
-                        name=persian_to_latin(city_fa),
-                        defaults={"fa_title": city_fa},
+                        name=persian_to_latin(city_row["name"]),
+                        defaults=defaults,
                     )

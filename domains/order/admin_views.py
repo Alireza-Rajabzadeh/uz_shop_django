@@ -1,5 +1,5 @@
 from django.utils.translation import gettext as _
-from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.views import APIView
 
@@ -29,8 +29,11 @@ class AdminOrderList(AdminAPIView):
     def get(self, request):
         query = AdminOrderListQuerySerializer(data=request.query_params.dict())
         query.is_valid(raise_exception=True)
+        can_view_returns = request.user.has_perm("order.view_returnrequest")
+        if query.validated_data["has_active_returns"] and not can_view_returns:
+            raise PermissionDenied(_("You do not have permission to view return requests."))
         orders = order_service.list_orders_admin(
-            include_returns=request.user.has_perm("order.view_returnrequest"),
+            include_returns=can_view_returns,
             **query.validated_data,
         )
         paginator = PageNumberPagination()
@@ -38,6 +41,13 @@ class AdminOrderList(AdminAPIView):
         return api_response(
             True, "", paginator.get_paginated_response(page).data
         )
+
+
+class AdminOrderGeography(AdminAPIView):
+    model = Order
+
+    def get(self, request):
+        return api_response(data=order_service.open_order_geography())
 
 
 class AdminOrderDetail(AdminAPIView):

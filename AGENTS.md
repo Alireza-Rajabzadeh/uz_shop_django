@@ -179,6 +179,13 @@ The seed command does not provision notification provider statuses or a default 
 
 Current catalog endpoints are administrative and permission-controlled. They are not a public storefront contract.
 
+### Order Geography
+
+- `/api/order/admin/orders/geography` aggregates open orders from checkout-time address snapshots under `order.view_order`.
+- Province and city counts include all open orders; foreign or incomplete locations are reported as unmapped rather than plotted on the Iran map.
+- City marker coordinates belong to `location.City` and are populated from the attributed canonical coordinate data during migration and location seeding.
+- Administrative order lists accept `state_id` and `city_id` snapshot filters alongside `in_progress=true`.
+
 ### Digikala Import (Importing Domain)
 
 The Digikala integration lives in the `domains.importing` domain under

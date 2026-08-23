@@ -222,6 +222,133 @@ class OrderAdminAPITests(APITestCase):
         response = self.client.get("/api/order/admin/orders", {"search": "no-match"})
         self.assertEqual(response.data["data"]["count"], 0)
 
+    def test_admin_list_filters_in_progress_orders_and_active_returns(self):
+        response = self.client.get(
+            "/api/order/admin/orders", {"in_progress": "true"}
+        )
+        self.assertEqual(response.data["data"]["count"], 1)
+
+        response = self.client.get(
+            "/api/order/admin/orders", {"has_active_returns": "true"}
+        )
+        self.assertEqual(response.data["data"]["count"], 0)
+
+        ReturnRequest.objects.create(
+            order=self.order,
+            customer=self.customer,
+            reason="Damaged",
+            refund_destination_type="card",
+            refund_destination_value="6037991234567890",
+        )
+        response = self.client.get(
+            "/api/order/admin/orders", {"has_active_returns": "true"}
+        )
+        self.assertEqual(response.data["data"]["count"], 1)
+
+        self.order.status = OrderStatus.objects.get(name="cancelled")
+        self.order.save(update_fields=["status"])
+        response = self.client.get(
+            "/api/order/admin/orders", {"in_progress": "true"}
+        )
+        self.assertEqual(response.data["data"]["count"], 0)
+
+    def test_admin_list_filters_by_snapshot_state_and_city(self):
+        self.order.address_info = {"state_id": 12, "city_id": 34}
+        self.order.save(update_fields=["address_info"])
+
+        matched = self.client.get(
+            "/api/order/admin/orders", {"state_id": 12, "city_id": 34}
+        )
+        wrong_city = self.client.get(
+            "/api/order/admin/orders", {"state_id": 12, "city_id": 35}
+        )
+
+        self.assertEqual(matched.data["data"]["count"], 1)
+        self.assertEqual(wrong_city.data["data"]["count"], 0)
+
+    def test_admin_geography_groups_open_orders_and_enriches_city_markers(self):
+        country = Country.objects.create(
+            name="Iran", fa_title="ایران", code="IR", phone_code="+98"
+        )
+        state = State.objects.create(
+            country=country, name="Tehran", fa_title="تهران"
+        )
+        city = City.objects.create(
+            state=state,
+            name="Tehran",
+            fa_title="تهران",
+            latitude="35.6892000",
+            longitude="51.3890000",
+        )
+        self.order.address_info = {
+            "country_id": country.id,
+            "state_id": state.id,
+            "state_name": state.name,
+            "state_fa_title": state.fa_title,
+            "city_id": city.id,
+            "city_name": city.name,
+            "city_fa_title": city.fa_title,
+        }
+        self.order.save(update_fields=["address_info"])
+        Order.objects.create(
+            customer=self.customer,
+            status=OrderStatus.objects.get(name="cancelled"),
+            address_info=self.order.address_info,
+            subtotal=Decimal("1.00"),
+            total_amount=Decimal("1.00"),
+        )
+        Order.objects.create(
+            customer=self.customer,
+            status=self.status,
+            address_info={},
+            subtotal=Decimal("1.00"),
+            total_amount=Decimal("1.00"),
+        )
+        foreign_country = Country.objects.create(
+            name="Turkey", code="TR", phone_code="+90"
+        )
+        foreign_state = State.objects.create(
+            country=foreign_country, name="Istanbul"
+        )
+        foreign_city = City.objects.create(
+            state=foreign_state, name="Istanbul"
+        )
+        Order.objects.create(
+            customer=self.customer,
+            status=self.status,
+            address_info={
+                "country_id": foreign_country.id,
+                "state_id": foreign_state.id,
+                "city_id": foreign_city.id,
+            },
+            subtotal=Decimal("1.00"),
+            total_amount=Decimal("1.00"),
+        )
+
+        response = self.client.get("/api/order/admin/orders/geography")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.data["data"]
+        self.assertEqual(data["total_open_orders"], 3)
+        self.assertEqual(data["mapped_order_count"], 1)
+        self.assertEqual(data["unmapped_order_count"], 2)
+        self.assertEqual(data["outside_iran_order_count"], 1)
+        province = next(row for row in data["provinces"] if row["state_id"] == state.id)
+        self.assertEqual(province["order_count"], 1)
+        self.assertEqual(province["cities"][0]["city_id"], city.id)
+        self.assertEqual(province["cities"][0]["latitude"], 35.6892)
+        self.assertEqual(province["cities"][0]["longitude"], 51.389)
+
+    def test_admin_geography_requires_order_view_permission(self):
+        staff = User.objects.create_user(
+            "order-geography-staff", password="password", is_staff=True
+        )
+        self.client.force_authenticate(staff)
+
+        response = self.client.get("/api/order/admin/orders/geography")
+
+        self.assertEqual(response.status_code, 403)
+
     def test_admin_detail_returns_full_payload_with_customer(self):
         response = self.client.get(f"/api/order/admin/orders/{self.order.id}")
         self.assertEqual(response.status_code, 200)
@@ -553,12 +680,19 @@ class OrderAPITests(APITestCase):
             ],
         )
         self.assertEqual(data["totals"]["subtotal"], "300.00")
+        self.assertEqual(
+            data["totals"]["shipment"],
+            {"original_price": "200000.00", "final_price": "0.00"},
+        )
+        self.assertEqual(data["totals"]["shipping_amount"], "0.00")
         self.assertEqual(data["totals"]["total_amount"], "300.00")
         self.assertTrue(data["reservation_expires_at"])
         self.assertEqual(CartItem.objects.filter(cart__customer=self.customer).count(), 0)
 
         order = Order.objects.get(id=data["id"])
         self.assertEqual(order.status.name, "payment_pending")
+        self.assertEqual(order.shipping_original_amount, Decimal("200000.00"))
+        self.assertEqual(order.shipping_amount, Decimal("0.00"))
         stock = WarehouseStock.objects.get(variant=variant)
         self.assertEqual(stock.reserved, 3)
         self.assertEqual(order.items.count(), 1)

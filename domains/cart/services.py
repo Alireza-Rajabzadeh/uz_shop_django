@@ -7,6 +7,7 @@ from django.utils.translation import gettext as _
 from domains.catalog.models import ProductVariants
 from domains.catalog.services import VariantService
 from domains.inventory.services import InventoryService
+from domains.shipment.services import ShipmentCalculationService
 
 from .address import AddressInfoService
 from .models import Cart, CartItem
@@ -20,6 +21,7 @@ class CartService:
 
     inventory_service = InventoryService()
     variant_service = VariantService()
+    shipment_service = ShipmentCalculationService()
 
     @staticmethod
     def get_or_create_cart(customer):
@@ -89,7 +91,7 @@ class CartService:
         ]
         subtotal = sum(Decimal(p["unit_price"]) * p["quantity"] for p in payloads)
         discount_amount = sum(Decimal(v) for v in (p["line_discount"] for p in payloads))
-        shipping = Decimal("0.00")
+        shipment = self.shipment_service.calculate(cart)
         return {
             "id": cart.id,
             "address_info": cart.address_info,
@@ -97,8 +99,11 @@ class CartService:
             "totals": {
                 "subtotal": str(subtotal),
                 "discount_amount": str(discount_amount),
-                "shipping_amount": str(shipping),
-                "total_amount": str(subtotal - discount_amount + shipping),
+                "shipping_amount": str(shipment.final_price),
+                "shipment": shipment.payload(),
+                "total_amount": str(
+                    subtotal - discount_amount + shipment.final_price
+                ),
             },
             "cart_valid": bool(payloads) and all(p["valid"] for p in payloads),
         }

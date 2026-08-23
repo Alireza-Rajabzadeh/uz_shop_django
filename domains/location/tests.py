@@ -126,12 +126,34 @@ class LocationCRUDAPITests(APITestCase):
         }).data["data"]
         city = self.client.post("/cities", {
             "state": state["id"], "name": "Almaty",
+            "latitude": "43.2389490", "longitude": "76.8897090",
         }).data["data"]
         updated = self.client.patch(f"/cities/{city['id']}", {"fa_title": "آلماتی"})
         self.assertEqual(updated.data["data"]["fa_title"], "آلماتی")
+        self.assertEqual(updated.data["data"]["latitude"], "43.2389490")
+        self.assertEqual(updated.data["data"]["longitude"], "76.8897090")
         self.assertEqual(self.client.delete(f"/cities/{city['id']}").status_code, 200)
         self.assertEqual(self.client.delete(f"/states/{state['id']}").status_code, 200)
         self.assertEqual(self.client.delete(f"/countries/{country['id']}").status_code, 200)
+
+    def test_city_requires_both_coordinates(self):
+        self.authenticate("add_city")
+        response = self.client.post("/cities", {
+            "state": self.tehran.id,
+            "name": "Coordinate City",
+            "latitude": "35.7000000",
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("coordinates", response.data["errors"])
+
+        out_of_range = self.client.post("/cities", {
+            "state": self.tehran.id,
+            "name": "Invalid Coordinate City",
+            "latitude": "91.0000000",
+            "longitude": "51.0000000",
+        })
+        self.assertEqual(out_of_range.status_code, 400)
+        self.assertIn("latitude", out_of_range.data["errors"])
 
     def test_native_model_permissions_apply_per_method(self):
         self.authenticate("view_country")

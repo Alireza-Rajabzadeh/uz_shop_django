@@ -237,6 +237,11 @@ class CartAPITests(APITestCase):
         self.assertEqual(item["unit_price"], "100.00")
         self.assertEqual(item["effective_price"], "90.00")
         self.assertEqual(item["line_total"], "180.00")
+        self.assertEqual(
+            data["totals"]["shipment"],
+            {"original_price": "200000.00", "final_price": "0.00"},
+        )
+        self.assertEqual(data["totals"]["shipping_amount"], "0.00")
         self.assertEqual(data["totals"]["total_amount"], "180.00")
         self.assertIn("combination_key", item)
 

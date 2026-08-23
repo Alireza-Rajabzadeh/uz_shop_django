@@ -26,6 +26,7 @@ class StateOptionSerializer(LocationOptionSerializer):
 class CityOptionSerializer(LocationOptionSerializer):
     class Meta(LocationOptionSerializer.Meta):
         model = City
+        fields = LocationOptionSerializer.Meta.fields + ["latitude", "longitude"]
 
 
 class CountryFilterSerializer(serializers.Serializer):

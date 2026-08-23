@@ -4,6 +4,7 @@ from .admin_views import (
     AdminOrderDetail,
     AdminOrderActions,
     AdminOrderExecuteAction,
+    AdminOrderGeography,
     AdminOrderList,
     AdminOrderStatusList,
     AdminReturnAction,
@@ -23,6 +24,7 @@ from .views import (
 urlpatterns = [
     path("", OrderListCreateView.as_view()),
     path("admin/orders", AdminOrderList.as_view()),
+    path("admin/orders/geography", AdminOrderGeography.as_view()),
     path("admin/orders/<int:order_id>", AdminOrderDetail.as_view()),
     path("admin/orders/<int:order_id>/actions", AdminOrderActions.as_view()),
     path(

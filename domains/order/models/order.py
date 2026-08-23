@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.db import models
 
 from .order_status import OrderStatus
@@ -30,6 +32,9 @@ class Order(models.Model):
     address_info = models.JSONField()
     subtotal = models.DecimalField(max_digits=15, decimal_places=2)
     discount_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    shipping_original_amount = models.DecimalField(
+        max_digits=15, decimal_places=2, default=Decimal("200000.00")
+    )
     shipping_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     total_amount = models.DecimalField(max_digits=15, decimal_places=2)
     reservation_expires_at = models.DateTimeField(null=True, blank=True)
