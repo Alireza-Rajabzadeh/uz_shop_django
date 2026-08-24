@@ -8,7 +8,8 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from domains.cart.services import CartService
-from domains.catalog.models import ProductVariants
+from domains.catalog.models import ProductFile, ProductVariants
+from domains.files.services import FileService
 from domains.payments.services import PaymentService
 from domains.shipment.services import ShipmentCalculationService
 from domains.inventory.enums.SerializedStockStatusEnum import SerializedStockStatusEnum
@@ -87,6 +88,9 @@ class OrderService:
             "product_id": variant.product_id,
             "product_name": variant.product.name,
             "product_slug": variant.product.slug,
+            "product_image": self._product_thumbnails(
+                [variant.product_id]
+            ).get(variant.product_id),
             "combination_key": variant.combination_key,
             "selections": [
                 {
@@ -98,6 +102,39 @@ class OrderService:
                 for selection in variant.selections.all()
             ],
         }
+
+    def _product_thumbnails(self, product_ids):
+        ids = {pid for pid in product_ids if pid is not None}
+        cache = getattr(self, "_thumbnail_urls", {})
+        missing = sorted(ids - cache.keys())
+        if missing:
+            preferred = {}
+            fallback = {}
+            rows = (
+                ProductFile.objects.filter(
+                    product_id__in=missing,
+                    role__in=[ProductFile.Role.THUMBNAIL, ProductFile.Role.GALLERY],
+                )
+                .select_related("file")
+                .order_by("product_id", "position", "id")
+            )
+            file_service = FileService()
+            for row in rows:
+                if row.role == ProductFile.Role.THUMBNAIL:
+                    preferred.setdefault(row.product_id, row)
+                else:
+                    fallback.setdefault(row.product_id, row)
+            for product_id in missing:
+                row = preferred.get(product_id) or fallback.get(product_id)
+                url = None
+                if row is not None:
+                    try:
+                        url = file_service.url(row.file)
+                    except FileService.Error:
+                        url = None
+                cache[product_id] = url
+            self._thumbnail_urls = cache
+        return cache
 
     @staticmethod
     def cart_service():
@@ -849,6 +886,12 @@ class OrderService:
         return payload
 
     def _order_payload(self, order):
+        item_rows = list(
+            order.items.select_related("inventory_strategy").order_by("id")
+        )
+        thumbnails = self._product_thumbnails(
+            [row.variant_info.get("product_id") for row in item_rows]
+        )
         items = [
             {
                 "id": item.id,
@@ -857,6 +900,10 @@ class OrderService:
                 "product_id": item.variant_info.get("product_id"),
                 "product_name": item.variant_info.get("product_name"),
                 "product_slug": item.variant_info.get("product_slug"),
+                "product_image": (
+                    item.variant_info.get("product_image")
+                    or thumbnails.get(item.variant_info.get("product_id"))
+                ),
                 "combination_key": item.variant_info.get("combination_key"),
                 "quantity": item.quantity,
                 "unit_price": str(item.unit_price),
@@ -874,7 +921,7 @@ class OrderService:
                 },
                 "selections": item.variant_info.get("selections", []),
             }
-            for item in order.items.select_related("inventory_strategy").order_by("id")
+            for item in item_rows
         ]
         payment = None
         if order.successful_payment is not None:

@@ -1,11 +1,12 @@
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, Prefetch, Q
 from django.utils.translation import gettext as _
 
-from domains.catalog.models import ProductVariants
+from domains.catalog.models import ProductFile, ProductVariants
 from domains.catalog.services import VariantService
+from domains.files.services import FileService
 from domains.inventory.services import InventoryService
 from domains.shipment.services import ShipmentCalculationService
 
@@ -110,18 +111,51 @@ class CartService:
 
     def _attach_variants(self, items):
         variant_ids = [item.variant_id for item in items]
+        storefront_media = ProductFile.objects.filter(
+            file__file_type="image",
+            file__status__name="available",
+            file__deleted_at__isnull=True,
+        ).select_related("file").order_by("-is_primary", "position", "id")
         queryset = (
             ProductVariants.objects.filter(pk__in=variant_ids)
             .select_related(
                 "product", "inventory_strategy", "product__status", "product__brand"
             )
-            .prefetch_related("selections__attribute", "selections__option")
+            .prefetch_related(
+                "selections__attribute",
+                "selections__option",
+                Prefetch(
+                    "product__product_files",
+                    queryset=storefront_media,
+                    to_attr="storefront_media",
+                ),
+            )
         )
         variants = {
             row.id: row
             for row in self.inventory_service.annotate_variant_summaries(queryset)
         }
         return [(item, variants.get(item.variant_id)) for item in items]
+
+    def _product_thumbnail(self, product):
+        media = getattr(product, "storefront_media", None)
+        if media is None:
+            media = list(
+                ProductFile.objects.filter(
+                    product=product,
+                    file__file_type="image",
+                    file__status__name="available",
+                    file__deleted_at__isnull=True,
+                )
+                .select_related("file")
+                .order_by("-is_primary", "position", "id")[:1]
+            )
+        if not media:
+            return None
+        try:
+            return FileService().url(media[0].file)
+        except FileService.Error:
+            return None
 
     def _item_payload(self, item, variant):
         if variant is None:
@@ -153,6 +187,7 @@ class CartService:
             "quantity": item.quantity,
             "product_id": product.id,
             "product_name": product.name,
+            "product_thumbnail": self._product_thumbnail(product),
             "product_status": product.status.name,
             "sku": variant.sku,
             "combination_key": variant.combination_key,
@@ -235,6 +270,7 @@ class CartService:
             "quantity_capped": quantity_capped,
             "product_id": product.id,
             "product_name": product.name,
+            "product_thumbnail": self._product_thumbnail(product),
             "product_status": product.status.name,
             "sku": variant.sku,
             "combination_key": variant.combination_key,
@@ -270,6 +306,7 @@ class CartService:
             "quantity_capped": False,
             "product_id": None,
             "product_name": "",
+            "product_thumbnail": None,
             "product_status": "",
             "sku": "",
             "combination_key": "",
@@ -296,6 +333,7 @@ class CartService:
             "quantity": item.quantity,
             "product_id": None,
             "product_name": "",
+            "product_thumbnail": None,
             "product_status": "",
             "sku": "",
             "combination_key": "",
