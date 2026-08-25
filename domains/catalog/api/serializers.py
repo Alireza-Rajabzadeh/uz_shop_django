@@ -420,6 +420,9 @@ class ProductBasicUpdateSerializer(serializers.Serializer):
     brand = serializers.PrimaryKeyRelatedField(
         queryset=Brand.objects.all(), required=False, allow_null=True
     )
+    status = serializers.PrimaryKeyRelatedField(
+        queryset=ProductStatus.objects.all(), required=False
+    )
 
 
 class ProductListSerializer(serializers.ModelSerializer):
