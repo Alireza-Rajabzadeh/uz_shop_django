@@ -30,6 +30,13 @@ class SerializedStock(models.Model):
         on_delete=models.PROTECT,
         related_name="serialized_stocks",
     )
+    supply = models.ForeignKey(
+        "InventorySupply",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="serialized_stocks",
+    )
 
     def save(self, *args, **kwargs):
         self.serial_number = " ".join(self.serial_number.split())

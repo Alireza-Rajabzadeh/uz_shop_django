@@ -5,20 +5,44 @@ from rest_framework.views import APIView
 
 from core.responses import api_response
 from domains.catalog.models import ProductVariants
+from domains.inventory.enums.InventorySupplyCostTypeEnum import InventorySupplyCostTypeEnum
 from domains.inventory.models import (
     SerializedStockStatus,
     Warehouse,
     WarehouseStatus,
 )
-from domains.inventory.services import InventoryService
+from domains.inventory.services import (
+    InventoryPricingService,
+    InventoryReportingService,
+    InventoryService,
+    InventorySupplyService,
+)
 from domains.users.auth import AdminJWTAuthentication
 
 from .serializers import (
     CodeOptionSerializer,
+    InventoryReportSummarySerializer,
     InventoryVariantQuerySerializer,
     InventoryVariantRowSerializer,
     OptionSerializer,
+    PricingListRowSerializer,
+    PricingQuerySerializer,
+    PricingStrategyOptionSerializer,
+    ReportSupplyRowSerializer,
+    ReportSupplyQuerySerializer,
+    ReportVariantQuerySerializer,
+    ReportVariantRowSerializer,
+    SupplyCostTypeOptionSerializer,
+    SupplyDetailSerializer,
+    SupplyListSerializer,
+    SupplyQuerySerializer,
+    SupplyReceiveSerializer,
+    SupplyWriteSerializer,
     VariantInventoryDetailSerializer,
+    VariantPriceApplySerializer,
+    VariantPriceHistorySerializer,
+    VariantPricingOverviewSerializer,
+    VariantPricingWriteSerializer,
     VariantStockWriteSerializer,
     WarehouseQuerySerializer,
     WarehouseSerializer,
@@ -27,6 +51,9 @@ from .serializers import (
 
 
 inventory_service = InventoryService()
+supply_service = InventorySupplyService()
+pricing_service = InventoryPricingService()
+reporting_service = InventoryReportingService()
 
 
 class InventoryActionPermission(BasePermission):
@@ -186,3 +213,259 @@ class InventoryStrategyOptions(LookupAPIView):
 class SerializedStatusOptions(LookupAPIView):
     def get(self, request):
         return api_response(True, "", CodeOptionSerializer(SerializedStockStatus.objects.order_by("id"), many=True).data)
+
+
+class SupplyActionPermission(BasePermission):
+    def has_permission(self, request, view):
+        permissions = ["inventory.view_inventory"]
+        if request.method in ("POST", "PATCH", "DELETE"):
+            permissions.append("inventory.adjust_stock")
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and request.user.has_perms(permissions)
+        )
+
+
+class SupplyAPIView(APIView):
+    authentication_classes = [AdminJWTAuthentication]
+    permission_classes = [SupplyActionPermission]
+
+
+class SupplyListCreate(SupplyAPIView):
+    def get(self, request):
+        query = SupplyQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        supplies = supply_service.search_supplies(**query.validated_data)
+        paginator = PageNumberPagination()
+        page = paginator.paginate_queryset(supplies, request, view=self)
+        rows = [supply_service.serialize_supply_row(item) for item in page]
+        data = paginator.get_paginated_response(SupplyListSerializer(rows, many=True).data).data
+        return api_response(True, "", data)
+
+    def post(self, request):
+        serializer = SupplyWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            supply = supply_service.create_supply(**serializer.validated_data)
+        except InventorySupplyService.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
+        return api_response(
+            True,
+            "Supply created.",
+            SupplyDetailSerializer(supply_service.serialize_supply_detail(supply)).data,
+            status_code=201,
+        )
+
+
+class SupplyDetail(SupplyAPIView):
+    def get_object(self, supply_id):
+        supply = supply_service.get_supply(supply_id)
+        if supply is None:
+            raise NotFound("Supply not found.")
+        return supply
+
+    def get(self, request, supply_id):
+        return api_response(
+            True,
+            "",
+            SupplyDetailSerializer(supply_service.serialize_supply_detail(self.get_object(supply_id))).data,
+        )
+
+    def patch(self, request, supply_id):
+        serializer = SupplyWriteSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        try:
+            supply = supply_service.update_supply(self.get_object(supply_id), **serializer.validated_data)
+        except InventorySupplyService.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
+        return api_response(
+            True,
+            "Supply updated.",
+            SupplyDetailSerializer(supply_service.serialize_supply_detail(supply)).data,
+        )
+
+    def delete(self, request, supply_id):
+        try:
+            supply_service.delete_supply(self.get_object(supply_id))
+        except InventorySupplyService.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
+        return api_response(True, "Supply deleted.", None)
+
+
+class SupplyReceive(SupplyAPIView):
+    def post(self, request, supply_id):
+        supply = supply_service.get_supply(supply_id)
+        if supply is None:
+            raise NotFound("Supply not found.")
+        serializer = SupplyReceiveSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serial_items = serializer.validated_data.get("serial_items")
+        try:
+            supply = supply_service.receive_supply(supply, serial_items=serial_items)
+        except InventorySupplyService.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
+        return api_response(
+            True,
+            "Supply received.",
+            SupplyDetailSerializer(supply_service.serialize_supply_detail(supply)).data,
+        )
+
+
+class SupplyCostTypeOptions(LookupAPIView):
+    def get(self, request):
+        options = [
+            {"code": member.value, "name": member.name.capitalize()}
+            for member in InventorySupplyCostTypeEnum
+        ]
+        return api_response(True, "", SupplyCostTypeOptionSerializer(options, many=True).data)
+
+
+class VariantPricingView(APIView):
+    # GET uses view_inventory; PATCH additionally requires adjust_stock via
+    # the shared InventoryActionPermission.
+    authentication_classes = [AdminJWTAuthentication]
+    permission_classes = [InventoryActionPermission]
+
+    def get_variant(self, variant_id):
+        variant = ProductVariants.objects.filter(pk=variant_id).first()
+        if variant is None:
+            raise NotFound("Variant not found.")
+        return variant
+
+    def get(self, request, variant_id):
+        variant = self.get_variant(variant_id)
+        overview = pricing_service.get_variant_pricing_overview(variant)
+        return api_response(True, "", VariantPricingOverviewSerializer(overview).data)
+
+    def patch(self, request, variant_id):
+        variant = self.get_variant(variant_id)
+        serializer = VariantPricingWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            pricing_service.update_variant_pricing(variant, **serializer.validated_data)
+        except InventoryPricingService.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
+        overview = pricing_service.get_variant_pricing_overview(variant)
+        return api_response(True, "Pricing updated.", VariantPricingOverviewSerializer(overview).data)
+
+
+class PricingApplyPermission(BasePermission):
+    def has_permission(self, request, view):
+        permissions = [
+            "inventory.view_inventory",
+            "inventory.adjust_stock",
+            "catalog.change_productvariants",
+        ]
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and request.user.has_perms(permissions)
+        )
+
+
+class VariantPricingApplyView(APIView):
+    authentication_classes = [AdminJWTAuthentication]
+    permission_classes = [PricingApplyPermission]
+
+    def post(self, request, variant_id):
+        variant = ProductVariants.objects.filter(pk=variant_id).first()
+        if variant is None:
+            raise NotFound("Variant not found.")
+        serializer = VariantPriceApplySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            variant, history = pricing_service.apply_price(
+                variant, **serializer.validated_data
+            )
+        except InventoryPricingService.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
+        overview = pricing_service.get_variant_pricing_overview(variant)
+        return api_response(
+            True,
+            "Price applied.",
+            {
+                "pricing": VariantPricingOverviewSerializer(overview).data,
+                "history": VariantPriceHistorySerializer(history).data,
+            },
+        )
+
+
+class VariantPricingHistoryView(APIView):
+    authentication_classes = [AdminJWTAuthentication]
+    permission_classes = [InventoryActionPermission]
+
+    def get(self, request, variant_id):
+        variant = ProductVariants.objects.filter(pk=variant_id).first()
+        if variant is None:
+            raise NotFound("Variant not found.")
+        history = pricing_service.get_price_history(variant)
+        return api_response(
+            True,
+            "",
+            VariantPriceHistorySerializer(history, many=True).data,
+        )
+
+
+class PricingListView(APIView):
+    authentication_classes = [AdminJWTAuthentication]
+    permission_classes = [InventoryActionPermission]
+
+    def get(self, request):
+        query = PricingQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        variants = pricing_service.search_pricing(**query.validated_data)
+        paginator = PageNumberPagination()
+        page = paginator.paginate_queryset(variants, request, view=self)
+        overview_map = pricing_service.get_pricing_overview_map(page)
+        rows = [pricing_service.serialize_pricing_row(variant, overview_map[variant.id]) for variant in page]
+        data = paginator.get_paginated_response(PricingListRowSerializer(rows, many=True).data).data
+        return api_response(True, "", data)
+
+
+class PricingStrategyOptions(LookupAPIView):
+    def get(self, request):
+        return api_response(
+            True, "", PricingStrategyOptionSerializer(pricing_service.get_strategies(), many=True).data
+        )
+
+
+class InventoryReportSummaryView(APIView):
+    authentication_classes = [AdminJWTAuthentication]
+    permission_classes = [InventoryActionPermission]
+
+    def get(self, request):
+        summary = reporting_service.get_summary()
+        return api_response(True, "", InventoryReportSummarySerializer(summary).data)
+
+
+class InventoryReportVariantListView(APIView):
+    authentication_classes = [AdminJWTAuthentication]
+    permission_classes = [InventoryActionPermission]
+
+    def get(self, request):
+        query = ReportVariantQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        variants = reporting_service.search_variants_for_report(**query.validated_data)
+        paginator = PageNumberPagination()
+        page = paginator.paginate_queryset(variants, request, view=self)
+        rows = reporting_service.variant_report_rows(page)
+        data = paginator.get_paginated_response(
+            ReportVariantRowSerializer([rows[variant.id] for variant in page], many=True).data
+        ).data
+        return api_response(True, "", data)
+
+
+class InventoryReportSupplyListView(APIView):
+    authentication_classes = [AdminJWTAuthentication]
+    permission_classes = [InventoryActionPermission]
+
+    def get(self, request):
+        query = ReportSupplyQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        supplies = reporting_service.search_supplies_for_report(**query.validated_data)
+        paginator = PageNumberPagination()
+        page = paginator.paginate_queryset(supplies, request, view=self)
+        rows = [reporting_service.serialize_supply_report_row(supply) for supply in page]
+        data = paginator.get_paginated_response(ReportSupplyRowSerializer(rows, many=True).data).data
+        return api_response(True, "", data)

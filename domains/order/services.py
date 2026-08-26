@@ -686,8 +686,13 @@ class OrderService:
 
     def consume_reservations(self, order):
         """Convert an order's reserved stock into a sale."""
+        from domains.inventory.services import InventorySupplyService
+
+        supply_service = InventorySupplyService()
         sold_status = None
-        for order_item in order.items.prefetch_related("reservations"):
+        for order_item in order.items.prefetch_related("reservations").select_related(
+            "inventory_strategy"
+        ):
             for reservation in order_item.reservations.all():
                 if reservation.inventory_type == "warehouse_stock":
                     WarehouseStock.objects.filter(id=reservation.inventory_id).update(
@@ -704,6 +709,19 @@ class OrderService:
                         sellable=False,
                         status_id=sold_status.id,
                     )
+            # Finalized sale: consume FIFO cost layers for COGS tracking.
+            # Runs inside the caller's transaction (payment approval).
+            supply_service.consume_order_item(order_item)
+
+    @staticmethod
+    def reverse_order_supply_consumption(order):
+        """Restore consumed cost layers for every item of a cancelled order."""
+        from domains.inventory.services import InventorySupplyService
+
+        supply_service = InventorySupplyService()
+        for order_item in order.items.all():
+            # Full reversal; items without consumption records are no-ops.
+            supply_service.reverse_order_item_consumption(order_item)
 
     @staticmethod
     def _action_payload(assignment):
@@ -792,6 +810,9 @@ class OrderService:
         update_fields = []
         if action.code == "cancel":
             self.release_reservations(order)
+            # Restore consumed supply cost layers for finalized items.
+            # Items whose FIFO consumption never happened reverse nothing.
+            self.reverse_order_supply_consumption(order)
             if order.reservation_expires_at is not None:
                 order.reservation_expires_at = None
                 update_fields.append("reservation_expires_at")
@@ -1131,6 +1152,20 @@ class ReturnRequestService:
             request.customer_response = customer_response
             update_fields.append("customer_response")
         request.save(update_fields=update_fields)
+        if target == ReturnRequest.Status.COMPLETED:
+            # Returned goods are accepted: restore the consumed supply cost
+            # layers for exactly the returned quantities. Runs inside this
+            # method's transaction; completion happens once per request.
+            # Items sold before supply tracking existed reverse nothing.
+            from domains.inventory.services import InventorySupplyService
+
+            supply_service = InventorySupplyService()
+            for item in request.items.select_related("order_item"):
+                if not item.order_item.supply_consumptions.exists():
+                    continue
+                supply_service.reverse_order_item_consumption(
+                    item.order_item, quantity=item.quantity
+                )
         return request
 
     @classmethod

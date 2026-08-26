@@ -591,3 +591,60 @@ class InventoryService:
                 "inventory": [_('A variant with stock cannot be deleted.')]
             })
         stocks.delete()
+
+    @transaction.atomic
+    def receive_normal_stock(self, *, variant, warehouse, quantity):
+        # Additive receiving: increases quantity and sellable by the supplied
+        # delta; reserved and remaining_quantity are never touched here.
+        stock = WarehouseStock.objects.select_for_update().filter(
+            variant=variant, warehouse=warehouse
+        ).first()
+        if stock is None:
+            WarehouseStock.objects.create(
+                variant=variant,
+                warehouse=warehouse,
+                quantity=quantity,
+                sellable=quantity,
+                reserved=0,
+                min_stock=0,
+            )
+            return
+        stock.quantity += quantity
+        stock.sellable += quantity
+        stock.save(update_fields=["quantity", "sellable"])
+
+    @transaction.atomic
+    def receive_serialized_stock(self, *, variant, warehouse, serial_numbers, supply):
+        in_stock = SerializedStockStatus.objects.filter(code="in_stock").first()
+        if in_stock is None:
+            raise self.ValidationError({
+                "serial_items": [_('Inventory setup is missing the in_stock serialized status.')]
+            })
+        normalized = [self.normalize_serial(value) for value in serial_numbers]
+        if any(not value for value in normalized):
+            raise self.ValidationError({
+                "serial_items": [_('Serial number cannot be blank.')]
+            })
+        folded = [value.casefold() for value in normalized]
+        if len(folded) != len(set(folded)):
+            raise self.ValidationError({
+                "serial_items": [_('Serial numbers must be globally unique, ignoring case.')]
+            })
+        try:
+            with transaction.atomic():
+                SerializedStock.objects.bulk_create([
+                    SerializedStock(
+                        variant=variant,
+                        warehouse=warehouse,
+                        status=in_stock,
+                        serial_number=value,
+                        sellable=True,
+                        reserved=False,
+                        supply=supply,
+                    )
+                    for value in normalized
+                ])
+        except IntegrityError as exc:
+            raise self.ValidationError({
+                "serial_items": [_('Serial numbers must be globally unique, ignoring case.')]
+            }) from exc
