@@ -17,6 +17,7 @@ from domains.inventory.services import (
     InventoryService,
     InventorySupplyService,
 )
+from domains.inventory.services.price_history_mongo import get_price_history as mongo_price_history
 from domains.users.auth import AdminJWTAuthentication
 
 from .serializers import (
@@ -399,12 +400,8 @@ class VariantPricingHistoryView(APIView):
         variant = ProductVariants.objects.filter(pk=variant_id).first()
         if variant is None:
             raise NotFound("Variant not found.")
-        history = pricing_service.get_price_history(variant)
-        return api_response(
-            True,
-            "",
-            VariantPriceHistorySerializer(history, many=True).data,
-        )
+        history = mongo_price_history(variant_id)
+        return api_response(True, "", history)
 
 
 class PricingListView(APIView):

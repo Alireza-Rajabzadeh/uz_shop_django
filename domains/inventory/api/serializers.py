@@ -96,6 +96,7 @@ class VariantInventoryDetailSerializer(serializers.Serializer):
     total_item_count = serializers.IntegerField()
     sellable_item_count = serializers.IntegerField()
     available_item_count = serializers.IntegerField()
+    total_supply_quantity = serializers.IntegerField()
     inventory = NormalInventoryDetailSerializer(allow_null=True)
     serial_items = SerializedItemDetailSerializer(many=True, allow_null=True)
 

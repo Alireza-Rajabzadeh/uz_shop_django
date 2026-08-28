@@ -489,6 +489,9 @@ class InventoryService:
         }
 
     def get_variant_details(self, variant):
+        from django.db.models import Sum
+        from domains.inventory.models import InventorySupply
+
         summary = self.get_summary(variant)
         primary_category = variant.product.categories.order_by("id").first()
         strategy = {
@@ -513,6 +516,12 @@ class InventoryService:
                 for selection in variant.selections.all()
             ],
         }
+        total_supply_quantity = (
+            InventorySupply.objects.filter(
+                variant=variant
+            ).aggregate(total=Sum("quantity"))["total"]
+            or 0
+        )
         if variant.inventory_strategy.code == "normal":
             warehouse = self.get_default_warehouse()
             stock = variant.warehouse_stocks.filter(warehouse=warehouse).first()
@@ -521,6 +530,7 @@ class InventoryService:
                 **context,
                 "strategy": strategy,
                 **summary,
+                "total_supply_quantity": total_supply_quantity,
                 "inventory": {
                     "warehouse": self.serialize_warehouse(warehouse),
                     "quantity": stock.quantity if stock else 0,
@@ -537,6 +547,7 @@ class InventoryService:
             **context,
             "strategy": strategy,
             **summary,
+            "total_supply_quantity": total_supply_quantity,
             "inventory": None,
             "serial_items": [
                 {

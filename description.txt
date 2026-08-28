@@ -1,0 +1,54 @@
+Catalog Domain — Model Relations
+================================
+
+Category tree
+-------------
+- Category -> CategoryStatus (FK, PROTECT): each category has one status; statuses can't be deleted while referenced.
+- Category -> self (parent, FK CASCADE): hierarchical tree; root categories have parent = NULL. Names unique per parent (normalized).
+
+Detail (specification) definitions
+----------------------------------
+- CategoryDetail: standalone spec attribute definition (name, type, required, filterable).
+- CategoryDetailOption -> CategoryDetail (FK CASCADE, related name "normalized_options"): predefined option values per detail, ordered by position.
+
+Detail assignments
+------------------
+- CategoryDetailRelation (join table): Category <-> CategoryDetail, both FKs CASCADE, unique per (category, detail), stores a value. Defines which details belong to which category.
+- ProductDetails: links Product (FK PROTECT) + CategoryDetail (FK CASCADE) + optional CategoryDetailOption (FK SET_NULL). Unique per (product, detail); holds the concrete value/extra_value of a spec on a product.
+
+Variants
+--------
+- VariantAttribute: global variant dimension (e.g. color), normalized-unique name.
+- VariantOption -> VariantAttribute (FK CASCADE): possible values per attribute; has its own sku_code.
+- CategoryVariantAttribute: assigns which VariantAttributes apply to which Category (both FKs CASCADE, unique pair).
+- ProductVariants -> Product (FK PROTECT) and inventory.InventoryStrategy (FK PROTECT): sellable SKU with price/discount; combination key unique per product.
+- ProductVariantSelection: resolves a variant's chosen options — FKs to ProductVariants (CASCADE), VariantAttribute (PROTECT), VariantOption (PROTECT); unique per (variant, attribute) and per (variant, option).
+
+Branding
+--------
+- Brand: standalone, unique slug/name.
+- BrandCategory: M2M through-table Brand <-> Category (both CASCADE, unique pair).
+- Product -> Brand (nullable FK PROTECT).
+
+Product media & taxonomy
+------------------------
+- Product -> Category via M2M "categories" (table catalog_product_categories) — products can live in multiple categories.
+- ProductFile: join row Product (FK CASCADE) <-> files.File (FK PROTECT, cross-domain) with role (gallery/thumbnail/video/document), ordering, and a single-primary-per-product constraint.
+
+Reference/status tables
+-----------------------
+- CategoryStatus and ProductStatus are simple lookup tables referenced with PROTECT.
+
+Text sketch
+-----------
+
+CategoryStatus 1──* Category *──* Category (self parent)
+                  |  |
+                  |  ├──* BrandCategory *── Brand ──* Product
+                  |  ├──* CategoryDetailRelation *── CategoryDetail ──* CategoryDetailOption
+                  |  └──* CategoryVariantAttribute *── VariantAttribute ──* VariantOption
+                  |
+Product ──* ProductDetails ── CategoryDetail / CategoryDetailOption
+        ├──* ProductVariants ──* ProductVariantSelection ── VariantAttribute / VariantOption
+        ├──* ProductFile ── files.File
+        └──1 ProductStatus / Brand

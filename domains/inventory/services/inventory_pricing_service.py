@@ -16,6 +16,7 @@ from domains.inventory.models import (
     VariantPriceHistory,
     VariantPricing,
 )
+from domains.inventory.services.price_history_mongo import log_price_change
 
 
 class InventoryPricingService:
@@ -107,6 +108,17 @@ class InventoryPricingService:
                 if custom_price
                 else VariantPriceHistorySourceEnum.INVENTORY_PRICING.value
             ),
+        )
+        log_price_change(
+            variant_id=variant.id,
+            sku=variant.sku,
+            product_name=variant.product.name,
+            old_price=old_price,
+            new_price=new_price,
+            cost_basis=cost_basis,
+            cost_strategy=overview["cost_strategy"],
+            expected_profit_percentage=overview["expected_profit_percentage"],
+            source=history.source,
         )
         return variant, history
 

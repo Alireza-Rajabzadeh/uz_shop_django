@@ -13,6 +13,7 @@ ALLOWED_PROP_TYPES = {
     "number",
     "integer",
     "boolean",
+    "color",
     "object",
     "array",
     "model",
@@ -246,7 +247,7 @@ def _validate_value(value, definition, location):
             raise serializers.ValidationError(
                 f"{location} uses unsupported cardinality {cardinality!r}."
             )
-    elif value_type in {"string", "link", "image"}:
+    elif value_type in {"string", "color", "link", "image"}:
         valid = isinstance(value, str)
     elif value_type == "relative_link":
         valid = isinstance(value, str) and value.startswith("/")

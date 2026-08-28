@@ -66,8 +66,7 @@
       "props": {
         "title": {
           "type": "string",
-          "required": true,
-          "description": "Slider heading text."
+          "description": "Optional slider heading text."
         },
         "sub_title": {
           "type": "string",
@@ -101,8 +100,8 @@
           }
         },
         "backgroundColor": {
-          "type": "string",
-          "description": "Inline background color override."
+          "type": "color",
+          "description": "Optional slider background color override."
         },
         "timer": {
           "type": "string",
@@ -118,8 +117,7 @@
       "props": {
         "title": {
           "type": "string",
-          "required": true,
-          "description": "Slider heading text."
+          "description": "Optional slider heading text."
         },
         "sub_title": {
           "type": "string",
@@ -160,8 +158,8 @@
           "description": "Optional destination for the promotional image."
         },
         "backgroundColor": {
-          "type": "string",
-          "description": "Inline background color override."
+          "type": "color",
+          "description": "Optional slider background color override."
         },
         "timer": {
           "type": "string",

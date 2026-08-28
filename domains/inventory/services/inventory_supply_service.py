@@ -230,27 +230,9 @@ class InventorySupplyService:
                     quantity=supply.quantity,
                 )
             else:
-                serial_numbers = [
-                    (item or {}).get("serial_number") for item in (serial_items or [])
-                ]
-                if not any(serial_numbers):
-                    raise self.ValidationError({
-                        "serial_items": [_('Serial items are required for serialized inventory.')]
-                    })
-                if len(serial_numbers) != supply.quantity:
-                    raise self.ValidationError({
-                        "serial_items": [
-                            _('Exactly {count} serial items are required.').format(
-                                count=supply.quantity
-                            )
-                        ]
-                    })
-                self.inventory_service.receive_serialized_stock(
-                    variant=supply.variant,
-                    warehouse=supply.warehouse,
-                    serial_numbers=serial_numbers,
-                    supply=supply,
-                )
+                # Serial items are added later through the inventory UI.
+                # Receiving just marks the supply as confirmed.
+                pass
         except InventoryService.ValidationError as exc:
             # Normalize the stock service's errors into this service's contract.
             if isinstance(exc, self.ValidationError):

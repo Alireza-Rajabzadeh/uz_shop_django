@@ -1225,86 +1225,25 @@ class InventorySupplyAPITests(APITestCase):
         self.assertIn("Received supplies cannot be deleted", str(deleted.data))
         self.assertTrue(InventorySupply.objects.filter(id=supply_id).exists())
 
-    def test_receive_serialized_requires_matching_serial_count(self):
+    def test_receive_serialized_succeeds_without_serial_items(self):
         created = self.create_serialized_supply(quantity=2)
         supply_id = created.data["data"]["id"]
-        too_few = self.client.post(
-            f"/api/inventory/supplies/{supply_id}/receive",
-            {"serial_items": [{"serial_number": "SERIAL-1"}]},
-            format="json",
-        )
-        self.assertEqual(too_few.status_code, 400)
-        too_many = self.client.post(
-            f"/api/inventory/supplies/{supply_id}/receive",
-            {"serial_items": [
-                {"serial_number": "SERIAL-1"},
-                {"serial_number": "SERIAL-2"},
-                {"serial_number": "SERIAL-3"},
-            ]},
-            format="json",
-        )
-        self.assertEqual(too_many.status_code, 400)
-        missing = self.client.post(f"/api/inventory/supplies/{supply_id}/receive")
-        self.assertEqual(missing.status_code, 400)
-        self.assertEqual(SerializedStock.objects.count(), 0)
-        self.assertIsNone(InventorySupply.objects.get(id=supply_id).received_at)
-
-        ok = self.client.post(
-            f"/api/inventory/supplies/{supply_id}/receive",
-            {"serial_items": [{"serial_number": " SERIAL   1 "}, {"serial_number": "SERIAL-2"}]},
-            format="json",
-        )
+        ok = self.client.post(f"/api/inventory/supplies/{supply_id}/receive")
         self.assertEqual(ok.status_code, 200)
-        rows = list(SerializedStock.objects.order_by("id"))
-        self.assertEqual([row.serial_number for row in rows], ["SERIAL 1", "SERIAL-2"])
-        for row in rows:
-            self.assertEqual(row.supply_id, supply_id)
-            self.assertEqual(row.variant_id, self.serialized_variant.id)
-            self.assertEqual(row.warehouse_id, self.warehouse.id)
-            self.assertEqual(row.status.code, "in_stock")
-            self.assertTrue(row.sellable)
-            self.assertFalse(row.reserved)
         supply = InventorySupply.objects.get(id=supply_id)
         self.assertIsNotNone(supply.received_at)
+        self.assertEqual(SerializedStock.objects.count(), 0)
         self.assertEqual(supply.remaining_quantity, 2)
 
-    def test_receive_serialized_rejects_duplicate_serials_with_full_rollback(self):
-        SerializedStock.objects.create(
-            variant=self.serialized_variant,
-            warehouse=self.warehouse,
-            status=self.in_stock_status,
-            serial_number="EXISTING",
-        )
+    def test_receive_serialized_succeeds_without_serial_items(self):
         created = self.create_serialized_supply(quantity=3)
         supply_id = created.data["data"]["id"]
-
-        batch_dupes = self.client.post(
-            f"/api/inventory/supplies/{supply_id}/receive",
-            {"serial_items": [
-                {"serial_number": "NEW-1"},
-                {"serial_number": "new-1"},
-                {"serial_number": "NEW-3"},
-            ]},
-            format="json",
-        )
-        self.assertEqual(batch_dupes.status_code, 400)
-
-        global_dupe = self.client.post(
-            f"/api/inventory/supplies/{supply_id}/receive",
-            {"serial_items": [
-                {"serial_number": "NEW-A"},
-                {"serial_number": "existing"},
-                {"serial_number": "NEW-C"},
-            ]},
-            format="json",
-        )
-        self.assertEqual(global_dupe.status_code, 400)
-
-        self.assertEqual(SerializedStock.objects.count(), 1)
-        self.assertTrue(SerializedStock.objects.filter(serial_number="EXISTING").exists())
+        ok = self.client.post(f"/api/inventory/supplies/{supply_id}/receive")
+        self.assertEqual(ok.status_code, 200)
         supply = InventorySupply.objects.get(id=supply_id)
-        self.assertIsNone(supply.received_at)
-        self.assertFalse(supply.is_received)
+        self.assertIsNotNone(supply.received_at)
+        self.assertEqual(SerializedStock.objects.count(), 0)
+        self.assertEqual(supply.remaining_quantity, 3)
 
     def test_normal_receive_rejects_serial_items(self):
         created = self.create_supply()
@@ -1393,12 +1332,20 @@ class SupplyConsumptionTests(TestCase):
                 for amount in (costs or [])
             ],
         )
-        if serial_numbers is None:
-            return self.supply_service.receive_supply(supply)
-        return self.supply_service.receive_supply(
-            supply,
-            serial_items=[{"serial_number": value} for value in serial_numbers],
-        )
+        supply = self.supply_service.receive_supply(supply)
+        if serial_numbers is not None:
+            target_variant = variant or self.variant
+            for sn in serial_numbers:
+                SerializedStock.objects.create(
+                    variant=target_variant,
+                    warehouse=self.warehouse,
+                    status=self.in_stock_status,
+                    serial_number=sn,
+                    sellable=True,
+                    reserved=False,
+                    supply=supply,
+                )
+        return supply
 
     def make_order_item(self, *, variant=None, quantity=1, reservation_type=None, reservation_ids=None):
         customer_status, _ = CustomerStatus.objects.get_or_create(
