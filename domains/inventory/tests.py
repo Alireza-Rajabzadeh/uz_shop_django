@@ -1162,7 +1162,7 @@ class InventorySupplyAPITests(APITestCase):
         self.assertTrue(detail["is_received"])
 
         stock.refresh_from_db()
-        self.assertEqual((stock.quantity, stock.sellable, stock.reserved, stock.min_stock), (15, 15, 1, 2))
+        self.assertEqual((stock.quantity, stock.sellable, stock.reserved, stock.min_stock), (15, 5, 1, 2))
         supply = InventorySupply.objects.get(id=supply_id)
         self.assertEqual(supply.remaining_quantity, 10)
 
@@ -1173,7 +1173,7 @@ class InventorySupplyAPITests(APITestCase):
         response = self.client.post(f"/api/inventory/supplies/{supply_id}/receive")
         self.assertEqual(response.status_code, 200)
         stock = WarehouseStock.objects.get(variant=self.variant, warehouse=self.warehouse)
-        self.assertEqual((stock.quantity, stock.sellable, stock.reserved), (7, 7, 0))
+        self.assertEqual((stock.quantity, stock.sellable, stock.reserved), (7, 0, 0))
 
     def test_second_receive_is_rejected_without_side_effects(self):
         created = self.create_supply()
@@ -1185,7 +1185,7 @@ class InventorySupplyAPITests(APITestCase):
         supply = InventorySupply.objects.get(id=supply_id)
         self.assertEqual(supply.received_at, first_received_at)
         stock = WarehouseStock.objects.get(variant=self.variant)
-        self.assertEqual((stock.quantity, stock.sellable), (10, 10))
+        self.assertEqual((stock.quantity, stock.sellable), (10, 0))
 
     def test_received_supply_restrictions_and_allowed_edits(self):
         created = self.create_supply()
@@ -1321,8 +1321,9 @@ class SupplyConsumptionTests(TestCase):
 
     def received_supply(self, *, variant=None, quantity=5, unit_buy_price="100.00",
                         costs=None, serial_numbers=None):
+        target_variant = variant or self.variant
         supply = self.supply_service.create_supply(
-            variant=variant or self.variant,
+            variant=target_variant,
             warehouse=self.warehouse,
             quantity=quantity,
             unit_buy_price=Decimal(unit_buy_price),
@@ -1333,8 +1334,11 @@ class SupplyConsumptionTests(TestCase):
             ],
         )
         supply = self.supply_service.receive_supply(supply)
+        if target_variant.inventory_strategy.code == "normal":
+            stock = WarehouseStock.objects.get(variant=target_variant, warehouse=self.warehouse)
+            stock.sellable = stock.quantity
+            stock.save(update_fields=["sellable"])
         if serial_numbers is not None:
-            target_variant = variant or self.variant
             for sn in serial_numbers:
                 SerializedStock.objects.create(
                     variant=target_variant,
@@ -1845,8 +1849,9 @@ class VariantPricingAPITests(APITestCase):
                         costs=None, remaining=None, day=1):
         from domains.inventory.services import InventorySupplyService
 
+        target_variant = variant or self.variant
         supply = InventorySupplyService().create_supply(
-            variant=variant or self.variant,
+            variant=target_variant,
             warehouse=self.warehouse,
             quantity=quantity,
             unit_buy_price=Decimal(unit_buy_price),
@@ -1855,6 +1860,9 @@ class VariantPricingAPITests(APITestCase):
         )
         if remaining is None:
             InventorySupplyService().receive_supply(supply)
+            stock = WarehouseStock.objects.get(variant=target_variant, warehouse=self.warehouse)
+            stock.sellable = stock.quantity
+            stock.save(update_fields=["sellable"])
         else:
             # Received without full stock-side setup; costing only needs
             # received_at plus a known remaining quantity.
@@ -2426,8 +2434,9 @@ class InventoryReportTests(APITestCase):
 
     def received_supply(self, *, variant=None, quantity=5, unit_buy_price="100.00",
                         costs=None, remaining=None, day=1):
+        target_variant = variant or self.variant_a
         supply = InventorySupplyService().create_supply(
-            variant=variant or self.variant_a,
+            variant=target_variant,
             warehouse=self.warehouse,
             quantity=quantity,
             unit_buy_price=Decimal(unit_buy_price),
@@ -2436,6 +2445,9 @@ class InventoryReportTests(APITestCase):
         )
         if remaining is None:
             InventorySupplyService().receive_supply(supply)
+            stock = WarehouseStock.objects.get(variant=target_variant, warehouse=self.warehouse)
+            stock.sellable = stock.quantity
+            stock.save(update_fields=["sellable"])
         else:
             InventorySupply.objects.filter(id=supply.id).update(
                 received_at=timezone.make_aware(datetime(2026, 1, day)),

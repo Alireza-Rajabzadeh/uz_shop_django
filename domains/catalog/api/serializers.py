@@ -502,7 +502,7 @@ class SerializedItemWriteSerializer(serializers.Serializer):
 
 
 class ProductVariantWriteSerializer(serializers.Serializer):
-    price = serializers.DecimalField(max_digits=15, decimal_places=2, min_value=0)
+    price = serializers.DecimalField(max_digits=15, decimal_places=2, min_value=0, required=False, default="0")
     discount_type = serializers.ChoiceField(
         choices=["percentage", "fixed"], required=False, allow_null=True
     )
@@ -524,11 +524,10 @@ class ProductVariantWriteSerializer(serializers.Serializer):
         )
         strategy_code = attrs.get("inventory_strategy_code", current_code)
         if strategy_code is None:
-            raise serializers.ValidationError({
-                "inventory_strategy_code": "This field is required."
-            })
+            strategy_code = "normal"
+            attrs["inventory_strategy_code"] = strategy_code
         strategy_changed = current_code is not None and strategy_code != current_code
-        if self.instance is None or strategy_changed:
+        if strategy_changed:
             required_field = "inventory" if strategy_code == "normal" else "serial_items"
             if required_field not in self.initial_data:
                 raise serializers.ValidationError({

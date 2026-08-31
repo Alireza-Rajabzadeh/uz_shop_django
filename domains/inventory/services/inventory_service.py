@@ -605,8 +605,9 @@ class InventoryService:
 
     @transaction.atomic
     def receive_normal_stock(self, *, variant, warehouse, quantity):
-        # Additive receiving: increases quantity and sellable by the supplied
-        # delta; reserved and remaining_quantity are never touched here.
+        # Additive receiving: increases quantity by the supplied delta;
+        # sellable is not touched — the seller must manually mark items as
+        # sellable through the stock editing UI.  reserved is never touched.
         stock = WarehouseStock.objects.select_for_update().filter(
             variant=variant, warehouse=warehouse
         ).first()
@@ -615,14 +616,13 @@ class InventoryService:
                 variant=variant,
                 warehouse=warehouse,
                 quantity=quantity,
-                sellable=quantity,
+                sellable=0,
                 reserved=0,
                 min_stock=0,
             )
             return
         stock.quantity += quantity
-        stock.sellable += quantity
-        stock.save(update_fields=["quantity", "sellable"])
+        stock.save(update_fields=["quantity"])
 
     @transaction.atomic
     def receive_serialized_stock(self, *, variant, warehouse, serial_numbers, supply):
