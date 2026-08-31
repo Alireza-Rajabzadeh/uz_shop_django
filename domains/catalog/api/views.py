@@ -10,7 +10,8 @@ from .serializers import (
     CategorySerializer, CategoryListSerializer, CategoryDetailSerializer,
     CategoryDetailRelationSerializer, ProductSerializer, ProductListSerializer,
     ProductDetailsSerializer, ProductStatusSerializer, CategoryStatusSerializer,
-    ProductVariantSerializer, CategoryNameSuggestionQuerySerializer,
+    ProductVariantSerializer, ProductVariantStatusSerializer,
+    CategoryNameSuggestionQuerySerializer,
     CategoryNameSuggestionSerializer, CategoryDetailNameSuggestionQuerySerializer,
     CategoryDetailNameSuggestionSerializer,
     CategoryDetailAssignmentWriteSerializer, CategoryDetailAssignmentOptionSerializer,
@@ -32,6 +33,7 @@ from domains.catalog.models import (
     Product,
     ProductDetails,
     ProductFile,
+    ProductVariantStatus,
     ProductVariants,
     VariantAttribute,
     VariantOption,
@@ -175,6 +177,15 @@ class CategoryStatusList(APIView):
     def get(self, request):
         statuses = category_service.list_statuses()
         serializer = CategoryStatusSerializer(statuses, many=True)
+        return api_response(True, "", serializer.data)
+
+
+class VariantStatusList(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        statuses = ProductVariantStatus.objects.all().order_by("id")
+        serializer = ProductVariantStatusSerializer(statuses, many=True)
         return api_response(True, "", serializer.data)
 
 
@@ -980,6 +991,29 @@ class VariantDetail(APIView):
         except ProductService.ValidationError as exc:
             raise ValidationError(exc.errors) from exc
         return api_response(True, _("Variant deleted."), None)
+
+
+class VariantDetailStatus(APIView):
+    model = ProductVariants
+    permission_classes = [CatalogModelPermissions]
+
+    def get_object(self, id):
+        try:
+            return product_service.get_variant(id)
+        except Exception:
+            raise NotFound(_("Variant not found."))
+
+    def patch(self, request, id):
+        variant = self.get_object(id)
+        status_id = request.data.get("status_id")
+        if status_id is None:
+            raise ValidationError({"status_id": _("This field is required.")})
+        try:
+            variant = product_service.update_variant(variant, status_id=status_id)
+        except ProductService.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
+        result = ProductVariantSerializer(variant).data
+        return api_response(True, _("Variant status updated."), result)
 
 
 class VariantList(APIView):

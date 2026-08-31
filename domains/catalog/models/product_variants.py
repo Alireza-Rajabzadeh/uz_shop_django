@@ -28,6 +28,14 @@ class ProductVariants(models.Model):
         on_delete=models.PROTECT
     )
     
+    status = models.ForeignKey(
+        "ProductVariantStatus",
+        on_delete=models.PROTECT,
+        related_name="variants",
+        null=True,
+        blank=True,
+    )
+    
     sku = models.CharField(max_length=255, unique=True)
     combination_key = models.CharField(max_length=500)
     price = models.DecimalField(max_digits=15, decimal_places=2, blank=True)

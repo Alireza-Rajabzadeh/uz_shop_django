@@ -5,6 +5,7 @@ from core.management.seeders.categories import CategorySeeder
 from core.management.seeders.category_details import CategoryDetailSeeder
 from core.management.seeders.inventory import InventorySeeder
 from core.management.seeders.product_statuses import ProductStatusSeeder
+from core.management.seeders.product_variant_statuses import ProductVariantStatusSeeder
 from core.management.seeders.order import OrderSeeder
 from core.management.seeders.payments import PaymentsSeeder
 from core.management.seeders.customers import CustomerSeeder
@@ -23,6 +24,7 @@ class Command(BaseCommand):
             VariantAttributeSeeder(),
             CategoryDetailSeeder(),
             ProductStatusSeeder(),
+            ProductVariantStatusSeeder(),
             InventorySeeder(),
             CustomerSeeder(),
             OrderSeeder(),

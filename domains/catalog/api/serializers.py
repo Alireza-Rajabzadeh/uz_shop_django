@@ -2,7 +2,7 @@ from rest_framework import serializers
 from domains.catalog.models import (
     Brand, Category, CategoryStatus, CategoryDetail,
     CategoryDetailRelation, Product, ProductStatus,
-    ProductDetails, ProductFile, ProductVariants, VariantAttribute, VariantOption,
+    ProductDetails, ProductFile, ProductVariantStatus, ProductVariants, VariantAttribute, VariantOption,
 )
 from domains.files.models import File
 from domains.files.services import FileService
@@ -16,6 +16,12 @@ def primary_category(obj):
 class CategoryStatusSerializer(serializers.ModelSerializer):
     class Meta:
         model = CategoryStatus
+        fields = "__all__"
+
+
+class ProductVariantStatusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductVariantStatus
         fields = "__all__"
 
 
@@ -276,6 +282,9 @@ class ProductVariantSerializer(serializers.ModelSerializer):
     inventory_strategy_name = serializers.CharField(
         source="inventory_strategy.name", read_only=True
     )
+    status_name = serializers.CharField(
+        source="status.name", read_only=True, allow_null=True
+    )
     selections = ProductVariantSelectionSerializer(many=True, read_only=True)
     total_item_count = serializers.SerializerMethodField()
     sellable_item_count = serializers.SerializerMethodField()
@@ -286,6 +295,7 @@ class ProductVariantSerializer(serializers.ModelSerializer):
         fields = [
             "id", "product", "sku", "price", "discount_type", "discount_value",
             "inventory_strategy", "inventory_strategy_code", "inventory_strategy_name",
+            "status", "status_name",
             "selections", "total_item_count", "sellable_item_count",
             "available_item_count",
         ]
@@ -508,6 +518,12 @@ class ProductVariantWriteSerializer(serializers.Serializer):
     )
     discount_value = serializers.DecimalField(
         max_digits=12, decimal_places=2, min_value=0, required=False, allow_null=True
+    )
+    status_id = serializers.PrimaryKeyRelatedField(
+        queryset=ProductVariantStatus.objects.all(),
+        source="status",
+        required=False,
+        allow_null=True,
     )
     selections = ProductVariantSelectionWriteSerializer(many=True, required=False)
     inventory_strategy_code = serializers.ChoiceField(

@@ -16,6 +16,7 @@ from domains.catalog.models import (
     ProductDetails,
     ProductFile,
     ProductStatus,
+    ProductVariantStatus,
     ProductVariants,
     ProductVariantSelection,
     VariantAttribute,
@@ -486,6 +487,10 @@ class ProductService(BaseService):
         selections = self._validate_variant_selections(selections)
         combination_key = self._build_combination_key(selections)
         sku = self._build_sku(product, selections)
+        variant_data.setdefault(
+            "status_id",
+            ProductVariantStatus.objects.filter(name__iexact="pending").values_list("id", flat=True).first(),
+        )
         try:
             with transaction.atomic():
                 variant = ProductVariants.objects.create(

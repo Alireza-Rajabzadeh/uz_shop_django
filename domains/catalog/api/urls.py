@@ -10,6 +10,7 @@ from .views import (
     ProductFileDetail, ProductFileListCreate, ProductFileReorder,
     ProductDetailListCreate,
     ProductVariantListCreate, ProductVariantFormOptions, VariantDetail, VariantList,
+    VariantDetailStatus, VariantStatusList,
     CategoryAssignVariantAttributes, VariantAttributeListCreate,
     VariantAttributeDetail, VariantOptionListCreate, VariantOptionDetail,
 )
@@ -75,5 +76,7 @@ urlpatterns = [
 
     # Variants (standalone)
     path("variants", VariantList.as_view()),
+    path("variant-statuses", VariantStatusList.as_view()),
     path("variants/<int:id>", VariantDetail.as_view()),
+    path("variants/<int:id>/status", VariantDetailStatus.as_view()),
 ]
