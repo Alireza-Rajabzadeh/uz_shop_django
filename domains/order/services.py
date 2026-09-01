@@ -387,6 +387,10 @@ class OrderService:
             queryset = queryset.filter(
                 return_requests__status__in=ReturnRequestService.ACTIVE_STATUSES
             ).distinct()
+        if filters.get("has_returns"):
+            queryset = queryset.filter(
+                return_requests__isnull=False
+            ).distinct()
         state_id = filters.get("state_id")
         if state_id:
             queryset = queryset.filter(address_info__state_id=state_id)
@@ -416,10 +420,43 @@ class OrderService:
             for order in queryset
         ]
 
-    def open_order_geography(self):
+    def open_order_geography(self, **filters):
+        queryset = Order.objects.all()
+        if filters.get("in_progress"):
+            queryset = queryset.filter(status__name__in=self.IN_PROGRESS_STATUSES)
+        status = filters.get("status")
+        if status:
+            queryset = queryset.filter(status__name=status)
+        if filters.get("has_active_returns"):
+            queryset = queryset.filter(
+                return_requests__status__in=ReturnRequestService.ACTIVE_STATUSES
+            ).distinct()
+        if filters.get("has_returns"):
+            queryset = queryset.filter(
+                return_requests__isnull=False
+            ).distinct()
+        state_id = filters.get("state_id")
+        if state_id:
+            queryset = queryset.filter(address_info__state_id=state_id)
+        city_id = filters.get("city_id")
+        if city_id:
+            queryset = queryset.filter(address_info__city_id=city_id)
+        search = (filters.get("search") or "").strip()
+        if search:
+            queryset = queryset.filter(
+                models_Q(customer__phone__icontains=search)
+                | models_Q(customer__first_name__icontains=search)
+                | models_Q(customer__last_name__icontains=search)
+            )
+        created_from = filters.get("created_from")
+        if created_from:
+            queryset = queryset.filter(created_at__date__gte=created_from)
+        created_to = filters.get("created_to")
+        if created_to:
+            queryset = queryset.filter(created_at__date__lte=created_to)
+
         rows = (
-            Order.objects.filter(status__name__in=self.IN_PROGRESS_STATUSES)
-            .values(
+            queryset.values(
                 "address_info__state_id",
                 "address_info__country_id",
                 "address_info__state_name",

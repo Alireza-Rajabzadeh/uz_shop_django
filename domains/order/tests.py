@@ -325,7 +325,7 @@ class OrderAdminAPITests(APITestCase):
             total_amount=Decimal("1.00"),
         )
 
-        response = self.client.get("/api/order/admin/orders/geography")
+        response = self.client.get("/api/order/admin/orders/geography?in_progress=true")
 
         self.assertEqual(response.status_code, 200)
         data = response.data["data"]
@@ -338,6 +338,35 @@ class OrderAdminAPITests(APITestCase):
         self.assertEqual(province["cities"][0]["city_id"], city.id)
         self.assertEqual(province["cities"][0]["latitude"], 35.6892)
         self.assertEqual(province["cities"][0]["longitude"], 51.389)
+
+    def test_admin_geography_defaults_to_all_orders(self):
+        country = Country.objects.create(
+            name="Iran", fa_title="ایران", code="IR", phone_code="+98"
+        )
+        state = State.objects.create(
+            country=country, name="Tehran", fa_title="تهران"
+        )
+        city = City.objects.create(
+            state=state, name="Tehran", fa_title="تهران",
+            latitude="35.6892000", longitude="51.3890000",
+        )
+        address = {
+            "country_id": country.id, "state_id": state.id,
+            "state_name": state.name, "state_fa_title": state.fa_title,
+            "city_id": city.id, "city_name": city.name, "city_fa_title": city.fa_title,
+        }
+        self.order.address_info = address
+        self.order.save(update_fields=["address_info"])
+        Order.objects.create(
+            customer=self.customer,
+            status=OrderStatus.objects.get(name="cancelled"),
+            address_info=address,
+            subtotal=Decimal("1.00"), total_amount=Decimal("1.00"),
+        )
+        response = self.client.get("/api/order/admin/orders/geography")
+        self.assertEqual(response.status_code, 200)
+        data = response.data["data"]
+        self.assertEqual(data["total_open_orders"], 2)
 
     def test_admin_geography_requires_order_view_permission(self):
         staff = User.objects.create_user(

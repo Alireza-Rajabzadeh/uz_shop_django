@@ -55,6 +55,7 @@ class StorefrontProductService:
         ).select_related("file").order_by("-is_primary", "position", "id")
         variants = self.inventory_service.annotate_variant_summaries(
             ProductVariants.objects.select_related("inventory_strategy")
+            .filter(status__name__iexact="active")
         ).prefetch_related("selections__attribute", "selections__option").order_by("id")
         return (
             Product.objects.select_related("brand")
@@ -129,6 +130,7 @@ class StorefrontProductService:
         )
         variants = self.inventory_service.annotate_variant_summaries(
             ProductVariants.objects.select_related("inventory_strategy")
+            .filter(status__name__iexact="active")
         ).prefetch_related("selections__attribute", "selections__option").order_by("id")
         product = (
             Product.objects.select_related("brand")

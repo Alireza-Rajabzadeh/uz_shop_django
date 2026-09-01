@@ -127,6 +127,7 @@ class AdminOrderListQuerySerializer(serializers.Serializer):
     status = serializers.CharField(required=False, allow_blank=True)
     in_progress = serializers.BooleanField(required=False, default=False)
     has_active_returns = serializers.BooleanField(required=False, default=False)
+    has_returns = serializers.BooleanField(required=False, default=False)
     search = serializers.CharField(required=False, allow_blank=True)
     created_from = serializers.DateField(required=False)
     created_to = serializers.DateField(required=False)

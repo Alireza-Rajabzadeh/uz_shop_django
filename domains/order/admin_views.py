@@ -47,7 +47,9 @@ class AdminOrderGeography(AdminAPIView):
     model = Order
 
     def get(self, request):
-        return api_response(data=order_service.open_order_geography())
+        query = AdminOrderListQuerySerializer(data=request.query_params.dict())
+        query.is_valid(raise_exception=True)
+        return api_response(data=order_service.open_order_geography(**query.validated_data))
 
 
 class AdminOrderDetail(AdminAPIView):
