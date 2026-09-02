@@ -238,6 +238,14 @@ class VariantAttributeSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "fa_name", "options"]
 
 
+class VariantAttributeListSerializer(serializers.ModelSerializer):
+    option_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = VariantAttribute
+        fields = ["id", "name", "fa_name", "option_count"]
+
+
 class VariantAttributeWriteSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=100)
     fa_name = serializers.CharField(

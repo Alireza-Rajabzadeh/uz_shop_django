@@ -21,7 +21,7 @@ from .serializers import (
     ProductFileReadSerializer, ProductFileUpdateSerializer,
     ProductFileReorderSerializer, ProductFileWriteSerializer,
     CategoryVariantAttributeAssignmentWriteSerializer,
-    VariantAttributeSerializer, VariantAttributeWriteSerializer,
+    VariantAttributeSerializer, VariantAttributeListSerializer, VariantAttributeWriteSerializer,
     VariantOptionSerializer, VariantOptionWriteSerializer,
     BrandSerializer, BrandWriteSerializer, BrandNameSuggestionQuerySerializer,
     BrandNameSuggestionSerializer,
@@ -395,7 +395,7 @@ class VariantAttributeListCreate(APIView):
 
     def get(self, request):
         attributes = variant_attribute_service.list_attributes(request.query_params.get("search"))
-        return api_response(True, "", VariantAttributeSerializer(attributes, many=True).data)
+        return api_response(True, "", VariantAttributeListSerializer(attributes, many=True).data)
 
     def post(self, request):
         serializer = VariantAttributeWriteSerializer(data=request.data)

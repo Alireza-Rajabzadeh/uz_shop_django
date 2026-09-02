@@ -2,7 +2,7 @@ import re
 
 from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
-from django.db.models import Q
+from django.db.models import Q, Count
 from django.utils.translation import gettext as _
 
 from domains.catalog.models import VariantAttribute, VariantOption
@@ -28,7 +28,7 @@ class VariantAttributeService:
         return code
 
     def list_attributes(self, search=None):
-        queryset = VariantAttribute.objects.prefetch_related("options")
+        queryset = VariantAttribute.objects.annotate(option_count=Count("options"))
         if search:
             query = (
                 Q(name__icontains=search)

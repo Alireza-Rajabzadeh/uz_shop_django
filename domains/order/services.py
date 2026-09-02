@@ -591,6 +591,11 @@ class OrderService:
                 "name": f"{customer.first_name} {customer.last_name}".strip(),
                 "phone": customer.phone,
                 "customer_code": customer.customer_code,
+                "status": {
+                    "id": customer.status.id,
+                    "title": customer.status.title,
+                    "is_active": customer.status.is_active,
+                } if customer.status_id else None,
             },
             "status": {
                 "id": order.status.id,
@@ -634,7 +639,7 @@ class OrderService:
     def get_order_admin(self, order_id, *, include_returns=True):
         try:
             order = (
-                Order.objects.select_related("status", "customer")
+                Order.objects.select_related("status", "customer__status")
                 .prefetch_related("status__status_actions__order_action")
                 .get(id=order_id)
             )
@@ -1005,6 +1010,8 @@ class OrderService:
                 "payment_channel": p.payment_channel.code if p.payment_channel else None,
                 "payment_channel_name": p.payment_channel.name if p.payment_channel else None,
                 "payment_channel_fa_name": p.payment_channel.fa_name if p.payment_channel else None,
+                "channel_account_number": p.payment_channel.account_number if p.payment_channel else None,
+                "channel_card_number": p.payment_channel.card_number if p.payment_channel else None,
                 "status": p.status,
                 "amount": str(p.amount),
                 "ref_number": p.ref_number,
