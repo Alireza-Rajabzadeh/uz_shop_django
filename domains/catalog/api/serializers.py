@@ -406,7 +406,7 @@ class ProductDetailReadSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = [
-            "id", "name", "description", "categories", "category_name", "category_fa_name",
+            "id", "name", "description", "json_description", "categories", "category_name", "category_fa_name",
             "status", "status_name", "brand", "brand_name", "brand_fa_name",
             "pictures", "details", "variants",
         ]
@@ -435,6 +435,7 @@ class ProductBasicUpdateSerializer(serializers.Serializer):
         allow_blank=True,
         allow_null=True,
     )
+    json_description = serializers.JSONField(required=False, default=dict)
     brand = serializers.PrimaryKeyRelatedField(
         queryset=Brand.objects.all(), required=False, allow_null=True
     )
@@ -474,7 +475,7 @@ class ProductListSerializer(serializers.ModelSerializer):
         fields = [
             "id", "name", "categories", "category_name", "category_fa_name", "brand",
             "brand_name", "brand_fa_name", "status", "status_name",
-            "description", "variant_count", "thumbnail_url",
+            "description", "json_description", "variant_count", "thumbnail_url",
         ]
 
 
@@ -602,6 +603,7 @@ class ProductVariantWriteSerializer(serializers.Serializer):
 class ProductCompleteCreateSerializer(ProductCategorySelectionSerializer):
     name = serializers.CharField(max_length=250)
     description = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    json_description = serializers.JSONField(required=False, default=dict)
     brand = serializers.PrimaryKeyRelatedField(
         queryset=Brand.objects.all(), required=False, allow_null=True
     )

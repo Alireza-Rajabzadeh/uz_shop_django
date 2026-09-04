@@ -275,7 +275,7 @@ class ProductService(BaseService):
 
     @transaction.atomic
     def create_complete_product(
-        self, *, name, category_ids, description=None, brand=None, details=()
+        self, *, name, category_ids, description=None, json_description=None, brand=None, details=()
     ):
         categories = list(category_ids)
         self._validate_complete_product_details(categories, details)
@@ -285,6 +285,7 @@ class ProductService(BaseService):
             status=ProductStatus.objects.get(name__iexact="pending"),
             brand=brand,
             description=description or "",
+            json_description=json_description or {},
         )
         product.categories.set(categories)
         self._replace_product_details(product, details)
@@ -292,7 +293,7 @@ class ProductService(BaseService):
 
     @transaction.atomic
     def update_complete_product(
-        self, product, *, name, category_ids, description=None, brand=None, details=()
+        self, product, *, name, category_ids, description=None, json_description=None, brand=None, details=()
     ):
         product = self.model.objects.select_for_update().get(pk=product.pk)
         categories = list(category_ids)
@@ -302,7 +303,8 @@ class ProductService(BaseService):
         product.name = name.strip()
         product.brand = brand
         product.description = description or ""
-        product.save(update_fields=["name", "brand", "description"])
+        product.json_description = json_description or {}
+        product.save(update_fields=["name", "brand", "description", "json_description"])
         product.categories.set(categories)
         self._replace_product_details(product, details)
         if {category.id for category in categories} != previous_ids:

@@ -1,5 +1,5 @@
 {
-  "contract_version": 3,
+  "contract_version": 4,
   "components": [
     {
       "key": "hero_slider",
@@ -338,6 +338,43 @@
           "items": {
             "type": "string"
           }
+        }
+      }
+    },
+    {
+      "key": "picture",
+      "name": "Picture",
+      "version": 1,
+      "description": "Displays a single image with optional caption and link.",
+      "props": {
+        "image": {
+          "type": "image",
+          "required": true,
+          "description": "The image to display."
+        },
+        "altText": {
+          "type": "string",
+          "required": true,
+          "description": "Alternative text for accessibility."
+        },
+        "link": {
+          "type": "link",
+          "description": "Optional destination URL. Wraps the image in a link."
+        },
+        "caption": {
+          "type": "string",
+          "description": "Optional caption text below the image."
+        },
+        "objectFit": {
+          "type": "string",
+          "enum": ["cover", "contain"],
+          "default": "cover",
+          "description": "How the image fills its container."
+        },
+        "openInNewTab": {
+          "type": "boolean",
+          "default": false,
+          "description": "Open link in a new browser tab."
         }
       }
     }

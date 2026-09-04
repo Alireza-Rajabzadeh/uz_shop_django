@@ -15,6 +15,7 @@ class StorefrontProductService:
         payload = self._base_payload(product)
         payload.update({
             "description": product.description or "",
+            "json_description": self._resolve_json_description(product.json_description),
             "details": self._detail_payload(product.storefront_details),
         })
         return payload
@@ -24,6 +25,7 @@ class StorefrontProductService:
         payload = self._base_payload(product)
         payload.update({
             "description": product.description or "",
+            "json_description": self._resolve_json_description(product.json_description),
             "details": self._detail_payload(product.storefront_details),
             "variants": [self._variant_payload(variant) for variant in product.storefront_variants],
             "similar_products": self._similar_products(product),
@@ -35,6 +37,12 @@ class StorefrontProductService:
     def _seo_payload(self, product):
         from domains.content.services import SEOService
         return SEOService.get_for("product", product.id)
+
+    def _resolve_json_description(self, json_description):
+        if not json_description or not json_description.get("components"):
+            return json_description or {}
+        from domains.content.services import LandingPageContentResolver
+        return LandingPageContentResolver().resolve(json_description)
 
     def get_content_items(self, ids):
         if not ids:

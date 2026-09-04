@@ -62,6 +62,7 @@ class Product(models.Model):
     )
     
     description = models.TextField(blank=True,null=True)
+    json_description = models.JSONField(default=dict, blank=True)
     
 
     
