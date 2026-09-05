@@ -262,11 +262,13 @@ class StorefrontProductService:
                 attribute = attributes.setdefault(selection.attribute_id, {
                     "attribute_id": selection.attribute_id,
                     "label": selection.attribute.name,
+                    "fa_name": selection.attribute.fa_name or "",
                     "values": {},
                 })
                 attribute["values"][selection.option_id] = {
                     "option_id": selection.option_id,
                     "label": selection.option.name,
+                    "fa_name": selection.option.fa_name or "",
                     "extra": selection.option.info or None,
                 }
         return [
