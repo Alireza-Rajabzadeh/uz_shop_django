@@ -60,6 +60,7 @@ domains/files/          Provider-neutral stored-file lifecycle
 domains/importing/      External-source import pipelines (Digikala, etc.)
 domains/inventory/      Warehouses, stock, and inventory strategies
 domains/location/       Countries, states, and cities
+domains/marketplace/    BusinessOffer model, per-business variant pricing
 domains/notifications/  Provider records, audit rows, and delivery workers
 domains/users/          Administrative users, auth, and permissions
 locale/                 Django translations
@@ -112,6 +113,7 @@ Root namespaces:
 - `/api/inventory/`
 - `/api/location/`
 - `/api/files/`
+- `/api/marketplace/`
 - `/api/notifications/`
 
 Return `core.responses.api_response` envelopes:
@@ -179,6 +181,21 @@ The seed command does not provision notification provider statuses or a default 
 
 Current catalog endpoints are administrative and permission-controlled. They are not a public storefront contract.
 
+## Marketplace Domain
+
+The marketplace domain owns per-business variant pricing through `BusinessOffer`.
+
+- `BusinessProfile` is a singleton (id=1) linked to a `Vendor`. Only one business exists.
+- `BusinessOffer` has a unique constraint on `(business, variant)`. Each variant can have at most one offer per business.
+- `BusinessOffer` owns `price`, `discount_type`, and `discount_value`. These fields were removed from `ProductVariants`.
+- Reading pricing: callers attach `_business_offer` to variant objects via a batched lookup, then read from `offer.price`, `offer.discount_type`, `offer.discount_value`.
+- Writing pricing: `InventoryPricingService.apply_price()` writes to `BusinessOffer.price` and creates `VariantPriceHistory` snapshots.
+- `VariantService.calculate_discounted_price(variant, offer=None)` accepts an optional offer parameter and reads price/discount from it.
+- Cart, order, storefront, and search backends must attach `_business_offer` to variant objects before reading pricing.
+- The Digikala import pipeline no longer writes pricing to variants. Pricing is applied separately via inventory pricing.
+- Product search price filters (`price_operator`, `price`, `price_min`, `price_max`) filter on `BusinessOffer.price`.
+- The storefront search API (`/api/catalog/storefront/products`) serves pricing from `BusinessOffer` through `StorefrontProductService`.
+
 ### Order Geography
 
 - `/api/order/admin/orders/geography` aggregates open orders from checkout-time address snapshots under `order.view_order`.
@@ -194,6 +211,11 @@ file-backed, migration-free pipeline: CLI, Celery tasks, and admin API.
 Catalog writes go through `DigikalaImportService`, which delegates to
 catalog services. Generated listing/job data lives outside the repository
 under `DIGIKALA_RUNTIME_ROOT` (gitignored `runtime/`).
+
+Pricing is no longer written during import. The import pipeline skips `price`,
+`discount_type`, and `discount_value` when creating or updating variants.
+Pricing is applied separately through the inventory pricing service once
+a `BusinessOffer` exists for the imported variant.
 
 Pipeline:
 
@@ -227,8 +249,10 @@ python manage.py test core.tests
 python manage.py test domains.customer.tests
 python manage.py test domains.notifications.tests
 python manage.py test domains.catalog.tests
-python manage.py test domains.importing.tests
+python manage.py test domains.catalog.tests_storefront_search
+python manage.py test domains.importing.tests.test_digikala_import
 python manage.py test domains.inventory.tests
+python manage.py test domains.marketplace.tests
 python manage.py test domains.files.tests
 python manage.py test domains.location.tests
 python manage.py test domains.users.tests

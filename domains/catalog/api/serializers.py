@@ -7,6 +7,7 @@ from domains.catalog.models import (
 from domains.files.models import File
 from domains.files.services import FileService
 from domains.inventory.services import InventoryService
+from domains.vendor.models import Vendor
 
 
 def primary_category(obj):
@@ -293,6 +294,9 @@ class ProductVariantSerializer(serializers.ModelSerializer):
     status_name = serializers.CharField(
         source="status.name", read_only=True, allow_null=True
     )
+    vendor_code = serializers.CharField(
+        source="vendor.vendor_code", read_only=True, allow_null=True
+    )
     selections = ProductVariantSelectionSerializer(many=True, read_only=True)
     total_item_count = serializers.SerializerMethodField()
     sellable_item_count = serializers.SerializerMethodField()
@@ -301,9 +305,9 @@ class ProductVariantSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductVariants
         fields = [
-            "id", "product", "sku", "price", "discount_type", "discount_value",
+            "id", "product", "sku",
             "inventory_strategy", "inventory_strategy_code", "inventory_strategy_name",
-            "status", "status_name",
+            "status", "status_name", "vendor", "vendor_code", "domain",
             "selections", "total_item_count", "sellable_item_count",
             "available_item_count",
         ]
@@ -521,19 +525,19 @@ class SerializedItemWriteSerializer(serializers.Serializer):
 
 
 class ProductVariantWriteSerializer(serializers.Serializer):
-    price = serializers.DecimalField(max_digits=15, decimal_places=2, min_value=0, required=False, default="0")
-    discount_type = serializers.ChoiceField(
-        choices=["percentage", "fixed"], required=False, allow_null=True
-    )
-    discount_value = serializers.DecimalField(
-        max_digits=12, decimal_places=2, min_value=0, required=False, allow_null=True
-    )
     status_id = serializers.PrimaryKeyRelatedField(
         queryset=ProductVariantStatus.objects.all(),
         source="status",
         required=False,
         allow_null=True,
     )
+    vendor_id = serializers.PrimaryKeyRelatedField(
+        queryset=Vendor.objects.all(),
+        source="vendor",
+        required=False,
+        allow_null=True,
+    )
+    domain = serializers.CharField(max_length=255, required=False, allow_blank=True)
     selections = ProductVariantSelectionWriteSerializer(many=True, required=False)
     inventory_strategy_code = serializers.ChoiceField(
         choices=["normal", "serialized"], required=False
@@ -569,35 +573,13 @@ class ProductVariantWriteSerializer(serializers.Serializer):
         attrs["inventory_submitted"] = (
             "inventory" in self.initial_data or "serial_items" in self.initial_data
         )
-        return self._validate_pricing(attrs)
+        return attrs
 
     def validate_selections(self, selections):
         ids = [item["attribute"].id for item in selections]
         if len(ids) != len(set(ids)):
             raise serializers.ValidationError("Each attribute can only be selected once.")
         return selections
-
-    def _validate_pricing(self, attrs):
-        discount_type = attrs.get(
-            "discount_type", getattr(self.instance, "discount_type", None)
-        )
-        discount_value = attrs.get(
-            "discount_value", getattr(self.instance, "discount_value", None)
-        )
-        price = attrs.get("price", getattr(self.instance, "price", None))
-        if bool(discount_type) != (discount_value is not None):
-            raise serializers.ValidationError({
-                "discount_value": "Discount type and value must be provided together."
-            })
-        if discount_type == "percentage" and discount_value > 100:
-            raise serializers.ValidationError({
-                "discount_value": "Percentage discount cannot exceed 100."
-            })
-        if discount_type == "fixed" and price is not None and discount_value > price:
-            raise serializers.ValidationError({
-                "discount_value": "Fixed discount cannot exceed the price."
-            })
-        return attrs
 
 
 class ProductCompleteCreateSerializer(ProductCategorySelectionSerializer):

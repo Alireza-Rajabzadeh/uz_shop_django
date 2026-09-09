@@ -632,7 +632,6 @@ class DigikalaImportService:
                     existing,
                     selections=selections,
                     inventory_submitted=False,
-                    **pricing,
                 )
                 variant_updated += 1
             else:
@@ -641,7 +640,6 @@ class DigikalaImportService:
                     selections=selections,
                     inventory_strategy_code="normal",
                     inventory_submitted=False,
-                    **pricing,
                 )
                 variant_created += 1
 

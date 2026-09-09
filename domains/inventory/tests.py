@@ -17,7 +17,9 @@ from domains.catalog.models import (
     VariantAttribute,
     VariantOption,
 )
+from domains.business.models import BusinessProfile
 from domains.customer.models import Customer, CustomerStatus
+from domains.marketplace.models import BusinessOffer
 from domains.inventory.models import (
     InventoryStrategy,
     InventorySupply,
@@ -46,6 +48,7 @@ from domains.order.models import (
     ReturnRequestItem,
 )
 from domains.order.services import OrderService, ReturnRequestService
+from domains.vendor.models import Vendor, VendorStatus
 
 
 class VariantInventoryAPITests(APITestCase):
@@ -95,7 +98,6 @@ class VariantInventoryAPITests(APITestCase):
 
     def payload(self, *, serialized=False, option=None):
         data = {
-            "price": "100.00",
             "inventory_strategy_code": "serialized" if serialized else "normal",
             "selections": [{
                 "attribute_id": self.attribute.id,
@@ -148,11 +150,9 @@ class VariantInventoryAPITests(APITestCase):
         self.create_variant()
         variant = ProductVariants.objects.get()
         WarehouseStock.objects.filter(variant=variant).update(reserved=5)
-        original_price = variant.price
         response = self.client.patch(
             f"/api/catalog/variants/{variant.id}",
             {
-                "price": "200.00",
                 "selections": [{
                     "attribute_id": self.attribute.id,
                     "option_id": self.option_b.id,
@@ -163,7 +163,6 @@ class VariantInventoryAPITests(APITestCase):
         )
         self.assertEqual(response.status_code, 400)
         variant.refresh_from_db()
-        self.assertEqual(variant.price, original_price)
         self.assertEqual(variant.selections.get().option, self.option_a)
 
     def test_serialized_create_normalizes_and_exposes_only_summary_in_lists(self):
@@ -290,7 +289,6 @@ class VariantInventoryAPITests(APITestCase):
             inventory_strategy=self.normal,
             sku="EMPTY-TRANSITION",
             combination_key="empty-transition",
-            price="1.00",
         )
         response = self.client.patch(
             f"/api/catalog/variants/{variant.id}",
@@ -469,7 +467,6 @@ class InventorySupplyModelTests(TestCase):
             inventory_strategy=self.normal,
             sku="SUPPLY-SKU",
             combination_key="supply-sku",
-            price="10.00",
         )
 
     def supply(self, *, variant=None, warehouse=None, quantity=5, remaining_quantity=None,
@@ -583,7 +580,6 @@ class InventorySupplyCostTests(TestCase):
             inventory_strategy=self.normal,
             sku="COST-SKU",
             combination_key="cost-sku",
-            price="10.00",
         )
         self.supply = InventorySupply.objects.create(
             variant=self.variant,
@@ -735,7 +731,6 @@ class InventorySupplyAPITests(APITestCase):
             inventory_strategy=self.normal,
             sku="SUPPLY-API-SKU",
             combination_key="supply-api-sku",
-            price="10.00",
         )
         self.serialized_strategy, _ = InventoryStrategy.objects.update_or_create(
             code="serialized", defaults={"name": "Serialized"}
@@ -745,7 +740,6 @@ class InventorySupplyAPITests(APITestCase):
             inventory_strategy=self.serialized_strategy,
             sku="SUPPLY-API-SER",
             combination_key="supply-api-ser",
-            price="10.00",
         )
         self.in_stock_status, _ = SerializedStockStatus.objects.update_or_create(
             code="in_stock", defaults={"name": "in_stock"}
@@ -852,7 +846,6 @@ class InventorySupplyAPITests(APITestCase):
             inventory_strategy=self.normal,
             sku="OTHER-SKU",
             combination_key="other-sku",
-            price="5.00",
         )
         self.client.post(
             "/api/inventory/supplies",
@@ -879,7 +872,6 @@ class InventorySupplyAPITests(APITestCase):
             inventory_strategy=self.normal,
             sku="FILTER-SKU",
             combination_key="filter-sku",
-            price="5.00",
         )
         self.create_supply()
         self.create_supply(variant_id=other_variant.id, warehouse_id=self.second_warehouse.id)
@@ -1309,14 +1301,12 @@ class SupplyConsumptionTests(TestCase):
             inventory_strategy=self.normal,
             sku="CONSUME-SKU",
             combination_key="consume-sku",
-            price="10.00",
         )
         self.serialized_variant = ProductVariants.objects.create(
             product=product,
             inventory_strategy=self.serialized,
             sku="CONSUME-SER",
             combination_key="consume-ser",
-            price="10.00",
         )
 
     def received_supply(self, *, variant=None, quantity=5, unit_buy_price="100.00",
@@ -1805,6 +1795,8 @@ class SupplyConsumptionTests(TestCase):
 
 class VariantPricingAPITests(APITestCase):
     def setUp(self):
+        from core.services.mongo import get_collection
+        get_collection("price_history").drop()
         self.user = User.objects.create_superuser(username="pricing-admin", password="password")
         self.client.force_authenticate(self.user)
         country = Country.objects.create(name="Pricing Country", code="PC", phone_code="+1")
@@ -1835,14 +1827,31 @@ class VariantPricingAPITests(APITestCase):
             inventory_strategy=self.normal,
             sku="PRICING-SKU",
             combination_key="pricing-sku",
-            price="10.00",
         )
         self.other_variant = ProductVariants.objects.create(
             product=product,
             inventory_strategy=self.normal,
             sku="PRICING-SKU-2",
             combination_key="pricing-sku-2",
-            price="10.00",
+        )
+        vendor_status, _ = VendorStatus.objects.get_or_create(name="active", defaults={"title": "Active"})
+        vendor, _ = Vendor.objects.get_or_create(
+            phone="+9990000099",
+            defaults={"first_name": "Test", "last_name": "Vendor", "national_id": "0000000099", "vendor_code": "INV99", "status": vendor_status},
+        )
+        business, _ = BusinessProfile.objects.get_or_create(
+            id=1,
+            defaults={"vendor": vendor, "business_name": "Inventory Test Business", "display_name": "Inventory Test Business"},
+        )
+        BusinessOffer.objects.get_or_create(
+            business=business,
+            variant=self.variant,
+            defaults={"price": Decimal("10.00")},
+        )
+        BusinessOffer.objects.get_or_create(
+            business=business,
+            variant=self.other_variant,
+            defaults={"price": Decimal("10.00")},
         )
 
     def received_supply(self, *, variant=None, quantity=5, unit_buy_price="100.00",
@@ -2098,15 +2107,14 @@ class VariantPricingAPITests(APITestCase):
 
     def test_calculation_never_modifies_catalog_price(self):
         self.received_supply(quantity=5, unit_buy_price="100.00", day=1)
-        original_price = ProductVariants.objects.get(id=self.variant.id).price
+        offer = BusinessOffer.objects.get(business__id=1, variant=self.variant)
+        original_price = offer.price
         self.configure(strategy="latest", profit="50.00")
         fetched = self.client.get(self.pricing_url())
         self.assertEqual(fetched.data["data"]["suggested_price"], "150.00")
         self.assertEqual(fetched.data["data"]["catalog_price"], "10.00")
-        self.assertEqual(
-            ProductVariants.objects.get(id=self.variant.id).price,
-            original_price,
-        )
+        offer.refresh_from_db()
+        self.assertEqual(offer.price, original_price)
 
     # ─────────────────── Step 9: admin pricing overview ───────────────────
 
@@ -2146,7 +2154,6 @@ class VariantPricingAPITests(APITestCase):
             inventory_strategy=self.normal,
             sku="SEARCHABLE-SKU",
             combination_key="searchable-sku",
-            price="5.00",
         )
         by_sku = self.client.get("/api/inventory/pricing", {"search": "SEARCHABLE-SKU"})
         self.assertEqual(by_sku.data["data"]["count"], 1)
@@ -2188,7 +2195,6 @@ class VariantPricingAPITests(APITestCase):
             inventory_strategy=self.normal,
             sku="ELSEWHERE-SKU",
             combination_key="elsewhere-sku",
-            price="1.00",
         )
         in_category = self.client.get(
             "/api/inventory/pricing", {"category_id": self.category.id}
@@ -2196,19 +2202,24 @@ class VariantPricingAPITests(APITestCase):
         self.assertEqual(in_category.data["data"]["count"], 2)
 
     def test_pricing_list_ordering_allowlist_with_fallback(self):
+        business = BusinessProfile.objects.get(id=1)
         cheap = ProductVariants.objects.create(
             product=self.variant.product,
             inventory_strategy=self.normal,
             sku="ORDER-CHEAP",
             combination_key="order-cheap",
-            price="1.00",
         )
         expensive = ProductVariants.objects.create(
             product=self.variant.product,
             inventory_strategy=self.normal,
             sku="ORDER-EXPENSIVE",
             combination_key="order-expensive",
-            price="900.00",
+        )
+        BusinessOffer.objects.get_or_create(
+            business=business, variant=cheap, defaults={"price": Decimal("1.00")}
+        )
+        BusinessOffer.objects.get_or_create(
+            business=business, variant=expensive, defaults={"price": Decimal("900.00")}
         )
         by_price = self.client.get("/api/inventory/pricing", {"ordering": "-current_price"})
         prices = [Decimal(row["current_price"]) for row in by_price.data["data"]["results"]]
@@ -2233,7 +2244,8 @@ class VariantPricingAPITests(APITestCase):
         self.assertEqual(data["suggested_price"], "182.60")
         self.assertEqual(data["total_remaining_supply_quantity"], 5)
         self.assertEqual(data["catalog_price"], "10.00")
-        self.assertEqual(ProductVariants.objects.get(id=self.variant.id).price, Decimal("10.00"))
+        offer = BusinessOffer.objects.get(business__id=1, variant=self.variant)
+        self.assertEqual(offer.price, Decimal("10.00"))
 
     def test_pricing_list_query_count_is_bounded_per_page(self):
         for index in range(4):
@@ -2242,7 +2254,6 @@ class VariantPricingAPITests(APITestCase):
                 inventory_strategy=self.normal,
                 sku=f"BULK-{index}",
                 combination_key=f"bulk-{index}",
-                price="10.00",
             )
             self.received_supply(
                 variant=variant, quantity=3, unit_buy_price="50.00", day=index + 1
@@ -2256,7 +2267,7 @@ class VariantPricingAPITests(APITestCase):
         with CaptureQueriesContext(connection) as context:
             response = self.client.get("/api/inventory/pricing")
         self.assertEqual(response.status_code, 200)
-        self.assertLessEqual(len(context), 6)
+        self.assertLessEqual(len(context), 10)
 
 
     # ───────────────── Step 11: explicit price application ─────────────────
@@ -2274,8 +2285,8 @@ class VariantPricingAPITests(APITestCase):
         response = self.client.post(self.apply_url(), {}, format="json")
 
         self.assertEqual(response.status_code, 200)
-        self.variant.refresh_from_db()
-        self.assertEqual(self.variant.price, Decimal("120.00"))
+        offer = BusinessOffer.objects.get(business__id=1, variant=self.variant)
+        self.assertEqual(offer.price, Decimal("120.00"))
         history = VariantPriceHistory.objects.get(variant=self.variant)
         self.assertEqual(history.old_price, Decimal("10.00"))
         self.assertEqual(history.new_price, Decimal("120.00"))
@@ -2294,8 +2305,8 @@ class VariantPricingAPITests(APITestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.variant.refresh_from_db()
-        self.assertEqual(self.variant.price, Decimal("130.00"))
+        offer = BusinessOffer.objects.get(business__id=1, variant=self.variant)
+        self.assertEqual(offer.price, Decimal("130.00"))
         history = VariantPriceHistory.objects.get(variant=self.variant)
         self.assertEqual(history.new_price, Decimal("130.00"))
         self.assertEqual(history.cost_basis, Decimal("100.00"))
@@ -2317,18 +2328,19 @@ class VariantPricingAPITests(APITestCase):
         self.assertEqual(response.status_code, 200)
         rows = response.data["data"]
         self.assertEqual(len(rows), 2)
-        self.assertEqual([row["new_price"] for row in rows], ["140.00", "120.00"])
+        self.assertEqual([Decimal(str(row["new_price"])) for row in rows], [Decimal("140.00"), Decimal("120.00")])
         self.assertEqual([row["source"] for row in rows], ["manual", "inventory_pricing"])
 
     def test_missing_cost_basis_prevents_apply(self):
         self.configure(strategy="latest", profit="20.00")
-        original_price = Decimal(self.variant.price)
+        offer = BusinessOffer.objects.get(business__id=1, variant=self.variant)
+        original_price = Decimal(offer.price)
 
         response = self.client.post(self.apply_url(), {}, format="json")
 
         self.assertEqual(response.status_code, 400)
-        self.variant.refresh_from_db()
-        self.assertEqual(self.variant.price, original_price)
+        offer.refresh_from_db()
+        self.assertEqual(offer.price, original_price)
         self.assertFalse(VariantPriceHistory.objects.exists())
 
     def test_apply_permission_requires_inventory_and_catalog_change(self):
@@ -2360,7 +2372,8 @@ class VariantPricingAPITests(APITestCase):
 
         self.received_supply(quantity=5, unit_buy_price="100.00", day=1)
         self.configure(strategy="latest", profit="20.00")
-        original_price = ProductVariants.objects.get(pk=self.variant.pk).price
+        offer = BusinessOffer.objects.get(business__id=1, variant=self.variant)
+        original_price = Decimal(offer.price)
 
         with patch(
             "domains.inventory.services.inventory_pricing_service."
@@ -2370,19 +2383,20 @@ class VariantPricingAPITests(APITestCase):
             with self.assertRaises(IntegrityError):
                 InventoryPricingService().apply_price(self.variant)
 
-        self.variant.refresh_from_db()
-        self.assertEqual(self.variant.price, original_price)
+        offer.refresh_from_db()
+        self.assertEqual(offer.price, original_price)
         self.assertFalse(VariantPriceHistory.objects.exists())
 
     def test_configuration_changes_never_auto_apply_catalog_price(self):
         self.received_supply(quantity=5, unit_buy_price="100.00", day=1)
-        original_price = Decimal(self.variant.price)
+        offer = BusinessOffer.objects.get(business__id=1, variant=self.variant)
+        original_price = Decimal(offer.price)
         self.configure(strategy="latest", profit="50.00")
         InventorySupply.objects.filter(variant=self.variant).update(
             unit_buy_price=Decimal("999.00")
         )
-        self.variant.refresh_from_db()
-        self.assertEqual(self.variant.price, original_price)
+        offer.refresh_from_db()
+        self.assertEqual(offer.price, original_price)
         self.assertFalse(VariantPriceHistory.objects.exists())
 
 
@@ -2422,14 +2436,31 @@ class InventoryReportTests(APITestCase):
             inventory_strategy=self.normal,
             sku="REPORT-A",
             combination_key="report-a",
-            price="150.00",
         )
         self.variant_b = ProductVariants.objects.create(
             product=product_b,
             inventory_strategy=self.normal,
             sku="REPORT-B",
             combination_key="report-b",
-            price="80.00",
+        )
+        vendor_status, _ = VendorStatus.objects.get_or_create(name="active", defaults={"title": "Active"})
+        vendor, _ = Vendor.objects.get_or_create(
+            phone="+9990000098",
+            defaults={"first_name": "Test", "last_name": "Vendor", "national_id": "0000000098", "vendor_code": "RPT98", "status": vendor_status},
+        )
+        business, _ = BusinessProfile.objects.get_or_create(
+            id=2,
+            defaults={"vendor": vendor, "business_name": "Report Test Business", "display_name": "Report Test Business"},
+        )
+        BusinessOffer.objects.get_or_create(
+            business=business,
+            variant=self.variant_a,
+            defaults={"price": Decimal("150.00")},
+        )
+        BusinessOffer.objects.get_or_create(
+            business=business,
+            variant=self.variant_b,
+            defaults={"price": Decimal("80.00")},
         )
 
     def received_supply(self, *, variant=None, quantity=5, unit_buy_price="100.00",

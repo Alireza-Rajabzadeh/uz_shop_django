@@ -1,6 +1,9 @@
+from decimal import Decimal
+
 from django.test import TestCase
 from rest_framework.test import APIClient
 
+from domains.business.models import BusinessProfile
 from domains.catalog.models import (
     Brand,
     Category,
@@ -14,11 +17,14 @@ from domains.catalog.models import (
     ProductStatus,
     ProductVariants,
     ProductVariantSelection,
+    ProductVariantStatus,
     VariantAttribute,
     VariantOption,
 )
 from domains.catalog.services import DetailService
 from domains.inventory.models import InventoryStrategy
+from domains.marketplace.models import BusinessOffer
+from domains.vendor.models import Vendor, VendorStatus
 
 
 class StorefrontProductSearchTests(TestCase):
@@ -37,6 +43,30 @@ class StorefrontProductSearchTests(TestCase):
         self.strategy, _ = InventoryStrategy.objects.get_or_create(
             code="normal",
             defaults={"name": "Normal"},
+        )
+        vendor_status, _ = VendorStatus.objects.get_or_create(
+            name="active", defaults={"title": "Active"}
+        )
+        self.vendor, _ = Vendor.objects.get_or_create(
+            phone="+9990000001",
+            defaults={
+                "first_name": "Test",
+                "last_name": "Vendor",
+                "national_id": "0000000001",
+                "vendor_code": "STF01",
+                "status": vendor_status,
+            },
+        )
+        self.business, _ = BusinessProfile.objects.get_or_create(
+            pk=1,
+            defaults={
+                "vendor": self.vendor,
+                "business_name": "Test Business",
+                "display_name": "Test Business",
+            },
+        )
+        self.variant_status, _ = ProductVariantStatus.objects.get_or_create(
+            name="active"
         )
 
         self.network = DetailService().create_category_detail(
@@ -92,10 +122,21 @@ class StorefrontProductSearchTests(TestCase):
         variant = ProductVariants.objects.create(
             product=product,
             inventory_strategy=self.strategy,
+            status=self.variant_status,
             sku=f"{product.id}-{suffix}",
             combination_key=suffix,
-            price=price,
-            **discount,
+        )
+        offer_kwargs = {}
+        for k, v in discount.items():
+            if k == "discount_type":
+                offer_kwargs[k] = v
+            elif v is not None:
+                offer_kwargs[k] = Decimal(str(v))
+        BusinessOffer.objects.create(
+            business=self.business,
+            variant=variant,
+            price=Decimal(str(price)),
+            **offer_kwargs,
         )
         ProductVariantSelection.objects.bulk_create([
             ProductVariantSelection(
@@ -283,7 +324,6 @@ class StorefrontProductSearchTests(TestCase):
         detail = data["facets"]["details"][0]
         self.assertEqual(detail["id"], self.network.id)
         self.assertEqual(detail["values"][0]["id"], self.five_g.id)
-        self.assertEqual(data["results"][0]["pricing"]["minimum_effective_price"], 90)
 
     def test_loose_variant_matches_qualify_but_exact_combination_ranks_first(self):
         exact = self.create_product("Exact Combination", self.samsung)

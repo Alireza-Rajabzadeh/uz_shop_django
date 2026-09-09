@@ -13,6 +13,23 @@ class ImmutableKeySerializer(serializers.ModelSerializer):
 
 
 class BusinessProfileSerializer(serializers.ModelSerializer):
+    light_logo_id = serializers.PrimaryKeyRelatedField(
+        source="light_logo",
+        queryset=File.objects.select_related("status"),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
+    light_logo = serializers.SerializerMethodField()
+    dark_logo_id = serializers.PrimaryKeyRelatedField(
+        source="dark_logo",
+        queryset=File.objects.select_related("status"),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
+    dark_logo = serializers.SerializerMethodField()
+
     class Meta:
         model = BusinessProfile
         fields = "__all__"
@@ -22,6 +39,41 @@ class BusinessProfileSerializer(serializers.ModelSerializer):
         if self.instance is None and BusinessProfile.objects.exists():
             raise serializers.ValidationError("Only one business profile may exist.")
         return attrs
+
+    def validate_light_logo_id(self, value):
+        if value is not None and (
+            value.status.name != FileService.STATUS_AVAILABLE or value.file_type != "image"
+        ):
+            raise serializers.ValidationError("Select an available image file.")
+        return value
+
+    def validate_dark_logo_id(self, value):
+        if value is not None and (
+            value.status.name != FileService.STATUS_AVAILABLE or value.file_type != "image"
+        ):
+            raise serializers.ValidationError("Select an available image file.")
+        return value
+
+    def _get_logo_info(self, file):
+        if file is None:
+            return None
+        try:
+            url = FileService().url(file)
+        except FileService.Error:
+            url = None
+        return {
+            "id": str(file.id),
+            "original_name": file.original_name,
+            "content_type": file.content_type,
+            "file_type": file.file_type,
+            "url": url,
+        }
+
+    def get_light_logo(self, obj):
+        return self._get_logo_info(obj.light_logo)
+
+    def get_dark_logo(self, obj):
+        return self._get_logo_info(obj.dark_logo)
 
 
 class BusinessPhoneSerializer(ImmutableKeySerializer):
@@ -117,9 +169,26 @@ class BusinessWorkingDaySerializer(serializers.ModelSerializer):
 
 
 class PublicBusinessProfileSerializer(serializers.ModelSerializer):
+    light_logo_url = serializers.SerializerMethodField()
+    dark_logo_url = serializers.SerializerMethodField()
+
     class Meta:
         model = BusinessProfile
         exclude = ["cache_ttl", "created_at", "updated_at"]
+
+    def _get_logo_url(self, file):
+        if file is None:
+            return None
+        try:
+            return FileService().url(file)
+        except FileService.Error:
+            return None
+
+    def get_light_logo_url(self, obj):
+        return self._get_logo_url(obj.light_logo)
+
+    def get_dark_logo_url(self, obj):
+        return self._get_logo_url(obj.dark_logo)
 
 
 class PublicBusinessWorkingDaySerializer(serializers.ModelSerializer):

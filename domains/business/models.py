@@ -31,6 +31,13 @@ class BusinessProfile(TimestampedModel):
         HOLIDAY = "holiday", "Holiday"
 
     id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    vendor = models.ForeignKey(
+        "vendor.Vendor",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="business_profiles",
+    )
     business_name = models.CharField(max_length=200)
     display_name = models.CharField(max_length=200)
     legal_name = models.CharField(max_length=200, blank=True)
@@ -39,6 +46,21 @@ class BusinessProfile(TimestampedModel):
     postal_code = models.CharField(max_length=32, blank=True)
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, validators=[MinValueValidator(-90), MaxValueValidator(90)])
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, validators=[MinValueValidator(-180), MaxValueValidator(180)])
+    light_logo = models.ForeignKey(
+        "files.File",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="business_light_logos",
+    )
+    dark_logo = models.ForeignKey(
+        "files.File",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="business_dark_logos",
+    )
+    enamad_link = models.URLField(max_length=500, blank=True)
     availability_status = models.CharField(max_length=32, choices=Availability.choices, default=Availability.OPEN)
     availability_message = models.CharField(max_length=500, blank=True)
     availability_until = models.DateTimeField(null=True, blank=True)

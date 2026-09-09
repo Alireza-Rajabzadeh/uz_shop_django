@@ -20,6 +20,8 @@ from domains.catalog.models import (
 )
 from domains.inventory.models import InventoryStrategy, Warehouse, WarehouseStatus, WarehouseStock
 from domains.location.models import City, Country, State
+from domains.business.models import BusinessProfile
+from domains.marketplace.models import BusinessOffer
 
 
 class ProductVariantWorkflowTests(APITestCase):
@@ -72,7 +74,6 @@ class ProductVariantWorkflowTests(APITestCase):
     def variant_payload(self, options=None):
         options = options or [(self.color, self.black), (self.storage, self.gb128)]
         return {
-            "price": "100.00",
             "inventory_strategy_code": "normal",
             "inventory": {"quantity": 0, "sellable": 0},
             "selections": [
@@ -164,7 +165,7 @@ class ProductVariantWorkflowTests(APITestCase):
 
         response = self.client.patch(
             f"/api/catalog/variants/{variant.id}",
-            {"price": "120.00"},
+            {},
             format="json",
         )
 
@@ -187,7 +188,7 @@ class ProductVariantWorkflowTests(APITestCase):
     def test_requires_at_least_one_selection_and_rejects_client_sku(self):
         empty = self.client.post(
             f"/api/catalog/products/{self.product.id}/variants",
-            {"price": "10.00", "selections": []}, format="json",
+            {"selections": []}, format="json",
         )
         supplied_sku = self.client.post(
             f"/api/catalog/products/{self.product.id}/variants",
@@ -969,30 +970,38 @@ class CatalogSearchAndReadTests(APITestCase):
             attribute=self.attribute, name="Ocean Blue", sku_code="OCN"
         )
 
-    def create_product(self, name, prices):
+    def create_product(self, name):
         product = Product.objects.create(
             name=name,
             status=self.product_status,
         )
         product.categories.add(self.category)
         variants = []
-        for index, price in enumerate(prices):
-            variant = ProductVariants.objects.create(
-                product=product,
-                inventory_strategy=self.normal,
-                sku=f"{name.upper().replace(' ', '-')}-{index}",
-                combination_key=f"{index}",
-                price=price,
-            )
-            variants.append(variant)
+        variant = ProductVariants.objects.create(
+            product=product,
+            inventory_strategy=self.normal,
+            sku=f"{name.upper().replace(' ', '-')}-0",
+            combination_key="0",
+        )
+        variants.append(variant)
         return product, variants
 
     def result_ids(self, response):
         return [item["id"] for item in response.data["data"]["results"]]
 
     def test_product_price_filters_match_one_variant(self):
-        split, _ = self.create_product("Split Prices", ["5.00", "20.00"])
-        matching, _ = self.create_product("Matching Price", ["12.00"])
+        split, split_variants = self.create_product("Split Prices")
+        matching, matching_variants = self.create_product("Matching Price")
+
+        business, _ = BusinessProfile.objects.get_or_create(
+            pk=1, defaults={"business_name": "Test Business", "display_name": "Test Business"}
+        )
+        BusinessOffer.objects.create(
+            business=business, variant=split_variants[0], price="5.00"
+        )
+        BusinessOffer.objects.create(
+            business=business, variant=matching_variants[0], price="12.00"
+        )
 
         response = self.client.get(
             "/api/catalog/products",
@@ -1009,15 +1018,15 @@ class CatalogSearchAndReadTests(APITestCase):
             "/api/catalog/products", {"price_operator": "less_than", "price": "6.00"}
         )
         greater_than = self.client.get(
-            "/api/catalog/products", {"price_operator": "greater_than", "price": "19.00"}
+            "/api/catalog/products", {"price_operator": "greater_than", "price": "6.00"}
         )
         self.assertEqual(self.result_ids(equal), [matching.id])
         self.assertIn(split.id, self.result_ids(less_than))
-        self.assertIn(split.id, self.result_ids(greater_than))
+        self.assertIn(matching.id, self.result_ids(greater_than))
 
     def test_product_standard_filters_can_be_combined(self):
-        matching, _ = self.create_product("Combined Search Phone", [])
-        self.create_product("Different Phone", [])
+        matching, _ = self.create_product("Combined Search Phone")
+        self.create_product("Different Phone")
 
         response = self.client.get(
             "/api/catalog/products",
@@ -1032,7 +1041,7 @@ class CatalogSearchAndReadTests(APITestCase):
         self.assertEqual(self.result_ids(response), [matching.id])
 
     def test_product_search_covers_details_and_variant_fields(self):
-        product, variants = self.create_product("Advanced Product", ["42.00"])
+        product, variants = self.create_product("Advanced Product")
         detail = CategoryDetail.objects.create(name="Surface", type="text")
         ProductDetails.objects.create(product=product, detail=detail, value="Ceramic finish")
         ProductVariantSelection.objects.create(
@@ -1046,7 +1055,7 @@ class CatalogSearchAndReadTests(APITestCase):
         self.assertIn(product.id, self.result_ids(option_response))
 
     def test_product_detail_read_payload_includes_names_pictures_and_children(self):
-        product, variants = self.create_product("Readable Product", ["50.00"])
+        product, variants = self.create_product("Readable Product")
         detail = CategoryDetail.objects.create(name="Material", type="text")
         ProductDetails.objects.create(product=product, detail=detail, value="Steel")
 
@@ -1061,7 +1070,7 @@ class CatalogSearchAndReadTests(APITestCase):
         self.assertEqual(data["variants"][0]["id"], variants[0].id)
 
     def test_variant_search_covers_ids_options_and_inventory_counts(self):
-        product, variants = self.create_product("Inventory Product", ["99.00"])
+        product, variants = self.create_product("Inventory Product")
         variant = variants[0]
         ProductVariantSelection.objects.create(
             variant=variant, attribute=self.attribute, option=self.option
@@ -1286,7 +1295,6 @@ class ProductMultiCategoryTests(APITestCase):
         variant_response = self.client.post(
             f"/api/catalog/products/{product.id}/variants",
             {
-                "price": "100.00",
                 "inventory_strategy_code": "normal",
                 "inventory": {"quantity": 1, "sellable": 1},
                 "selections": [{"attribute_id": self.color_attr.id, "option_id": self.black.id}],
@@ -1308,7 +1316,6 @@ class ProductMultiCategoryTests(APITestCase):
             inventory_strategy=self.normal,
             sku=f"CG{self.phones.id}-PD{product.id}-BLK",
             combination_key=f"{self.color_attr.id}:{self.black.id}",
-            price="100.00",
         )
         ProductVariantSelection.objects.create(
             variant=variant, attribute=self.color_attr, option=self.black

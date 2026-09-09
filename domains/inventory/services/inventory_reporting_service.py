@@ -13,6 +13,7 @@ from django.db.models import (
 )
 from django.db.models.functions import Coalesce
 from django.utils.translation import gettext as _
+from domains.marketplace.models import BusinessOffer
 
 from domains.catalog.models import ProductVariants
 from domains.inventory.models import (
@@ -35,6 +36,14 @@ class InventoryReportingService:
 
     def __init__(self):
         self.pricing_service = InventoryPricingService()
+
+    @staticmethod
+    def _get_offer_price(variant):
+        from domains.marketplace.models import BusinessOffer
+        offer = BusinessOffer.objects.filter(
+            variant=variant, is_active=True
+        ).first()
+        return getattr(offer, "price", None)
 
     # ───────────────────────── shared query builders ─────────────────────────
 
@@ -210,15 +219,26 @@ class InventoryReportingService:
                 Decimal("0"),
                 output_field=DecimalField(max_digits=22, decimal_places=2),
             ),
+            current_price_annotation=Coalesce(
+                Subquery(
+                    BusinessOffer.objects.filter(
+                        variant=OuterRef("pk"),
+                        is_active=True,
+                    ).values("price")[:1],
+                    output_field=DecimalField(max_digits=15, decimal_places=2),
+                ),
+                Decimal("0"),
+                output_field=DecimalField(max_digits=15, decimal_places=2),
+            ),
         )
 
         ordering_map = {
             "sku": "sku",
             "product_name": "product__name",
-            "current_price": "price",
             "remaining_quantity": "remaining_quantity_total",
             "total_consumed_quantity": "total_consumed_quantity",
             "total_cogs": "total_cogs",
+            "current_price": "current_price_annotation",
         }
         requested = (ordering or "sku").strip()
         descending = requested.startswith("-")
@@ -277,7 +297,7 @@ class InventoryReportingService:
                 ),
                 "total_consumed_quantity": stats.get("consumed_quantity", 0) or 0,
                 "total_cogs": (stats.get("total_cogs") or Decimal("0")).quantize(money),
-                "current_price": variant.price,
+                "current_price": self._get_offer_price(variant),
                 "suggested_price": suggested_price,
             }
         return rows

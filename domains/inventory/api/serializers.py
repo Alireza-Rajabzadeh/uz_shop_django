@@ -4,6 +4,7 @@ from domains.catalog.models import ProductVariants
 from domains.inventory.enums.InventorySupplyCostTypeEnum import InventorySupplyCostTypeEnum
 from domains.inventory.enums.VariantCostStrategyEnum import VariantCostStrategyEnum
 from domains.inventory.models import Warehouse
+from domains.business.models import BusinessProfile
 
 
 class ClosedSerializer(serializers.Serializer):
@@ -139,6 +140,12 @@ class WarehouseQuerySerializer(serializers.Serializer):
 
 class WarehouseWriteSerializer(ClosedSerializer):
     name = serializers.CharField(max_length=100)
+    business_id = serializers.PrimaryKeyRelatedField(
+        queryset=BusinessProfile.objects.all(),
+        source="business",
+        required=False,
+        allow_null=True,
+    )
     city = serializers.PrimaryKeyRelatedField(queryset=Warehouse._meta.get_field("city").remote_field.model.objects.all())
     address = serializers.CharField()
     lat = serializers.DecimalField(max_digits=9, decimal_places=6, min_value=-90, max_value=90)
@@ -166,11 +173,13 @@ class WarehouseSerializer(serializers.ModelSerializer):
     country_id = serializers.IntegerField(source="city.state.country_id", read_only=True)
     country_name = serializers.CharField(source="city.state.country.name", read_only=True)
     status_name = serializers.CharField(source="status.name", read_only=True)
+    business_name = serializers.CharField(source="business.business_name", read_only=True, allow_null=True)
 
     class Meta:
         model = Warehouse
         fields = (
-            "id", "code", "name", "city", "city_name", "state_id", "state_name",
+            "id", "code", "name", "business", "business_name",
+            "city", "city_name", "state_id", "state_name",
             "country_id", "country_name", "address", "lat", "lng", "phone_numbers",
             "postal_code", "is_default", "status", "status_name",
         )

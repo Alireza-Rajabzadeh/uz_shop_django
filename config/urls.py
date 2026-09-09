@@ -27,6 +27,7 @@ urlpatterns = [
     path("api/users/", include("domains.users.users_urls")),
     path("api/business/", include("domains.business.api.urls")),
     path("api/customer/", include("domains.customer.urls")),
+    path("api/vendor/", include("domains.vendor.urls")),
     path("api/catalog/", include("domains.catalog.api.urls")),
     path("api/importing/", include("domains.importing.api.urls")),
     path("api/inventory/", include("domains.inventory.api.urls")),
@@ -42,4 +43,5 @@ urlpatterns = [
     path("api/cart/", include("domains.cart.urls")),
     path("api/order", OrderListCreateView.as_view()),
     path("api/order/", include("domains.order.urls")),
+    path("api/marketplace/", include("domains.marketplace.api.urls")),
 ]

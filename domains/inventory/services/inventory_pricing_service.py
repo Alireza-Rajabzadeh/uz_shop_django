@@ -2,7 +2,7 @@ from collections import defaultdict
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import DecimalField, IntegerField, Q, Sum
+from django.db.models import DecimalField, IntegerField, OuterRef, Q, Subquery, Sum
 from django.db.models.functions import Coalesce
 from domains.catalog.models import ProductVariants
 from django.utils.translation import gettext as _
@@ -17,6 +17,7 @@ from domains.inventory.models import (
     VariantPricing,
 )
 from domains.inventory.services.price_history_mongo import log_price_change
+from domains.marketplace.models import BusinessOffer
 
 
 class InventoryPricingService:
@@ -66,11 +67,26 @@ class InventoryPricingService:
 
     @transaction.atomic
     def apply_price(self, variant, *, price=None):
+        from domains.marketplace.models import BusinessOffer
+
         variant = (
             ProductVariants.objects.select_for_update()
             .select_related("product")
             .get(pk=variant.pk)
         )
+        offer = BusinessOffer.objects.filter(
+            variant=variant, is_active=True
+        ).select_for_update().first()
+        if offer is None:
+            raise self.ValidationError({
+                "pricing": [
+                    _(
+                        "No active business offer exists for this variant. "
+                        "Create a BusinessOffer before applying a price."
+                    )
+                ]
+            })
+
         overview = self.get_variant_pricing_overview(variant)
         cost_basis = overview["cost_basis"]
         suggested_price = overview["suggested_price"]
@@ -93,9 +109,9 @@ class InventoryPricingService:
                 "price": [_('Price must be greater than or equal to zero.')]
             })
 
-        old_price = Decimal(variant.price)
-        variant.price = new_price
-        variant.save(update_fields=["price"])
+        old_price = Decimal(offer.price)
+        offer.price = new_price
+        offer.save(update_fields=["price"])
         history = VariantPriceHistory.objects.create(
             variant=variant,
             old_price=old_price,
@@ -209,8 +225,16 @@ class InventoryPricingService:
             "cost_basis": basis.quantize(money) if basis is not None else None,
             "suggested_price": suggested_price.quantize(money) if suggested_price is not None else None,
             "available_supply_quantity": sum(row.remaining_quantity for row in rows),
-            "catalog_price": getattr(variant, "price", None),
+            "catalog_price": self._get_offer_price(variant),
         }
+
+    @staticmethod
+    def _get_offer_price(variant):
+        from domains.marketplace.models import BusinessOffer
+        offer = BusinessOffer.objects.filter(
+            variant=variant, is_active=True
+        ).first()
+        return getattr(offer, "price", None)
 
     # ─────────────────── admin pricing overview / list ───────────────────
 
@@ -218,8 +242,10 @@ class InventoryPricingService:
     def _quantized(value):
         return value.quantize(Decimal("0.01")) if value is not None else None
 
-    def _overview_for_rows(self, variant, config, rows):
+    def _overview_for_rows(self, variant, config, rows, offer_price=None):
         """Shared overview builder; rows must be newest-first and annotated."""
+        if offer_price is None:
+            offer_price = self._get_offer_price(variant)
         latest_cost = self._landed_unit_cost(rows[0]) if rows else None
         fifo_next_cost = self._landed_unit_cost(rows[-1]) if rows else None
         weighted_average_cost = (
@@ -241,7 +267,7 @@ class InventoryPricingService:
             "variant_id": variant.id,
             "sku": variant.sku,
             "product_name": variant.product.name,
-            "current_price": getattr(variant, "price", None),
+            "current_price": offer_price,
             "latest_cost": self._quantized(latest_cost),
             "weighted_average_cost": self._quantized(weighted_average_cost),
             "fifo_next_cost": self._quantized(fifo_next_cost),
@@ -252,7 +278,7 @@ class InventoryPricingService:
             "cost_basis": self._quantized(selected_basis),
             "suggested_price": self._quantized(suggested_price),
             "total_remaining_supply_quantity": sum(row.remaining_quantity for row in rows),
-            "catalog_price": getattr(variant, "price", None),
+            "catalog_price": offer_price,
             "created_at": config.created_at if config is not None else None,
             "updated_at": config.updated_at if config is not None else None,
         }
@@ -308,13 +334,24 @@ class InventoryPricingService:
                 ),
                 0,
                 output_field=IntegerField(),
-            )
+            ),
+            current_price_annotation=Coalesce(
+                Subquery(
+                    BusinessOffer.objects.filter(
+                        variant=OuterRef("pk"),
+                        is_active=True,
+                    ).values("price")[:1],
+                    output_field=DecimalField(max_digits=15, decimal_places=2),
+                ),
+                Decimal("0"),
+                output_field=DecimalField(max_digits=15, decimal_places=2),
+            ),
         )
         ordering_map = {
             "sku": "sku",
             "product_name": "product__name",
-            "current_price": "price",
             "remaining_quantity": "remaining_quantity_total",
+            "current_price": "current_price_annotation",
         }
         requested = (ordering or "sku").strip()
         descending = requested.startswith("-")
@@ -327,6 +364,12 @@ class InventoryPricingService:
         configs = {
             pricing.variant_id: pricing
             for pricing in VariantPricing.objects.filter(variant_id__in=variant_ids)
+        }
+        offer_prices = {
+            offer.variant_id: offer.price
+            for offer in BusinessOffer.objects.filter(
+                variant_id__in=variant_ids, is_active=True,
+            )
         }
         rows_by_variant = defaultdict(list)
         supplies = InventorySupply.objects.filter(
@@ -344,7 +387,8 @@ class InventoryPricingService:
             rows_by_variant[supply.variant_id].append(supply)
         return {
             variant.id: self._overview_for_rows(
-                variant, configs.get(variant.id), rows_by_variant.get(variant.id, [])
+                variant, configs.get(variant.id), rows_by_variant.get(variant.id, []),
+                offer_price=offer_prices.get(variant.id),
             )
             for variant in variants
         }

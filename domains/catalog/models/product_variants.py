@@ -1,6 +1,6 @@
 
 from django.db import models
-from core.constants import DISCOUNT_TYPES
+
 
 class ProductVariants(models.Model):
     class Meta:
@@ -11,23 +11,18 @@ class ProductVariants(models.Model):
                 name="catalog_product_variant_combination_unique",
             ),
         ]
-        indexes = [
-            models.Index(
-                fields=["product", "price"],
-                name="catalog_variant_price_idx",
-            ),
-        ]
+
     product = models.ForeignKey(
         "Product",
         on_delete=models.PROTECT,
-        related_name="variants"
+        related_name="variants",
     )
-    
+
     inventory_strategy = models.ForeignKey(
         "inventory.InventoryStrategy",
-        on_delete=models.PROTECT
+        on_delete=models.PROTECT,
     )
-    
+
     status = models.ForeignKey(
         "ProductVariantStatus",
         on_delete=models.PROTECT,
@@ -35,24 +30,18 @@ class ProductVariants(models.Model):
         null=True,
         blank=True,
     )
-    
+
+    vendor = models.ForeignKey(
+        "vendor.Vendor",
+        on_delete=models.PROTECT,
+        related_name="variants",
+        null=True,
+        blank=True,
+    )
+    domain = models.CharField(max_length=255, blank=True)
+
     sku = models.CharField(max_length=255, unique=True)
     combination_key = models.CharField(max_length=500)
-    price = models.DecimalField(max_digits=15, decimal_places=2, blank=True)
 
-    discount_type = models.CharField(
-        max_length=20,
-        choices=DISCOUNT_TYPES,
-        blank=True,
-        null=True,
-    )
-
-    discount_value = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
-        blank=True,
-        null=True,
-    )
-    
     def __str__(self):
         return self.sku or f"{self.product} #{self.pk}"

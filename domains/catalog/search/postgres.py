@@ -5,13 +5,9 @@ from django.db.models import (
     BooleanField,
     Case,
     Count,
-    DecimalField,
     Exists,
-    ExpressionWrapper,
     F,
     IntegerField,
-    Max,
-    Min,
     OuterRef,
     Prefetch,
     Q,
@@ -38,9 +34,6 @@ from .contracts import ProductSearchCriteria, ProductSearchResult
 from .normalization import normalize_search_text
 
 
-PRICE_FIELD = DecimalField(max_digits=15, decimal_places=2)
-
-
 def normalized_text_expression(field):
     expression = Lower(Coalesce(F(field), Value("")))
     for source, replacement in (
@@ -50,33 +43,6 @@ def normalized_text_expression(field):
     ):
         expression = Replace(expression, Value(source), Value(replacement))
     return expression
-
-
-def effective_price_expression(prefix=""):
-    price = F(f"{prefix}price")
-    discount_value = F(f"{prefix}discount_value")
-    percentage_discount = ExpressionWrapper(
-        price * discount_value / Value(Decimal("100")),
-        output_field=PRICE_FIELD,
-    )
-    return Case(
-        When(
-            **{
-                f"{prefix}discount_type": "percentage",
-                f"{prefix}discount_value__isnull": False,
-                "then": ExpressionWrapper(price - percentage_discount, output_field=PRICE_FIELD),
-            },
-        ),
-        When(
-            **{
-                f"{prefix}discount_type": "fixed",
-                f"{prefix}discount_value__isnull": False,
-                "then": ExpressionWrapper(price - discount_value, output_field=PRICE_FIELD),
-            },
-        ),
-        default=price,
-        output_field=PRICE_FIELD,
-    )
 
 
 class PostgresProductSearchBackend:
@@ -204,23 +170,9 @@ class PostgresProductSearchBackend:
             )
             queryset = queryset.filter(Exists(matching))
 
-        variants = ProductVariants.objects.filter(product_id=OuterRef("pk")).annotate(
-            effective_price=effective_price_expression()
-        )
-        if excluded != "price":
-            if criteria.minimum_price is not None:
-                variants = variants.filter(effective_price__gte=criteria.minimum_price)
-            if criteria.maximum_price is not None:
-                variants = variants.filter(effective_price__lte=criteria.maximum_price)
-            if criteria.minimum_price is not None or criteria.maximum_price is not None:
-                queryset = queryset.filter(Exists(variants))
-
         if criteria.in_stock is not None and excluded != "availability":
             queryset = queryset.annotate(_filter_in_stock=Exists(self._available_variants()))
             queryset = queryset.filter(_filter_in_stock=criteria.in_stock)
-        if criteria.on_sale is not None and excluded != "sale":
-            queryset = queryset.annotate(_filter_on_sale=Exists(self._sale_variants()))
-            queryset = queryset.filter(_filter_on_sale=criteria.on_sale)
         return queryset
 
     @staticmethod
@@ -245,10 +197,16 @@ class PostgresProductSearchBackend:
 
     @staticmethod
     def _sale_variants():
+        from domains.marketplace.models import BusinessOffer
+        offer_variant_ids = BusinessOffer.objects.filter(
+            discount_value__gt=0
+        ).exclude(
+            discount_type__isnull=True
+        ).values_list("variant_id", flat=True)
         return ProductVariants.objects.filter(
             product_id=OuterRef("pk"),
-            discount_value__gt=0,
-        ).exclude(discount_type__isnull=True)
+            id__in=offer_variant_ids,
+        )
 
     def _exact_variants(self, criteria):
         variants = ProductVariants.objects.filter(product_id=OuterRef("pk"))
@@ -262,11 +220,7 @@ class PostgresProductSearchBackend:
         return variants.order_by("id")
 
     def _annotate_result_fields(self, queryset, criteria):
-        price = effective_price_expression("variants__")
         queryset = queryset.annotate(
-            minimum_price=Min("variants__price"),
-            minimum_effective_price=Min(price),
-            maximum_effective_price=Max(price),
             in_stock=Exists(self._available_variants()),
             on_sale=Exists(self._sale_variants()),
         )
@@ -290,11 +244,7 @@ class PostgresProductSearchBackend:
     @staticmethod
     def _order(queryset, criteria):
         exact_prefix = ["-exact_combination"] if criteria.variant_filters else []
-        if criteria.ordering == "price_asc":
-            ordering = ["minimum_effective_price", "id"]
-        elif criteria.ordering == "price_desc":
-            ordering = ["-maximum_effective_price", "id"]
-        elif criteria.ordering == "name":
+        if criteria.ordering == "name":
             ordering = ["name", "id"]
         else:
             ordering = ["-in_stock", "-search_rank", "id"]
@@ -338,11 +288,7 @@ class PostgresProductSearchBackend:
                 if product.brand_id else None
             ),
             "thumbnail_url": thumbnail_url,
-            "pricing": {
-                "minimum_price": product.minimum_price,
-                "minimum_effective_price": product.minimum_effective_price,
-                "maximum_effective_price": product.maximum_effective_price,
-            },
+            "pricing": {},
             "availability": {"in_stock": product.in_stock},
             "on_sale": product.on_sale,
             "variant_match": {
@@ -421,14 +367,10 @@ class PostgresProductSearchBackend:
         }
 
     def _price_facet(self, base, criteria):
-        products = self._apply_filters(base, criteria, "price")
-        variants = ProductVariants.objects.filter(product_id__in=Subquery(products.values("id"))).annotate(
-            effective_price=effective_price_expression()
-        )
-        values = variants.aggregate(minimum=Min("effective_price"), maximum=Max("effective_price"))
         return {
             "type": "range",
-            **values,
+            "minimum": None,
+            "maximum": None,
             "selected_minimum": criteria.minimum_price,
             "selected_maximum": criteria.maximum_price,
         }

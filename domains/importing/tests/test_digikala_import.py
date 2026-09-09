@@ -158,9 +158,6 @@ class DigikalaImportServiceTests(TestCase):
             "20 وات",
         )
         variant = ProductVariants.objects.get(product=product)
-        self.assertEqual(variant.price, 1000)
-        self.assertEqual(variant.discount_type, "fixed")
-        self.assertEqual(variant.discount_value, 200)
         self.assertFalse(variant.warehouse_stocks.exists())
         option = VariantOption.objects.get(variant_selections__variant=variant)
         self.assertEqual(option.name, "Black")
@@ -197,8 +194,6 @@ class DigikalaImportServiceTests(TestCase):
         self.assertEqual(
             set(product.categories.values_list("id", flat=True)), {1003, 3001}
         )
-        self.assertEqual(variant.price, 1200)
-        self.assertEqual(variant.discount_value, 500)
         self.assertEqual(Product.objects.count(), 1)
         self.assertEqual(ProductVariants.objects.count(), 1)
 

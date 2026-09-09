@@ -84,3 +84,4 @@ static-collected/
 
 # Local fallback for file-backed Digikala jobs when not using the Compose mount.
 runtime/
+inventory.txt

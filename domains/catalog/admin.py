@@ -152,7 +152,7 @@ class ProductVariantSelectionInline(admin.TabularInline):
 
 @admin.register(ProductVariants)
 class ProductVariantAdmin(ModelAdmin):
-    list_display = ["product", "sku", "price"]
+    list_display = ["product", "sku", "status"]
     list_filter = ["product"]
     search_fields = ["sku"]
     readonly_fields = ["sku", "combination_key"]

@@ -1,9 +1,10 @@
 from django.db.models import Prefetch
 
-from domains.catalog.models import Product, ProductDetails, ProductFile, ProductVariants
+from domains.catalog.models import Product, ProductDetails, ProductVariants
 from domains.catalog.services.variant_service import VariantService
 from domains.files.services import FileService
 from domains.inventory.services import InventoryService
+from domains.marketplace.models import BusinessOffer
 
 
 class StorefrontProductService:
@@ -56,6 +57,7 @@ class StorefrontProductService:
         return [items[item_id] for item_id in ids if item_id in items]
 
     def _content_queryset(self):
+        from domains.catalog.models import ProductFile
         media = ProductFile.objects.filter(
             file__file_type="image",
             file__status__name="available",
@@ -114,12 +116,15 @@ class StorefrontProductService:
         return list(self._content_items(queryset).values())
 
     def _suggestion_products(self, product, limit=15):
+        from django.db.models import Q
+        offer_ids = BusinessOffer.objects.filter(
+            Q(discount_type__isnull=False) & Q(discount_value__gt=0)
+        ).values_list("variant_id", flat=True)
         queryset = (
             self._content_queryset()
             .filter(
                 status__name__iexact="active",
-                variants__discount_type__isnull=False,
-                variants__discount_value__gt=0,
+                variants__id__in=offer_ids,
             )
             .exclude(pk=product.pk)
             .distinct()
@@ -128,6 +133,7 @@ class StorefrontProductService:
         return list(self._content_items(queryset).values())
 
     def _get_product(self, slug):
+        from domains.catalog.models import ProductFile
         media = ProductFile.objects.filter(
             file__file_type="image",
             file__status__name="available",
@@ -176,13 +182,33 @@ class StorefrontProductService:
             if current is None or current.status.name.casefold() != "active":
                 raise Product.DoesNotExist
 
+    def _attach_offers(self, variants):
+        variant_ids = [v.id for v in variants]
+        offers = BusinessOffer.objects.filter(
+            variant_id__in=variant_ids,
+            is_active=True,
+        ).select_related("business")
+        offer_map = {}
+        for offer in offers:
+            offer_map.setdefault(offer.variant_id, []).append(offer)
+        for variant in variants:
+            variant._business_offers = offer_map.get(variant.id, [])
+            variant._business_offer = variant._business_offers[0] if variant._business_offers else None
+
     def _base_payload(self, product):
         variants = product.storefront_variants
+        self._attach_offers(variants)
         default_variant = next(
             (row for row in variants if row.available_item_count > 0),
             variants[0] if variants else None,
         )
-        effective_prices = [self.variant_service.calculate_discounted_price(row) for row in variants]
+        effective_prices = [
+            self.variant_service.calculate_discounted_price(row) for row in variants
+        ]
+        prices = [
+            getattr(row._business_offer, "price", None) or Decimal("0")
+            for row in variants
+        ]
         media = self._media_payload(product.storefront_media)
         primary_category = self._primary_category(product)
         return {
@@ -204,7 +230,7 @@ class StorefrontProductService:
             "media": media,
             "thumbnail_url": media[0]["url"] if media else None,
             "pricing": {
-                "minimum_price": min((row.price for row in variants), default=None),
+                "minimum_price": min(prices, default=None),
                 "minimum_effective_price": min(effective_prices, default=None),
                 "maximum_effective_price": max(effective_prices, default=None),
             },
@@ -215,7 +241,7 @@ class StorefrontProductService:
             "default_variant": (
                 {
                     "id": default_variant.id,
-                    "price": default_variant.price,
+                    "price": getattr(default_variant._business_offer, "price", None),
                     "effective_price": self.variant_service.calculate_discounted_price(
                         default_variant
                     ),
@@ -277,12 +303,13 @@ class StorefrontProductService:
         ]
 
     def _variant_payload(self, variant):
+        offer = getattr(variant, "_business_offer", None)
         return {
             "id": variant.id,
-            "price": variant.price,
+            "price": getattr(offer, "price", None),
             "effective_price": self.variant_service.calculate_discounted_price(variant),
-            "discount_type": variant.discount_type,
-            "discount_value": variant.discount_value,
+            "discount_type": getattr(offer, "discount_type", None),
+            "discount_value": getattr(offer, "discount_value", None),
             "in_stock": variant.available_item_count > 0,
             "selections": [
                 {

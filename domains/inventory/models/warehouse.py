@@ -14,6 +14,13 @@ class Warehouse(models.Model):
 
     code = models.CharField(max_length=20, unique=True)
     name = models.CharField(max_length=100)
+    business = models.ForeignKey(
+        "business.BusinessProfile",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="warehouses",
+    )
     city = models.ForeignKey(
         "location.City",
         on_delete=models.PROTECT,

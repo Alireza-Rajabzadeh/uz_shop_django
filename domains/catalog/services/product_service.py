@@ -101,7 +101,6 @@ class ProductService(BaseService):
         variants = self.inventory_service.annotate_variant_summaries(ProductVariants.objects.all())
         query = (
             Q(sku__icontains=search)
-            | Q(discount_type__icontains=search)
             | Q(inventory_strategy__code__icontains=search)
             | Q(inventory_strategy__name__icontains=search)
             | Q(selections__attribute__name__icontains=search)
@@ -116,8 +115,6 @@ class ProductService(BaseService):
                 | Q(total_item_count=integer) | Q(sellable_item_count=integer)
                 | Q(available_item_count=integer)
             )
-        if decimal is not None:
-            query |= Q(price=decimal) | Q(discount_value=decimal)
         return variants.filter(query)
 
     def search_products(self, ordering=None, **filters):
@@ -133,7 +130,7 @@ class ProductService(BaseService):
         search = filters.pop("search", None)
         category_id = filters.pop("category_id", None)
         price_operator = filters.pop("price_operator", None)
-        price = filters.pop("price", None)
+        price_value = filters.pop("price", None)
         price_min = filters.pop("price_min", None)
         price_max = filters.pop("price_max", None)
         list_media = ProductFile.objects.filter(
@@ -157,17 +154,6 @@ class ProductService(BaseService):
             queryset = queryset.filter(name__icontains=name)
         if category_id:
             queryset = queryset.filter(categories__id=category_id).distinct()
-        if price_operator:
-            matching_prices = ProductVariants.objects.filter(product_id=OuterRef("pk"))
-            if price_operator == "equal":
-                matching_prices = matching_prices.filter(price=price)
-            elif price_operator == "less_than":
-                matching_prices = matching_prices.filter(price__lt=price)
-            elif price_operator == "greater_than":
-                matching_prices = matching_prices.filter(price__gt=price)
-            else:
-                matching_prices = matching_prices.filter(price__gte=price_min, price__lte=price_max)
-            queryset = queryset.filter(Exists(matching_prices))
         if search:
             base_query = (
                 Q(name__icontains=search) | Q(description__icontains=search)
@@ -184,6 +170,36 @@ class ProductService(BaseService):
             queryset = queryset.filter(
                 base_query | Exists(matching_details) | Exists(matching_variants)
             ).distinct()
+
+        if price_operator:
+            from domains.marketplace.models import BusinessOffer
+            offer_qs = BusinessOffer.objects.filter(
+                variant__product_id=OuterRef("pk"), is_active=True
+            )
+            if price_operator == "between":
+                try:
+                    min_d = Decimal(str(price_min)) if price_min is not None else None
+                    max_d = Decimal(str(price_max)) if price_max is not None else None
+                except (InvalidOperation, ValueError):
+                    min_d = max_d = None
+                if min_d is not None:
+                    offer_qs = offer_qs.filter(price__gte=min_d)
+                if max_d is not None:
+                    offer_qs = offer_qs.filter(price__lte=max_d)
+            elif price_value is not None:
+                try:
+                    price_decimal = Decimal(str(price_value))
+                except (InvalidOperation, ValueError):
+                    price_decimal = None
+                if price_decimal is not None:
+                    if price_operator == "equal":
+                        offer_qs = offer_qs.filter(price=price_decimal)
+                    elif price_operator == "less_than":
+                        offer_qs = offer_qs.filter(price__lt=price_decimal)
+                    elif price_operator == "greater_than":
+                        offer_qs = offer_qs.filter(price__gt=price_decimal)
+            queryset = queryset.filter(Exists(offer_qs))
+
         queryset = queryset.annotate(variant_count=Count("variants", distinct=True))
         descending = ordering and ordering.startswith("-")
         requested_field = ordering.lstrip("-") if ordering else "id"

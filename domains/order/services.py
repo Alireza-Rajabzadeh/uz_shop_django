@@ -65,16 +65,30 @@ class OrderService:
     def _status(self, name):
         return OrderStatus.objects.filter(name=name).first()
 
+    def _attach_offers(self, variants):
+        from domains.marketplace.models import BusinessOffer
+        variant_ids = [v.id for v in variants]
+        offers = BusinessOffer.objects.filter(
+            variant_id__in=variant_ids, is_active=True
+        ).select_related("business")
+        offer_map = {}
+        for offer in offers:
+            offer_map.setdefault(offer.variant_id, []).append(offer)
+        for variant in variants:
+            variant._business_offers = offer_map.get(variant.id, [])
+            variant._business_offer = variant._business_offers[0] if variant._business_offers else None
+
     def _line_snapshot(self, variant, quantity):
-        price = variant.price.quantize(self.two_places)
+        offer = getattr(variant, "_business_offer", None)
+        price = (getattr(offer, "price", None) or Decimal("0")).quantize(self.two_places)
         effective = self.cart_service().variant_service.calculate_discounted_price(
-            variant
+            variant, offer
         ).quantize(self.two_places)
         unit_discount = max(price - effective, Decimal("0")).quantize(self.two_places)
         return {
             "unit_price": price,
-            "discount_type": variant.discount_type,
-            "discount_value": variant.discount_value,
+            "discount_type": getattr(offer, "discount_type", None),
+            "discount_value": getattr(offer, "discount_value", None),
             "unit_discount": unit_discount,
             "line_discount": (unit_discount * quantity).quantize(self.two_places),
             "line_total": (effective * quantity).quantize(self.two_places),
@@ -189,6 +203,8 @@ class OrderService:
         )
         if not items:
             raise self.ValidationError({"cart": [_("The cart is empty.")]})
+
+        self._attach_offers([item.variant for item in items])
 
         summary = self._summary_map([item.variant for item in items])
         validation_errors = []

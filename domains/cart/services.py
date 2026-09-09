@@ -110,6 +110,7 @@ class CartService:
         }
 
     def _attach_variants(self, items):
+        from domains.marketplace.models import BusinessOffer
         variant_ids = [item.variant_id for item in items]
         storefront_media = ProductFile.objects.filter(
             file__file_type="image",
@@ -135,6 +136,15 @@ class CartService:
             row.id: row
             for row in self.inventory_service.annotate_variant_summaries(queryset)
         }
+        offers = BusinessOffer.objects.filter(
+            variant_id__in=variant_ids, is_active=True
+        )
+        offer_map = {}
+        for offer in offers:
+            offer_map.setdefault(offer.variant_id, []).append(offer)
+        for variant in variants.values():
+            variant._business_offers = offer_map.get(variant.id, [])
+            variant._business_offer = variant._business_offers[0] if variant._business_offers else None
         return [(item, variants.get(item.variant_id)) for item in items]
 
     def _product_thumbnail(self, product):
@@ -218,16 +228,17 @@ class CartService:
 
     @staticmethod
     def _variant_pricing(variant):
-        unit_price = variant.price
-        effective_price = VariantService().calculate_discounted_price(variant)
+        offer = getattr(variant, "_business_offer", None)
+        unit_price = getattr(offer, "price", None) or Decimal("0")
+        effective_price = VariantService().calculate_discounted_price(variant, offer)
         unit_discount = max(unit_price - effective_price, Decimal("0"))
         two_places = Decimal("0.01")
         return {
             "unit_price": str(unit_price),
-            "discount_type": variant.discount_type,
+            "discount_type": getattr(offer, "discount_type", None),
             "discount_value": (
-                str(variant.discount_value)
-                if variant.discount_value is not None else None
+                str(offer.discount_value)
+                if offer and offer.discount_value is not None else None
             ),
             "effective_price": str(effective_price.quantize(two_places)),
             "unit_discount_amount": str(unit_discount.quantize(two_places)),
@@ -469,7 +480,15 @@ class CartService:
             "product", "product__status", "inventory_strategy"
         ).prefetch_related("selections__attribute", "selections__option")
         variant = self.inventory_service.annotate_variant_summaries(queryset)[0]
+        self._attach_single_offer(variant)
         return self._variant_payload(variant, quantity, cap_quantity=True)
+
+    def _attach_single_offer(self, variant):
+        from domains.marketplace.models import BusinessOffer
+        offer = BusinessOffer.objects.filter(
+            variant=variant, is_active=True
+        ).select_related("business").first()
+        variant._business_offer = offer
 
     def validate_items(self, items):
         return [
