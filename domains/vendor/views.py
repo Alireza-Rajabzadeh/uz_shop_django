@@ -154,6 +154,7 @@ class VendorPhoneConfirmationVerify(APIView):
 
 
 class VendorMe(APIView):
+    authentication_classes = [VendorJWTAuthentication]
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -171,6 +172,7 @@ class VendorMe(APIView):
 
 
 class VendorChangePassword(APIView):
+    authentication_classes = [VendorJWTAuthentication]
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -188,6 +190,7 @@ class VendorChangePassword(APIView):
 
 
 class VendorPreferenceView(APIView):
+    authentication_classes = [VendorJWTAuthentication]
     permission_classes = [IsAuthenticated]
 
     def get(self, request):

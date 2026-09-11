@@ -11,6 +11,7 @@ from core.management.seeders.payments import PaymentsSeeder
 from core.management.seeders.customers import CustomerSeeder
 from core.management.seeders.location import LocationSeeder
 from core.management.seeders.variant_attributes import VariantAttributeSeeder
+from core.management.seeders.vendor_statuses import VendorStatusSeeder
 
 
 class Command(BaseCommand):
@@ -22,6 +23,7 @@ class Command(BaseCommand):
             CategorySeeder(),
             BrandSeeder(),
             VariantAttributeSeeder(),
+            VendorStatusSeeder(),
             CategoryDetailSeeder(),
             ProductStatusSeeder(),
             ProductVariantStatusSeeder(),
