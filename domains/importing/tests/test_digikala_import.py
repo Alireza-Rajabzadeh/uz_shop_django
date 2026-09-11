@@ -29,7 +29,6 @@ from domains.catalog.models import (
 from domains.importing.services.digikala_import_service import DigikalaImportService
 from domains.importing.models import ExternalProductIdentity
 from domains.files.models import File
-from domains.inventory.models import InventoryStrategy
 
 IN_MEMORY_STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.InMemoryStorage"},
@@ -60,7 +59,6 @@ class DigikalaImportServiceTests(TestCase):
         status, _ = CategoryStatus.objects.get_or_create(name="active")
         ProductStatus.objects.get_or_create(name="pending")
         self.active_product_status, _ = ProductStatus.objects.get_or_create(name="active")
-        InventoryStrategy.objects.get_or_create(code="normal", defaults={"name": "Normal"})
         self.category = Category.objects.create(
             id=1003, name="Chargers", fa_name="شارژر گوشی", status=status
         )

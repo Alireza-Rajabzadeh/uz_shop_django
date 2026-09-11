@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.contrib.auth.models import User
 
+from domains.business.models import BusinessProfile
 from domains.catalog.models import (
     Category,
     CategoryStatus,
@@ -14,13 +15,14 @@ from domains.catalog.models import (
 from domains.cart.models import Cart, CartItem
 from domains.customer.models import Customer, CustomerAddress, CustomerStatus
 from domains.inventory.models import (
-    InventoryStrategy,
     Warehouse,
     WarehouseStatus,
     WarehouseStock,
 )
 from domains.location.models import City, Country, State
+from domains.marketplace.models import BusinessOffer
 from domains.preorder.models import PreOrder
+from domains.vendor.models import Vendor, VendorStatus
 from domains.wishlist.models import Wishlist
 from rest_framework.test import APIClient, APITestCase
 
@@ -106,9 +108,6 @@ class CartAPITests(APITestCase):
             is_default=True,
             status=self.warehouse_status,
         )
-        self.normal, _ = InventoryStrategy.objects.update_or_create(
-            code="normal", defaults={"name": "Normal"}
-        )
         category_status = CategoryStatus.objects.create(name="cart-active")
         self.category = Category.objects.create(
             name="Cart Category", status=category_status
@@ -120,6 +119,21 @@ class CartAPITests(APITestCase):
         self.option = VariantOption.objects.create(
             attribute=self.attribute, name="Black", sku_code="CARTBLK"
         )
+        vendor_status = VendorStatus.objects.create(name="active", title="Active")
+        vendor = Vendor.objects.create(
+            phone="+9990000002",
+            first_name="Cart",
+            last_name="Vendor",
+            national_id="0000000002",
+            vendor_code="VEN-CART-001",
+            status=vendor_status,
+        )
+        self.business = BusinessProfile.objects.create(
+            id=1,
+            vendor=vendor,
+            business_name="Cart Business",
+            display_name="Cart Business",
+        )
 
     def make_product(self, status):
         product = Product.objects.create(name="Cart Product", status=status)
@@ -129,10 +143,13 @@ class CartAPITests(APITestCase):
     def make_variant(self, product, price="100.00", available=8, quantity=10):
         variant = ProductVariants.objects.create(
             product=product,
-            inventory_strategy=self.normal,
             sku=f"CG0-PD{product.id}-CARTBLK",
             combination_key=f"opt:{self.option.id}",
-            price=price,
+        )
+        BusinessOffer.objects.get_or_create(
+            business=self.business,
+            variant=variant,
+            defaults={"price": Decimal(price)},
         )
         WarehouseStock.objects.create(
             variant=variant,
@@ -227,9 +244,10 @@ class CartAPITests(APITestCase):
     def test_cart_shows_live_prices_and_discounts(self):
         product = self.make_product(self.active_status)
         variant = self.make_variant(product)
-        variant.discount_type = "percentage"
-        variant.discount_value = Decimal("10")
-        variant.save(update_fields=["discount_type", "discount_value"])
+        offer = BusinessOffer.objects.get(business=self.business, variant=variant)
+        offer.discount_type = "percentage"
+        offer.discount_value = Decimal("10")
+        offer.save(update_fields=["discount_type", "discount_value"])
 
         self.add_item(variant, quantity=2)
         data = self.client.get("/api/cart/").data["data"]

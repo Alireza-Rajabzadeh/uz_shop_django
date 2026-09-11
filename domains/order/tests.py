@@ -9,6 +9,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.utils import timezone
 
+from domains.business.models import BusinessProfile
 from domains.catalog.models import (
     Category,
     CategoryStatus,
@@ -29,6 +30,7 @@ from domains.inventory.models import (
     WarehouseStock,
 )
 from domains.location.models import City, Country, State
+from domains.marketplace.models import BusinessOffer
 from domains.order.models import (
     Order,
     OrderHistory,
@@ -45,6 +47,7 @@ from domains.payments.models import (
     PaymentMethod,
 )
 from domains.payments.services import PaymentService
+from domains.vendor.models import Vendor, VendorStatus
 from rest_framework.test import APITestCase
 
 from core.management.seeders.order import (
@@ -623,6 +626,21 @@ class OrderAPITests(APITestCase):
         PaymentChannelSupportedMethod.objects.create(
             payment_channel=self.card_channel, payment_method=self.card_to_card
         )
+        vendor_status = VendorStatus.objects.create(name="active", title="Active")
+        vendor = Vendor.objects.create(
+            phone="+9990000003",
+            first_name="Order",
+            last_name="Vendor",
+            national_id="0000000003",
+            vendor_code="VEN-ORDER-001",
+            status=vendor_status,
+        )
+        self.business = BusinessProfile.objects.create(
+            id=1,
+            vendor=vendor,
+            business_name="Order Business",
+            display_name="Order Business",
+        )
         self.set_address()
 
     def set_address(self):
@@ -651,10 +669,13 @@ class OrderAPITests(APITestCase):
     def make_normal_variant(self, product, price="100.00", available=8, quantity=10):
         variant = ProductVariants.objects.create(
             product=product,
-            inventory_strategy=self.normal,
             sku=f"ORD-PD{product.id}-BLK",
             combination_key=f"opt:{self.option.id}",
-            price=price,
+        )
+        BusinessOffer.objects.get_or_create(
+            business=self.business,
+            variant=variant,
+            defaults={"price": Decimal(price)},
         )
         WarehouseStock.objects.create(
             variant=variant,
@@ -781,10 +802,13 @@ class OrderAPITests(APITestCase):
         product = self.make_product()
         variant = ProductVariants.objects.create(
             product=product,
-            inventory_strategy=self.serialized,
             sku=f"SER-PD{product.pk}-BLK",
             combination_key=f"ser:{self.option.id}",
-            price="500.00",
+        )
+        BusinessOffer.objects.get_or_create(
+            business=self.business,
+            variant=variant,
+            defaults={"price": Decimal("500.00")},
         )
         for index in range(3):
             SerializedStock.objects.create(
@@ -848,10 +872,13 @@ class OrderAPITests(APITestCase):
         product = self.make_product()
         variant = ProductVariants.objects.create(
             product=product,
-            inventory_strategy=self.serialized,
             sku=f"SER-PD{product.pk}-BLK",
             combination_key=f"ser:{self.option.id}",
-            price="500.00",
+        )
+        BusinessOffer.objects.get_or_create(
+            business=self.business,
+            variant=variant,
+            defaults={"price": Decimal("500.00")},
         )
         for index in range(3):
             SerializedStock.objects.create(

@@ -24,6 +24,7 @@ from .serializers import (
     CodeOptionSerializer,
     InventoryReportSummarySerializer,
     InventoryVariantQuerySerializer,
+    InventoryVariantDetailSerializer,
     InventoryVariantRowSerializer,
     OptionSerializer,
     PricingListRowSerializer,
@@ -39,7 +40,6 @@ from .serializers import (
     SupplyQuerySerializer,
     SupplyReceiveSerializer,
     SupplyWriteSerializer,
-    VariantInventoryDetailSerializer,
     VariantPriceApplySerializer,
     VariantPriceHistorySerializer,
     VariantPricingOverviewSerializer,
@@ -107,7 +107,7 @@ class InventoryVariantList(InventoryAPIView):
 class VariantInventoryDetail(InventoryAPIView):
     def get_object(self, variant_id):
         variant = ProductVariants.objects.select_related(
-            "inventory_strategy", "product"
+            "product"
         ).prefetch_related(
             "product__categories", "selections__attribute", "selections__option"
         ).filter(pk=variant_id).first()
@@ -120,22 +120,22 @@ class VariantInventoryDetail(InventoryAPIView):
             details = inventory_service.get_variant_details(self.get_object(variant_id))
         except InventoryService.ValidationError as exc:
             raise ValidationError(exc.errors) from exc
-        return api_response(True, "", VariantInventoryDetailSerializer(details).data)
+        return api_response(True, "", InventoryVariantDetailSerializer(details).data)
 
     def patch(self, request, variant_id):
         variant = self.get_object(variant_id)
         serializer = VariantStockWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        strategy = variant.inventory_strategy.code
-        expected = "inventory" if strategy == "normal" else "serial_items"
+        inv_type = inventory_service._detect_inventory_type(variant)
+        expected = "inventory" if inv_type == "normal" else "serial_items"
         if expected not in serializer.validated_data:
-            raise ValidationError({expected: [f"This field is required for {strategy} inventory."]})
+            raise ValidationError({expected: [f"This field is required for {inv_type} inventory."]})
         try:
             variant = inventory_service.adjust_variant_stock(variant, **serializer.validated_data)
             details = inventory_service.get_variant_details(variant)
         except InventoryService.ValidationError as exc:
             raise ValidationError(exc.errors) from exc
-        return api_response(True, "Stock updated.", VariantInventoryDetailSerializer(details).data)
+        return api_response(True, "Stock updated.", InventoryVariantDetailSerializer(details).data)
 
 
 class WarehouseAPIView(APIView):
@@ -208,7 +208,7 @@ class WarehouseStatusOptions(WarehouseAPIView):
 
 class InventoryStrategyOptions(LookupAPIView):
     def get(self, request):
-        return api_response(True, "", CodeOptionSerializer(inventory_service.get_strategies(), many=True).data)
+        return api_response(True, "", CodeOptionSerializer([], many=True).data)
 
 
 class SerializedStatusOptions(LookupAPIView):

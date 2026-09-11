@@ -1,6 +1,7 @@
 from django.db import models
 
 from core.constants import DISCOUNT_TYPES
+from domains.inventory.enums.VariantCostStrategyEnum import VariantCostStrategyEnum
 
 
 class BusinessOffer(models.Model):
@@ -10,6 +11,10 @@ class BusinessOffer(models.Model):
             models.UniqueConstraint(
                 fields=["business", "variant"],
                 name="marketplace_offer_business_variant_unique",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(expected_profit_percentage__gte=0),
+                name="marketplace_offer_profit_gte_zero",
             ),
         ]
 
@@ -35,6 +40,16 @@ class BusinessOffer(models.Model):
         decimal_places=2,
         blank=True,
         null=True,
+    )
+    expected_profit_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+    )
+    cost_strategy = models.CharField(
+        max_length=20,
+        choices=VariantCostStrategyEnum.choices(),
+        default="latest",
     )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)

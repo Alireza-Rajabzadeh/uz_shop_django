@@ -3,6 +3,7 @@ from decimal import Decimal
 from rest_framework import serializers
 
 from core.constants import DISCOUNT_TYPES
+from domains.inventory.enums.VariantCostStrategyEnum import VariantCostStrategyEnum
 from ..models import BusinessOffer
 
 
@@ -16,6 +17,8 @@ class BusinessOfferSerializer(serializers.ModelSerializer):
             "price",
             "discount_type",
             "discount_value",
+            "expected_profit_percentage",
+            "cost_strategy",
             "is_active",
             "created_at",
             "updated_at",
@@ -41,5 +44,19 @@ class BusinessOfferSerializer(serializers.ModelSerializer):
         if discount_type == "fixed" and price is not None and discount_value is not None and discount_value > price:
             raise serializers.ValidationError({
                 "discount_value": "Fixed discount cannot exceed the price."
+            })
+        cost_strategy = attrs.get(
+            "cost_strategy", getattr(self.instance, "cost_strategy", None)
+        )
+        if cost_strategy is not None and cost_strategy not in {m.value for m in VariantCostStrategyEnum}:
+            raise serializers.ValidationError({
+                "cost_strategy": "Unsupported pricing cost strategy."
+            })
+        expected_profit = attrs.get(
+            "expected_profit_percentage", getattr(self.instance, "expected_profit_percentage", None)
+        )
+        if expected_profit is not None and expected_profit < 0:
+            raise serializers.ValidationError({
+                "expected_profit_percentage": "Expected profit percentage must be greater than or equal to zero."
             })
         return attrs

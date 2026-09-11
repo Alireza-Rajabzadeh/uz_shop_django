@@ -1,3 +1,9 @@
+from .inventory import Inventory
+from .inventory_attribute import InventoryAttribute
+from .inventory_attribute_definition import InventoryAttributeDefinition
+from .inventory_unit import InventoryUnit
+from .inventory_unit_attribute import InventoryUnitAttribute
+from .inventory_transfer import InventoryTransfer
 from .inventory_strategy import InventoryStrategy
 from .warehouse_status import WarehouseStatus
 from .warehouse import Warehouse
@@ -7,5 +13,4 @@ from .serialized_stock import SerializedStock
 from .inventory_supply import InventorySupply
 from .inventory_supply_cost import InventorySupplyCost
 from .inventory_supply_consumption import InventorySupplyConsumption
-from .variant_pricing import VariantPricing
 from .variant_price_history import VariantPriceHistory

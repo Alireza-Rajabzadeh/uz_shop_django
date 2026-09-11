@@ -19,7 +19,6 @@ from domains.catalog.models import ProductVariants
 from domains.inventory.models import (
     InventorySupply,
     InventorySupplyConsumption,
-    VariantPricing,
 )
 from domains.inventory.services.inventory_pricing_service import InventoryPricingService
 
@@ -173,8 +172,8 @@ class InventoryReportingService:
                 raise self.ValidationError({
                     "strategy": [_('Unsupported pricing cost strategy.')]
                 })
-            queryset = queryset.filter(pk__in=VariantPricing.objects.filter(
-                cost_strategy=strategy
+            queryset = queryset.filter(pk__in=BusinessOffer.objects.filter(
+                cost_strategy=strategy, is_active=True
             ).values_list("variant_id", flat=True))
 
         scoped_consumptions = InventorySupplyConsumption.objects.filter(
@@ -255,8 +254,10 @@ class InventoryReportingService:
             supplies_by_variant[supply.variant_id].append(supply)
         consumption_stats = self._consumption_stats_by_variant(variant_ids)
         configs = {
-            pricing.variant_id: pricing
-            for pricing in VariantPricing.objects.filter(variant_id__in=variant_ids)
+            offer.variant_id: offer
+            for offer in BusinessOffer.objects.filter(
+                variant_id__in=variant_ids, is_active=True
+            )
         }
         rows = {}
         money = Decimal("0.01")

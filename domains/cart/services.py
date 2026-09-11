@@ -120,7 +120,7 @@ class CartService:
         queryset = (
             ProductVariants.objects.filter(pk__in=variant_ids)
             .select_related(
-                "product", "inventory_strategy", "product__status", "product__brand"
+                "product", "product__status", "product__brand"
             )
             .prefetch_related(
                 "selections__attribute",
@@ -204,11 +204,6 @@ class CartService:
             **pricing,
             "line_discount": str((unit_discount * item.quantity).quantize(two_places)),
             "line_total": str((effective_price * item.quantity).quantize(two_places)),
-            "inventory_strategy": {
-                "id": variant.inventory_strategy_id,
-                "code": variant.inventory_strategy.code,
-                "name": variant.inventory_strategy.name,
-            },
             "available": variant.available_item_count,
             "selections": [
                 {
@@ -286,11 +281,6 @@ class CartService:
             "sku": variant.sku,
             "combination_key": variant.combination_key,
             **self._variant_pricing(variant),
-            "inventory_strategy": {
-                "id": variant.inventory_strategy_id,
-                "code": variant.inventory_strategy.code,
-                "name": variant.inventory_strategy.name,
-            },
             "available": available,
             "selections": [
                 {
@@ -326,7 +316,6 @@ class CartService:
             "discount_value": None,
             "effective_price": "0.00",
             "unit_discount_amount": "0.00",
-            "inventory_strategy": None,
             "available": 0,
             "selections": [],
             "purchasable": False,
@@ -355,7 +344,6 @@ class CartService:
             "unit_discount_amount": "0.00",
             "line_discount": "0.00",
             "line_total": "0.00",
-            "inventory_strategy": None,
             "available": 0,
             "selections": [],
             "purchasable": False,
@@ -472,7 +460,7 @@ class CartService:
             raise self.ValidationError({"quantity": [_("Quantity must be greater than zero.")]})
         try:
             variant = ProductVariants.objects.select_related(
-                "product", "product__status", "inventory_strategy"
+                "product", "product__status"
             ).prefetch_related("selections__attribute", "selections__option").get(id=variant_id)
         except ProductVariants.DoesNotExist:
             return self._unavailable_payload(variant_id, quantity)

@@ -6,6 +6,7 @@ from .models import BusinessPhone, BusinessProfile, BusinessSocialLink, Business
 @admin.register(BusinessProfile)
 class BusinessProfileAdmin(admin.ModelAdmin):
     list_display = ("display_name", "availability_status", "cache_ttl", "updated_at")
+    search_fields = ("business_name", "display_name")
 
 
 @admin.register(BusinessPhone)

@@ -4,13 +4,18 @@ from unfold.admin import ModelAdmin, TabularInline
 from domains.inventory.services import InventoryCostService
 
 from .models import (
+    Inventory,
+    InventoryAttribute,
+    InventoryAttributeDefinition,
     InventoryStrategy,
     InventorySupply,
     InventorySupplyCost,
+    InventoryTransfer,
+    InventoryUnit,
+    InventoryUnitAttribute,
     SerializedStock,
     SerializedStockStatus,
     VariantPriceHistory,
-    VariantPricing,
     Warehouse,
     WarehouseStatus,
     WarehouseStock,
@@ -23,6 +28,66 @@ inventory_cost_service = InventoryCostService()
 class InventoryStrategyAdmin(ModelAdmin):
     list_display = ["code", "name"]
     search_fields = ["code", "name"]
+
+
+@admin.register(Inventory)
+class InventoryAdmin(ModelAdmin):
+    list_display = ["variant", "warehouse", "business", "quantity", "sellable", "reserved", "available", "min_stock"]
+    list_filter = ["warehouse", "business"]
+    search_fields = ["variant__sku"]
+    autocomplete_fields = ["variant", "warehouse", "business"]
+    readonly_fields = ["created_at", "updated_at"]
+
+
+@admin.register(InventoryUnit)
+class InventoryUnitAdmin(ModelAdmin):
+    list_display = ["pk", "inventory", "state", "supply", "created_at", "updated_at"]
+    list_filter = ["state"]
+    search_fields = ["inventory__variant__sku", "inventory__warehouse__code"]
+    autocomplete_fields = ["inventory", "supply"]
+    readonly_fields = ["created_at", "updated_at"]
+
+
+@admin.register(InventoryAttributeDefinition)
+class InventoryAttributeDefinitionAdmin(ModelAdmin):
+    list_display = ["name", "code", "business", "type", "created_at"]
+    list_filter = ["type", "business"]
+    search_fields = ["name", "code"]
+    autocomplete_fields = ["business"]
+    readonly_fields = ["created_at", "updated_at"]
+
+
+@admin.register(InventoryAttribute)
+class InventoryAttributeAdmin(ModelAdmin):
+    list_display = ["inventory", "attribute_definition", "value"]
+    search_fields = ["inventory__variant__sku", "attribute_definition__name", "value"]
+    autocomplete_fields = ["inventory", "attribute_definition"]
+
+
+@admin.register(InventoryUnitAttribute)
+class InventoryUnitAttributeAdmin(ModelAdmin):
+    list_display = ["inventory_unit", "attribute_definition", "value"]
+    search_fields = [
+        "inventory_unit__inventory__variant__sku",
+        "attribute_definition__name",
+        "value",
+    ]
+    autocomplete_fields = ["inventory_unit", "attribute_definition"]
+
+
+@admin.register(InventoryTransfer)
+class InventoryTransferAdmin(ModelAdmin):
+    list_display = [
+        "variant",
+        "source_inventory",
+        "destination_inventory",
+        "quantity",
+        "unit_count",
+        "created_at",
+    ]
+    search_fields = ["variant__sku", "notes"]
+    autocomplete_fields = ["source_inventory", "destination_inventory", "variant"]
+    readonly_fields = ["created_at"]
 
 
 @admin.register(WarehouseStatus)
@@ -112,14 +177,6 @@ class InventorySupplyAdmin(ModelAdmin):
     @admin.display(description="Landed unit cost")
     def landed_unit_cost_display(self, obj):
         return inventory_cost_service.get_landed_unit_cost(obj)
-
-
-@admin.register(VariantPricing)
-class VariantPricingAdmin(ModelAdmin):
-    list_display = ["variant", "expected_profit_percentage", "cost_strategy", "updated_at"]
-    list_filter = ["cost_strategy"]
-    search_fields = ["variant__sku"]
-    autocomplete_fields = ["variant"]
 
 
 @admin.register(VariantPriceHistory)

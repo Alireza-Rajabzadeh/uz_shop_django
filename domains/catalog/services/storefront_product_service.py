@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.db.models import Prefetch
 
 from domains.catalog.models import Product, ProductDetails, ProductVariants
@@ -64,7 +66,7 @@ class StorefrontProductService:
             file__deleted_at__isnull=True,
         ).select_related("file").order_by("-is_primary", "position", "id")
         variants = self.inventory_service.annotate_variant_summaries(
-            ProductVariants.objects.select_related("inventory_strategy")
+            ProductVariants.objects
             .filter(status__name__iexact="active")
         ).prefetch_related("selections__attribute", "selections__option").order_by("id")
         return (
@@ -143,7 +145,7 @@ class StorefrontProductService:
             "detail__name", "id"
         )
         variants = self.inventory_service.annotate_variant_summaries(
-            ProductVariants.objects.select_related("inventory_strategy")
+            ProductVariants.objects
             .filter(status__name__iexact="active")
         ).prefetch_related("selections__attribute", "selections__option").order_by("id")
         product = (

@@ -22,7 +22,6 @@ from domains.catalog.models import (
     VariantOption,
 )
 from domains.catalog.services import DetailService
-from domains.inventory.models import InventoryStrategy
 from domains.marketplace.models import BusinessOffer
 from domains.vendor.models import Vendor, VendorStatus
 
@@ -40,10 +39,6 @@ class StorefrontProductSearchTests(TestCase):
         )
         self.samsung = Brand.objects.create(name="Samsung")
         self.xiaomi = Brand.objects.create(name="Xiaomi")
-        self.strategy, _ = InventoryStrategy.objects.get_or_create(
-            code="normal",
-            defaults={"name": "Normal"},
-        )
         vendor_status, _ = VendorStatus.objects.get_or_create(
             name="active", defaults={"title": "Active"}
         )
@@ -121,7 +116,6 @@ class StorefrontProductSearchTests(TestCase):
     def create_variant(self, product, suffix, price, selections, **discount):
         variant = ProductVariants.objects.create(
             product=product,
-            inventory_strategy=self.strategy,
             status=self.variant_status,
             sku=f"{product.id}-{suffix}",
             combination_key=suffix,

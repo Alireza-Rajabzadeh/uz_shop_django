@@ -18,11 +18,6 @@ class ProductVariants(models.Model):
         related_name="variants",
     )
 
-    inventory_strategy = models.ForeignKey(
-        "inventory.InventoryStrategy",
-        on_delete=models.PROTECT,
-    )
-
     status = models.ForeignKey(
         "ProductVariantStatus",
         on_delete=models.PROTECT,

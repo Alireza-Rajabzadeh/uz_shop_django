@@ -18,7 +18,7 @@ from domains.catalog.models import (
     VariantAttribute,
     VariantOption,
 )
-from domains.inventory.models import InventoryStrategy, Warehouse, WarehouseStatus, WarehouseStock
+from domains.inventory.models import Warehouse, WarehouseStatus, WarehouseStock
 from domains.location.models import City, Country, State
 from domains.business.models import BusinessProfile
 from domains.marketplace.models import BusinessOffer
@@ -48,12 +48,6 @@ class ProductVariantWorkflowTests(APITestCase):
             attribute=self.storage, name="128 GB", sku_code="128GB"
         )
         CategoryVariantAttribute.objects.create(category=self.category, attribute=self.color)
-        self.normal, _ = InventoryStrategy.objects.get_or_create(
-            code="normal", defaults={"name": "Normal"}
-        )
-        InventoryStrategy.objects.get_or_create(
-            code="serialized", defaults={"name": "Serialized"}
-        )
         country = Country.objects.create(
             name="Variant Country", code="VC", phone_code="+1"
         )
@@ -74,7 +68,6 @@ class ProductVariantWorkflowTests(APITestCase):
     def variant_payload(self, options=None):
         options = options or [(self.color, self.black), (self.storage, self.gb128)]
         return {
-            "inventory_strategy_code": "normal",
             "inventory": {"quantity": 0, "sellable": 0},
             "selections": [
                 {"attribute_id": attribute.id, "option_id": option.id}
@@ -122,7 +115,6 @@ class ProductVariantWorkflowTests(APITestCase):
 
         self.assertEqual(response.status_code, 201)
         variant = ProductVariants.objects.get(product=self.product)
-        self.assertEqual(variant.inventory_strategy, self.normal)
         self.assertEqual(
             variant.sku,
             f"CG{self.category.id}-PD{self.product.id}-BLK-128GB",
@@ -149,29 +141,10 @@ class ProductVariantWorkflowTests(APITestCase):
         )
         variant.refresh_from_db()
         self.assertEqual(variant.sku, f"CG{self.category.id}-PD{self.product.id}-WHT")
-        self.assertEqual(variant.inventory_strategy, self.normal)
         self.assertEqual(
             list(variant.selections.values_list("attribute_id", "option_id")),
             [(self.color.id, self.white.id)],
         )
-
-    def test_update_preserves_existing_serialized_strategy(self):
-        serialized = InventoryStrategy.objects.get(code="serialized")
-        self.create_variant()
-        variant = ProductVariants.objects.get(product=self.product)
-        variant.warehouse_stocks.all().delete()
-        variant.inventory_strategy = serialized
-        variant.save(update_fields=["inventory_strategy"])
-
-        response = self.client.patch(
-            f"/api/catalog/variants/{variant.id}",
-            {},
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, 200)
-        variant.refresh_from_db()
-        self.assertEqual(variant.inventory_strategy, serialized)
 
     def test_rejects_duplicate_combination(self):
         self.assertEqual(self.create_variant().status_code, 201)
@@ -948,9 +921,6 @@ class CatalogSearchAndReadTests(APITestCase):
         self.category_status = CategoryStatus.objects.create(name="search-active")
         self.product_status = ProductStatus.objects.create(name="search-pending")
         self.category = Category.objects.create(name="Search Phones", status=self.category_status)
-        self.normal, _ = InventoryStrategy.objects.get_or_create(
-            code="normal", defaults={"name": "Search Normal"}
-        )
         country = Country.objects.create(name="Search Country", code="SC", phone_code="+2")
         state = State.objects.create(name="Search State", country=country)
         city = City.objects.create(name="Search City", state=state)
@@ -979,7 +949,6 @@ class CatalogSearchAndReadTests(APITestCase):
         variants = []
         variant = ProductVariants.objects.create(
             product=product,
-            inventory_strategy=self.normal,
             sku=f"{name.upper().replace(' ', '-')}-0",
             combination_key="0",
         )
@@ -1070,12 +1039,18 @@ class CatalogSearchAndReadTests(APITestCase):
         self.assertEqual(data["variants"][0]["id"], variants[0].id)
 
     def test_variant_search_covers_ids_options_and_inventory_counts(self):
+        from domains.inventory.models import Inventory
+        from domains.business.models import BusinessProfile
         product, variants = self.create_product("Inventory Product")
         variant = variants[0]
         ProductVariantSelection.objects.create(
             variant=variant, attribute=self.attribute, option=self.option
         )
-        WarehouseStock.objects.create(
+        business, _ = BusinessProfile.objects.get_or_create(
+            id=1, defaults={"business_name": "Catalog Test Business", "display_name": "Catalog Test Biz"}
+        )
+        Inventory.objects.create(
+            business=business,
             variant=variant,
             warehouse=self.warehouse,
             quantity=987,
@@ -1256,9 +1231,6 @@ class ProductMultiCategoryTests(APITestCase):
         self.black = VariantOption.objects.create(
             attribute=self.color_attr, name="Black", sku_code="BLK"
         )
-        self.normal, _ = InventoryStrategy.objects.get_or_create(
-            code="normal", defaults={"name": "M2M Normal"}
-        )
         country = Country.objects.create(name="M2M Country", code="MC", phone_code="+3")
         state = State.objects.create(name="M2M State", country=country)
         city = City.objects.create(name="M2M City", state=state)
@@ -1295,7 +1267,6 @@ class ProductMultiCategoryTests(APITestCase):
         variant_response = self.client.post(
             f"/api/catalog/products/{product.id}/variants",
             {
-                "inventory_strategy_code": "normal",
                 "inventory": {"quantity": 1, "sellable": 1},
                 "selections": [{"attribute_id": self.color_attr.id, "option_id": self.black.id}],
             },
@@ -1313,7 +1284,6 @@ class ProductMultiCategoryTests(APITestCase):
         product.categories.add(self.phones)
         variant = ProductVariants.objects.create(
             product=product,
-            inventory_strategy=self.normal,
             sku=f"CG{self.phones.id}-PD{product.id}-BLK",
             combination_key=f"{self.color_attr.id}:{self.black.id}",
         )

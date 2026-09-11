@@ -21,7 +21,6 @@ from domains.catalog.models import (
     ProductVariantSelection,
     VariantAttribute,
 )
-from domains.inventory.models import InventoryStrategy
 from domains.inventory.services import InventoryService
 from domains.files.services import FileService
 
@@ -101,8 +100,6 @@ class ProductService(BaseService):
         variants = self.inventory_service.annotate_variant_summaries(ProductVariants.objects.all())
         query = (
             Q(sku__icontains=search)
-            | Q(inventory_strategy__code__icontains=search)
-            | Q(inventory_strategy__name__icontains=search)
             | Q(selections__attribute__name__icontains=search)
             | Q(selections__option__name__icontains=search)
             | Q(selections__option__sku_code__icontains=search)
@@ -110,7 +107,7 @@ class ProductService(BaseService):
         integer, decimal = self._numeric_values(search)
         if integer is not None:
             query |= (
-                Q(id=integer) | Q(product_id=integer) | Q(inventory_strategy_id=integer)
+                Q(id=integer) | Q(product_id=integer)
                 | Q(selections__attribute_id=integer) | Q(selections__option_id=integer)
                 | Q(total_item_count=integer) | Q(sellable_item_count=integer)
                 | Q(available_item_count=integer)
@@ -496,7 +493,6 @@ class ProductService(BaseService):
         product,
         *,
         selections=(),
-        inventory_strategy_code,
         inventory=None,
         serial_items=None,
         inventory_submitted=True,
@@ -513,7 +509,6 @@ class ProductService(BaseService):
             with transaction.atomic():
                 variant = ProductVariants.objects.create(
                     product=product,
-                    inventory_strategy=InventoryStrategy.objects.get(code=inventory_strategy_code),
                     combination_key=combination_key,
                     sku=sku,
                     **variant_data,
@@ -526,7 +521,6 @@ class ProductService(BaseService):
         try:
             self.inventory_service.apply_variant_inventory(
                 variant,
-                strategy_code=inventory_strategy_code,
                 inventory=inventory,
                 serial_items=serial_items,
                 inventory_submitted=inventory_submitted,
@@ -537,7 +531,7 @@ class ProductService(BaseService):
 
     def _variant_queryset(self):
         queryset = ProductVariants.objects.select_related(
-            "inventory_strategy"
+            "product"
         ).prefetch_related(
             "selections__attribute", "selections__option",
             "warehouse_stocks", "serialized_stocks__status",
@@ -553,7 +547,7 @@ class ProductService(BaseService):
 
     def get_variant(self, id):
         return get_object_or_404(
-            ProductVariants.objects.select_related("product", "inventory_strategy").prefetch_related(
+            ProductVariants.objects.select_related("product").prefetch_related(
                 "selections__attribute", "selections__option",
                 "warehouse_stocks", "serialized_stocks__status",
             ),
@@ -566,7 +560,6 @@ class ProductService(BaseService):
         instance,
         *,
         selections=None,
-        inventory_strategy_code=None,
         inventory=None,
         serial_items=None,
         inventory_submitted=False,
@@ -594,7 +587,6 @@ class ProductService(BaseService):
         try:
             self.inventory_service.apply_variant_inventory(
                 instance,
-                strategy_code=inventory_strategy_code or instance.inventory_strategy.code,
                 inventory=inventory,
                 serial_items=serial_items,
                 inventory_submitted=inventory_submitted,

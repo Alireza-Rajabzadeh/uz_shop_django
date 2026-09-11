@@ -7,12 +7,13 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from domains.inventory.enums.InventorySupplyCostTypeEnum import InventorySupplyCostTypeEnum
+from domains.inventory.enums.InventoryUnitStateEnum import InventoryUnitStateEnum
 from domains.inventory.models import (
+    Inventory,
     InventorySupply,
     InventorySupplyConsumption,
     InventorySupplyCost,
-    SerializedStock,
-    WarehouseStock,
+    InventoryUnit,
 )
 from domains.inventory.services.inventory_cost_service import InventoryCostService
 from domains.inventory.services.inventory_service import InventoryService
@@ -142,7 +143,7 @@ class InventorySupplyService:
     def update_supply(self, supply, **values):
         supply = (
             InventorySupply.objects.select_for_update()
-            .select_related("variant__product", "warehouse", "variant__inventory_strategy")
+            .select_related("variant__product", "warehouse")
             .prefetch_related("costs")
             .get(pk=supply.pk)
         )
@@ -210,16 +211,19 @@ class InventorySupplyService:
         # FIFO consumption will consume cost layers in a later step.
         supply = (
             InventorySupply.objects.select_for_update()
-            .select_related("variant__inventory_strategy")
+            .select_related("variant")
             .get(pk=supply.pk)
         )
         if supply.received_at is not None:
             raise self.ValidationError({
                 "receive": [_('This supply has already been received.')]
             })
-        strategy_code = supply.variant.inventory_strategy.code
+        inv_type = self.inventory_service._detect_inventory_type(supply.variant)
+        has_inventory = Inventory.objects.filter(variant=supply.variant).exists()
         try:
-            if strategy_code == "normal":
+            if inv_type == "serialized" or (not has_inventory and serial_items is not None):
+                self._receive_serialized_supply(supply, serial_items)
+            else:
                 if serial_items:
                     raise self.ValidationError({
                         "serial_items": [_('Serial items are only accepted for serialized inventory.')]
@@ -229,10 +233,6 @@ class InventorySupplyService:
                     warehouse=supply.warehouse,
                     quantity=supply.quantity,
                 )
-            else:
-                # Serial items are added later through the inventory UI.
-                # Receiving just marks the supply as confirmed.
-                pass
         except InventoryService.ValidationError as exc:
             # Normalize the stock service's errors into this service's contract.
             if isinstance(exc, self.ValidationError):
@@ -242,6 +242,41 @@ class InventorySupplyService:
         supply.save(update_fields=["received_at"])
         return self.get_supply(supply.id)
 
+    def _receive_serialized_supply(self, supply, serial_items):
+        from domains.business.models import BusinessProfile
+        from domains.inventory.models import InventoryAttributeDefinition, InventoryUnitAttribute
+
+        business = BusinessProfile.objects.get(id=1)
+        inventory, _ = Inventory.objects.select_for_update().get_or_create(
+            business=business,
+            warehouse=supply.warehouse,
+            variant=supply.variant,
+            defaults={"quantity": 0, "sellable": 0, "reserved": 0},
+        )
+        if serial_items:
+            serial_attr_def = InventoryAttributeDefinition.objects.filter(code="serial_number").first()
+            units = []
+            for item in serial_items:
+                units.append(InventoryUnit(
+                    inventory=inventory,
+                    state=InventoryUnitStateEnum.IN_STOCK.value,
+                    supply=supply,
+                ))
+            created_units = InventoryUnit.objects.bulk_create(units)
+            if serial_attr_def:
+                attrs = [
+                    InventoryUnitAttribute(
+                        inventory_unit=unit,
+                        attribute_definition=serial_attr_def,
+                        value=item.get("serial_number", ""),
+                    )
+                    for unit, item in zip(created_units, serial_items)
+                ]
+                InventoryUnitAttribute.objects.bulk_create(attrs)
+            inventory.quantity += len(units)
+            inventory.sellable += len(units)
+            inventory.save(update_fields=["quantity", "sellable"])
+
     @transaction.atomic
     def consume_order_item(self, order_item):
         # Consume supply cost layers for a finalized sale. Called from
@@ -249,7 +284,6 @@ class InventorySupplyService:
         # cart/reservation/pending stages. Idempotent per order item.
         order_item = (
             OrderItem.objects.select_for_update()
-            .select_related("inventory_strategy")
             .get(pk=order_item.pk)
         )
         if order_item.supply_consumptions.exists():
@@ -261,8 +295,14 @@ class InventorySupplyService:
         if order_item.variant_id is None:
             return []
         reservations = list(order_item.reservations.all())
+        new_unit_reservations = [r for r in reservations if r.linked_unit_id is not None]
+        new_inventory_reservations = [r for r in reservations if r.linked_inventory_id is not None and r.linked_unit_id is None]
         normal_ids = [r.inventory_id for r in reservations if r.inventory_type == "warehouse_stock"]
         serialized_ids = [r.inventory_id for r in reservations if r.inventory_type == "serialized_stock"]
+        if new_unit_reservations:
+            return self._consume_new_serialized_layers(order_item, new_unit_reservations)
+        if new_inventory_reservations:
+            return self._consume_new_normal_layers(order_item, new_inventory_reservations)
         if order_item.inventory_strategy.code == "normal":
             return self._consume_normal_layers(order_item, normal_ids)
         return self._consume_serialized_layers(order_item, serialized_ids)
@@ -283,6 +323,48 @@ class InventorySupplyService:
                     warehouse_id=warehouse_id, quantity=need,
                 )
             )
+        return consumptions
+
+    def _consume_new_normal_layers(self, order_item, reservations):
+        needs = {}
+        for r in reservations:
+            inv = r.linked_inventory
+            if inv is None:
+                continue
+            needs[inv.warehouse_id] = needs.get(inv.warehouse_id, 0) + r.quantity
+        consumptions = []
+        for warehouse_id, need in needs.items():
+            consumptions.extend(
+                self._consume_fifo(
+                    order_item, variant_id=order_item.variant_id,
+                    warehouse_id=warehouse_id, quantity=need,
+                )
+            )
+        return consumptions
+
+    def _consume_new_serialized_layers(self, order_item, reservations):
+        from domains.inventory.models import InventoryUnit
+        counts_by_supply = {}
+        for r in reservations:
+            unit = r.linked_unit
+            if unit is None:
+                continue
+            if unit.supply_id is None:
+                continue
+            counts_by_supply[unit.supply_id] = counts_by_supply.get(unit.supply_id, 0) + 1
+        consumptions = []
+        for supply_id, count in sorted(counts_by_supply.items()):
+            supply = InventorySupply.objects.select_for_update().get(pk=supply_id)
+            if supply.remaining_quantity < count:
+                raise self.ValidationError({
+                    "supply": [
+                        _('Supply %(reference)s does not cover %(needed)s consumed units.')
+                        % {"reference": supply.reference_number or supply.id, "needed": count}
+                    ]
+                })
+            consumptions.append(self._create_consumption(order_item, supply, count))
+            supply.remaining_quantity -= count
+            supply.save(update_fields=["remaining_quantity"])
         return consumptions
 
     def _consume_fifo(self, order_item, *, variant_id, warehouse_id, quantity):

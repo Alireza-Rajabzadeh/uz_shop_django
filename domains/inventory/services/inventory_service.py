@@ -2,19 +2,37 @@ import uuid
 
 from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
-from django.db.models import Case, Count, F, IntegerField, OuterRef, Q, Subquery, Sum, When
+from django.db.models import Count, F, IntegerField, OuterRef, Q, Subquery, Sum
 from django.db.models.functions import Coalesce
 from django.utils.translation import gettext as _
 
 from domains.catalog.models import Category
+from domains.inventory.enums.InventoryUnitStateEnum import InventoryUnitStateEnum
 from domains.inventory.models import (
-    InventoryStrategy,
-    SerializedStock,
-    SerializedStockStatus,
+    Inventory,
+    InventoryAttributeDefinition,
+    InventoryTransfer,
+    InventoryUnit,
+    InventoryUnitAttribute,
     Warehouse,
     WarehouseStatus,
-    WarehouseStock,
 )
+
+_VALID_TRANSITIONS = {
+    InventoryUnitStateEnum.IN_STOCK.value: {
+        InventoryUnitStateEnum.RESERVED.value,
+        InventoryUnitStateEnum.SOLD.value,
+        InventoryUnitStateEnum.DAMAGED.value,
+        InventoryUnitStateEnum.LOST.value,
+    },
+    InventoryUnitStateEnum.RESERVED.value: {
+        InventoryUnitStateEnum.IN_STOCK.value,
+        InventoryUnitStateEnum.SOLD.value,
+    },
+    InventoryUnitStateEnum.RETURNED.value: {
+        InventoryUnitStateEnum.IN_STOCK.value,
+    },
+}
 
 
 class InventoryService:
@@ -23,18 +41,12 @@ class InventoryService:
             self.errors = errors
             super().__init__(str(errors))
 
-    def get_strategies(self):
-        return InventoryStrategy.objects.filter(
-            code__in=("normal", "serialized")
-        ).order_by("id")
-
     def search_variants(
         self,
         *,
         search=None,
         product=None,
         category=None,
-        strategy_code=None,
         stock_state=None,
         has_reserved=None,
         ordering=None,
@@ -45,51 +57,17 @@ class InventoryService:
             products=OuterRef("product_id")
         ).order_by("id").values("name")[:1]
         queryset = ProductVariants.objects.select_related(
-            "product", "inventory_strategy"
+            "product"
         ).prefetch_related(
             "product__categories", "selections__attribute", "selections__option"
         ).annotate(primary_category_name=Subquery(primary_category))
         queryset = self.annotate_variant_summaries(queryset)
-        reserved_normal = WarehouseStock.objects.filter(
-            variant_id=OuterRef("pk")
-        ).values("variant_id")
-        reserved_serialized = SerializedStock.objects.filter(
-            variant_id=OuterRef("pk"), reserved=True
-        ).values("variant_id")
-        default_stock = WarehouseStock.objects.filter(
-            variant_id=OuterRef("pk"), warehouse__is_default=True
-        )
-        queryset = queryset.annotate(
-            normal_reserved=Coalesce(
-                Subquery(reserved_normal.annotate(value=Sum("reserved")).values("value")[:1]),
-                0,
-                output_field=IntegerField(),
-            ),
-            serialized_reserved=Coalesce(
-                Subquery(reserved_serialized.annotate(value=Count("id")).values("value")[:1]),
-                0,
-                output_field=IntegerField(),
-            ),
-            min_stock=Coalesce(
-                Subquery(default_stock.values("min_stock")[:1]),
-                0,
-                output_field=IntegerField(),
-            ),
-        ).annotate(
-            reserved_item_count=Case(
-                When(inventory_strategy__code="normal", then=F("normal_reserved")),
-                default=F("serialized_reserved"),
-                output_field=IntegerField(),
-            )
-        )
         if search:
             queryset = queryset.filter(Q(sku__icontains=search) | Q(product__name__icontains=search))
         if product is not None:
             queryset = queryset.filter(product_id=product)
         if category is not None:
             queryset = queryset.filter(product__categories__id=category).distinct()
-        if strategy_code:
-            queryset = queryset.filter(inventory_strategy__code=strategy_code)
         if has_reserved is not None:
             queryset = (
                 queryset.filter(reserved_item_count__gt=0)
@@ -108,7 +86,6 @@ class InventoryService:
             "sku": "sku",
             "product_name": "product__name",
             "category_name": "primary_category_name",
-            "strategy": "inventory_strategy__code",
             "total": "total_item_count",
             "sellable": "sellable_item_count",
             "reserved": "reserved_item_count",
@@ -122,6 +99,10 @@ class InventoryService:
 
     def serialize_variant_overview(self, variant, default_warehouse):
         primary_category = variant.product.categories.order_by("id").first()
+        inv = Inventory.objects.filter(variant=variant, warehouse=default_warehouse).first()
+        min_stock = inv.min_stock if inv else 0
+        inv_type = self._detect_inventory_type(variant)
+        strategy = {"id": 1, "code": "normal", "name": "Normal"} if inv_type == "normal" else {"id": 2, "code": "serialized", "name": "Serialized"}
         return {
             "variant": variant.id,
             "sku": variant.sku,
@@ -129,19 +110,15 @@ class InventoryService:
             "product_name": variant.product.name,
             "category_id": primary_category.id if primary_category else None,
             "category_name": primary_category.name if primary_category else None,
-            "strategy": {
-                "id": variant.inventory_strategy_id,
-                "code": variant.inventory_strategy.code,
-                "name": variant.inventory_strategy.name,
-            },
+            "strategy": strategy,
             "total": variant.total_item_count,
             "sellable": variant.sellable_item_count,
             "reserved": variant.reserved_item_count,
             "available": variant.available_item_count,
-            "min_stock": variant.min_stock,
+            "min_stock": min_stock,
             "low_stock": bool(
-                variant.min_stock > 0
-                and 0 < variant.available_item_count <= variant.min_stock
+                min_stock > 0
+                and 0 < variant.available_item_count <= min_stock
             ),
             "default_warehouse": self.serialize_warehouse(default_warehouse),
         }
@@ -175,7 +152,6 @@ class InventoryService:
 
     @transaction.atomic
     def create_warehouse(self, **values):
-        # A status row provides a stable lock even while the warehouse table is empty.
         list(WarehouseStatus.objects.select_for_update().order_by().values_list("id", flat=True))
         list(Warehouse.objects.select_for_update().order_by().values_list("id", flat=True))
         values["is_default"] = not Warehouse.objects.exists() or values.get("is_default", False)
@@ -202,10 +178,9 @@ class InventoryService:
             values["is_default"] = True
         if make_default:
             current_default = Warehouse.objects.filter(is_default=True).exclude(pk=warehouse.pk).first()
-            if current_default and (
-                current_default.stocks.filter(quantity__gt=0).exists()
-                or current_default.serialized_stocks.exists()
-            ):
+            if current_default and Inventory.objects.filter(
+                warehouse=current_default, quantity__gt=0
+            ).exists():
                 raise self.ValidationError({
                     "is_default": [_('The default warehouse cannot be changed while it contains stock.')]
                 })
@@ -231,64 +206,63 @@ class InventoryService:
             }) from exc
 
     def annotate_variant_summaries(self, queryset):
-        normal = WarehouseStock.objects.filter(variant_id=OuterRef("pk")).values("variant_id")
-        serialized = SerializedStock.objects.filter(variant_id=OuterRef("pk")).values("variant_id")
+        inventory_sub = Inventory.objects.filter(variant_id=OuterRef("pk")).values("variant_id")
+        unit_sub = InventoryUnit.objects.filter(
+            inventory__variant_id=OuterRef("pk")
+        ).values("inventory__variant_id")
         return queryset.annotate(
-            normal_total=Coalesce(
-                Subquery(normal.annotate(value=Sum("quantity")).values("value")[:1]),
+            inv_quantity=Coalesce(
+                Subquery(inventory_sub.annotate(value=Sum("quantity")).values("value")[:1]),
                 0,
                 output_field=IntegerField(),
             ),
-            normal_sellable=Coalesce(
-                Subquery(normal.annotate(value=Sum("sellable")).values("value")[:1]),
+            inv_sellable=Coalesce(
+                Subquery(inventory_sub.annotate(value=Sum("sellable")).values("value")[:1]),
                 0,
                 output_field=IntegerField(),
             ),
-            normal_available=Coalesce(
+            inv_reserved=Coalesce(
+                Subquery(inventory_sub.annotate(value=Sum("reserved")).values("value")[:1]),
+                0,
+                output_field=IntegerField(),
+            ),
+            unit_total=Coalesce(
+                Subquery(unit_sub.annotate(value=Count("inventory__variant_id")).values("value")[:1]),
+                0,
+                output_field=IntegerField(),
+            ),
+            unit_sellable=Coalesce(
                 Subquery(
-                    normal.annotate(value=Sum(F("sellable") - F("reserved"))).values("value")[:1]
+                    unit_sub.filter(
+                        inventory__variant_id=OuterRef("pk"),
+                        state=InventoryUnitStateEnum.IN_STOCK.value,
+                    ).annotate(value=Count("inventory__variant_id")).values("value")[:1]
                 ),
                 0,
                 output_field=IntegerField(),
             ),
-            serialized_total=Coalesce(
-                Subquery(serialized.annotate(value=Count("id")).values("value")[:1]),
-                0,
-                output_field=IntegerField(),
-            ),
-            serialized_sellable=Coalesce(
+            unit_reserved=Coalesce(
                 Subquery(
-                    serialized.annotate(value=Count("id", filter=Q(sellable=True))).values("value")[:1]
-                ),
-                0,
-                output_field=IntegerField(),
-            ),
-            serialized_available=Coalesce(
-                Subquery(
-                    serialized.annotate(
-                        value=Count(
-                            "id",
-                            filter=Q(status__code="in_stock", sellable=True, reserved=False),
-                        )
-                    ).values("value")[:1]
+                    unit_sub.filter(
+                        inventory__variant_id=OuterRef("pk"),
+                        state=InventoryUnitStateEnum.RESERVED.value,
+                    ).annotate(value=Count("inventory__variant_id")).values("value")[:1]
                 ),
                 0,
                 output_field=IntegerField(),
             ),
         ).annotate(
-            total_item_count=Case(
-                When(inventory_strategy__code="normal", then=F("normal_total")),
-                default=F("serialized_total"),
-                output_field=IntegerField(),
-            ),
-            sellable_item_count=Case(
-                When(inventory_strategy__code="normal", then=F("normal_sellable")),
-                default=F("serialized_sellable"),
-                output_field=IntegerField(),
-            ),
-            available_item_count=Case(
-                When(inventory_strategy__code="normal", then=F("normal_available")),
-                default=F("serialized_available"),
+            total_item_count=F("inv_quantity") + F("unit_total"),
+            sellable_item_count=F("inv_sellable") + F("unit_sellable"),
+            available_item_count=(F("inv_sellable") - F("inv_reserved")) + F("unit_sellable"),
+            reserved_item_count=F("inv_reserved") + F("unit_reserved"),
+            min_stock=Coalesce(
+                Subquery(
+                    Inventory.objects.filter(
+                        variant_id=OuterRef("pk"), warehouse__is_default=True
+                    ).values("variant_id").annotate(value=Sum("min_stock")).values("value")[:1]
+                ),
+                0,
                 output_field=IntegerField(),
             ),
         )
@@ -309,80 +283,84 @@ class InventoryService:
         self,
         variant,
         *,
-        strategy_code,
         inventory=None,
         serial_items=None,
         inventory_submitted=False,
     ):
-        strategy = InventoryStrategy.objects.filter(code=strategy_code).first()
-        if strategy is None or strategy_code not in {"normal", "serialized"}:
-            raise self.ValidationError({
-                "inventory_strategy_code": [_('Choose either normal or serialized.')]
-            })
-
-        current_code = variant.inventory_strategy.code
-        if current_code != strategy_code:
-            self._validate_empty_for_transition(variant, current_code)
-            variant.inventory_strategy = strategy
-            variant.save(update_fields=["inventory_strategy"])
-
         if not inventory_submitted:
             return
-        warehouse = self.get_default_warehouse(lock=True)
-        if strategy_code == "normal":
+        has_serialized = InventoryUnit.objects.filter(inventory__variant=variant).exists()
+        if has_serialized or serial_items is not None:
+            self._apply_serialized_snapshot(variant, serial_items)
+        else:
+            warehouse = self.get_default_warehouse(lock=True)
             self._apply_normal(variant, warehouse, inventory)
-        else:
-            self._apply_serialized_snapshot(variant, warehouse, serial_items)
-
-    def _validate_empty_for_transition(self, variant, current_code):
-        if current_code == "normal":
-            stocks = variant.warehouse_stocks.select_for_update()
-            has_inventory = stocks.filter(quantity__gt=0).exists()
-            if not has_inventory:
-                stocks.delete()
-        else:
-            has_inventory = variant.serialized_stocks.exists()
-        if has_inventory:
-            raise self.ValidationError({
-                "inventory_strategy_code": [
-                    _('Inventory strategy cannot change while the current strategy has stock.')
-                ]
-            })
 
     def _apply_normal(self, variant, warehouse, inventory):
         if inventory is None:
             raise self.ValidationError({"inventory": [_('This field is required for normal inventory.')]})
-        stock = WarehouseStock.objects.select_for_update().filter(
+        inv = Inventory.objects.select_for_update().filter(
             variant=variant, warehouse=warehouse
         ).first()
-        reserved = stock.reserved if stock else 0
+        reserved = inv.reserved if inv else 0
         quantity = inventory["quantity"]
         sellable = inventory["sellable"]
-        min_stock = inventory.get("min_stock", stock.min_stock if stock else 0)
+        min_stock = inventory.get("min_stock", inv.min_stock if inv else 0)
         if reserved > sellable or sellable > quantity:
             raise self.ValidationError({
                 "inventory": [_('Inventory must satisfy 0 <= reserved <= sellable <= quantity.')]
             })
-        WarehouseStock.objects.update_or_create(
-            variant=variant,
-            warehouse=warehouse,
-            defaults={
-                "quantity": quantity,
-                "sellable": sellable,
-                "reserved": reserved,
-                "min_stock": min_stock,
-            },
-        )
+        if inv is None:
+            from domains.business.models import BusinessProfile
+            business = BusinessProfile.objects.get(id=1)
+            inv = Inventory.objects.create(
+                business=business,
+                warehouse=warehouse,
+                variant=variant,
+                quantity=quantity,
+                sellable=sellable,
+                reserved=reserved,
+                min_stock=min_stock,
+            )
+        else:
+            inv.quantity = quantity
+            inv.sellable = sellable
+            inv.reserved = reserved
+            inv.min_stock = min_stock
+            inv.save(update_fields=["quantity", "sellable", "reserved", "min_stock"])
 
-    def _apply_serialized_snapshot(self, variant, warehouse, serial_items):
+    def _apply_serialized_snapshot(self, variant, serial_items):
         if serial_items is None:
             raise self.ValidationError({
                 "serial_items": [_('This field is required for serialized inventory.')]
             })
+        inventory = Inventory.objects.filter(variant=variant).first()
+        if inventory is None:
+            from domains.business.models import BusinessProfile
+            business = BusinessProfile.objects.get(id=1)
+            warehouse = self.get_default_warehouse()
+            inventory = Inventory.objects.create(
+                business=business,
+                warehouse=warehouse,
+                variant=variant,
+                quantity=0,
+                sellable=0,
+                reserved=0,
+            )
+        serial_attr_def = InventoryAttributeDefinition.objects.filter(code="serial_number").first()
+        if serial_attr_def is None:
+            raise self.ValidationError({
+                "serial_items": [_('Inventory setup is missing the serial_number attribute definition.')]
+            })
         existing = {
-            row.id: row
-            for row in SerializedStock.objects.select_for_update().select_related("status").filter(
-                variant=variant
+            unit.id: unit
+            for unit in InventoryUnit.objects.select_for_update().filter(inventory=inventory)
+        }
+        existing_attrs = {
+            a.inventory_unit_id: a
+            for a in InventoryUnitAttribute.objects.filter(
+                inventory_unit_id__in=list(existing.keys()),
+                attribute_definition=serial_attr_def,
             )
         }
         supplied_ids = [item["id"] for item in serial_items if item.get("id") is not None]
@@ -393,8 +371,8 @@ class InventoryService:
                 "serial_items": [_('One or more serialized row IDs do not belong to this variant.')]
             })
 
-        omitted = [row for row_id, row in existing.items() if row_id not in supplied_ids]
-        protected_omitted = [row for row in omitted if not self._is_editable(row)]
+        omitted = [unit for unit_id, unit in existing.items() if unit_id not in supplied_ids]
+        protected_omitted = [unit for unit in omitted if not self._is_editable(unit)]
         if protected_omitted:
             raise self.ValidationError({
                 "serial_items": [_('Sold, reserved, or historical serialized rows cannot be deleted.')]
@@ -408,97 +386,134 @@ class InventoryService:
             raise self.ValidationError({
                 "serial_items": [_('Serial numbers must be globally unique, ignoring case.')]
             })
-
-        in_stock = SerializedStockStatus.objects.filter(code="in_stock").first()
-        if in_stock is None:
-            raise self.ValidationError({
-                "serial_items": [_('Inventory setup is missing the in_stock serialized status.')]
-            })
+        existing_unit_ids = list(existing.keys())
+        existing_serials = set(
+            InventoryUnitAttribute.objects.filter(
+                attribute_definition=serial_attr_def,
+                inventory_unit_id__in=existing_unit_ids,
+            ).values_list("value", flat=True)
+        )
+        global_serials = set(
+            a.value.casefold()
+            for a in InventoryUnitAttribute.objects.filter(
+                attribute_definition=serial_attr_def,
+            ).exclude(inventory_unit_id__in=existing_unit_ids)
+        )
+        for sn in folded:
+            if sn in global_serials:
+                raise self.ValidationError({
+                    "serial_items": [_('Serial numbers must be globally unique, ignoring case.')]
+                })
 
         try:
             with transaction.atomic():
-                for row in omitted:
-                    row.delete()
+                for unit in omitted:
+                    InventoryUnitAttribute.objects.filter(inventory_unit=unit).delete()
+                    unit.delete()
                 changed_existing = []
                 for item, serial_number in zip(serial_items, normalized_serials):
                     row_id = item.get("id")
                     if row_id is None:
                         continue
-                    row = existing[row_id]
-                    changed = row.serial_number != serial_number or row.sellable != item["on_sale"]
-                    if changed and not self._is_editable(row):
+                    unit = existing[row_id]
+                    attr = existing_attrs.get(row_id)
+                    old_serial = attr.value if attr else ""
+                    on_sale = item["on_sale"]
+                    desired_state = InventoryUnitStateEnum.IN_STOCK.value if on_sale else InventoryUnitStateEnum.RESERVED.value
+                    changed = old_serial != serial_number or unit.state != desired_state
+                    if changed and not self._is_editable(unit):
                         raise self.ValidationError({
                             "serial_items": [_('Sold, reserved, or historical serialized rows cannot be edited.')]
                         })
                     if changed:
-                        changed_existing.append((row, serial_number, item["on_sale"]))
+                        changed_existing.append((unit, serial_number, desired_state))
 
-                # Release current unique serial values before applying a valid swapped snapshot.
                 for changed in changed_existing:
-                    row = changed[0]
-                    row.serial_number = f"__inventory_tmp_{row.id}_{uuid.uuid4().hex}"
-                    row.save(update_fields=["serial_number"])
+                    unit = changed[0]
+                    InventoryUnitAttribute.objects.filter(
+                        inventory_unit=unit, attribute_definition=serial_attr_def
+                    ).update(value=f"__inventory_tmp_{unit.id}_{uuid.uuid4().hex}")
 
                 for item, serial_number in zip(serial_items, normalized_serials):
                     row_id = item.get("id")
+                    on_sale = item["on_sale"]
+                    desired_state = InventoryUnitStateEnum.IN_STOCK.value if on_sale else InventoryUnitStateEnum.RESERVED.value
                     if row_id is None:
-                        SerializedStock.objects.create(
-                            variant=variant,
-                            warehouse=warehouse,
-                            status=in_stock,
-                            serial_number=serial_number,
-                            sellable=item["on_sale"],
-                            reserved=False,
+                        new_unit = InventoryUnit.objects.create(
+                            inventory=inventory,
+                            state=desired_state,
+                        )
+                        InventoryUnitAttribute.objects.create(
+                            inventory_unit=new_unit,
+                            attribute_definition=serial_attr_def,
+                            value=serial_number,
                         )
                         continue
-                    row = existing[row_id]
-                    changed = row.serial_number != serial_number or row.sellable != item["on_sale"]
-                    if changed:
-                        row.serial_number = serial_number
-                        row.sellable = item["on_sale"]
-                        row.save(update_fields=["serial_number", "sellable"])
+                    unit = existing[row_id]
+                    unit.state = desired_state
+                    unit.save(update_fields=["state"])
+                    attr = existing_attrs.get(row_id)
+                    if attr:
+                        attr.value = serial_number
+                        attr.save(update_fields=["value"])
+                    else:
+                        InventoryUnitAttribute.objects.create(
+                            inventory_unit=unit,
+                            attribute_definition=serial_attr_def,
+                            value=serial_number,
+                        )
         except IntegrityError as exc:
             raise self.ValidationError({
                 "serial_items": [_('Serial numbers must be globally unique, ignoring case.')]
             }) from exc
+        self._sync_inventory_summary(inventory)
 
     @staticmethod
     def normalize_serial(value):
         return " ".join(value.split())
 
     @staticmethod
-    def _is_editable(row):
-        return row.status.code == "in_stock" and not row.reserved
+    def _is_editable(unit):
+        return unit.state == InventoryUnitStateEnum.IN_STOCK.value
+
+    def _detect_inventory_type(self, variant):
+        if InventoryUnit.objects.filter(inventory__variant=variant).exists():
+            return "serialized"
+        return "normal"
 
     def get_summary(self, variant):
-        if variant.inventory_strategy.code == "normal":
-            rows = list(variant.warehouse_stocks.all())
+        inv_type = self._detect_inventory_type(variant)
+        if inv_type == "normal":
+            inv = Inventory.objects.filter(variant=variant).first()
+            if inv is None:
+                return {"total_item_count": 0, "sellable_item_count": 0, "available_item_count": 0}
             return {
-                "total_item_count": sum(row.quantity for row in rows),
-                "sellable_item_count": sum(row.sellable for row in rows),
-                "available_item_count": sum(row.sellable - row.reserved for row in rows),
+                "total_item_count": inv.quantity,
+                "sellable_item_count": inv.sellable,
+                "available_item_count": inv.available,
             }
-        rows = list(variant.serialized_stocks.all())
+        units = InventoryUnit.objects.filter(inventory__variant=variant)
+        total = units.count()
+        sellable = units.filter(state=InventoryUnitStateEnum.IN_STOCK.value).count()
         return {
-            "total_item_count": len(rows),
-            "sellable_item_count": sum(row.sellable for row in rows),
-            "available_item_count": sum(
-                row.status.code == "in_stock" and row.sellable and not row.reserved
-                for row in rows
-            ),
+            "total_item_count": total,
+            "sellable_item_count": sellable,
+            "available_item_count": sellable,
         }
 
     def get_variant_details(self, variant):
         from django.db.models import Sum
         from domains.inventory.models import InventorySupply
 
+        inv_type = self._detect_inventory_type(variant)
         summary = self.get_summary(variant)
         primary_category = variant.product.categories.order_by("id").first()
-        strategy = {
-            "id": variant.inventory_strategy_id,
-            "code": variant.inventory_strategy.code,
-            "name": variant.inventory_strategy.name,
-        }
+        total_supply_quantity = (
+            InventorySupply.objects.filter(
+                variant=variant
+            ).aggregate(total=Sum("quantity"))["total"]
+            or 0
+        )
         context = {
             "sku": variant.sku,
             "product": {"id": variant.product_id, "name": variant.product.name},
@@ -516,73 +531,87 @@ class InventoryService:
                 for selection in variant.selections.all()
             ],
         }
-        total_supply_quantity = (
-            InventorySupply.objects.filter(
-                variant=variant
-            ).aggregate(total=Sum("quantity"))["total"]
-            or 0
-        )
-        if variant.inventory_strategy.code == "normal":
+        if inv_type == "normal":
             warehouse = self.get_default_warehouse()
-            stock = variant.warehouse_stocks.filter(warehouse=warehouse).first()
+            inv = Inventory.objects.filter(variant=variant, warehouse=warehouse).first()
             return {
                 "variant_id": variant.id,
                 **context,
-                "strategy": strategy,
+                "strategy": {"id": 1, "code": "normal", "name": "Normal"},
                 **summary,
                 "total_supply_quantity": total_supply_quantity,
                 "inventory": {
                     "warehouse": self.serialize_warehouse(warehouse),
-                    "quantity": stock.quantity if stock else 0,
-                    "sellable": stock.sellable if stock else 0,
-                    "reserved": stock.reserved if stock else 0,
-                    "available": stock.available if stock else 0,
-                    "min_stock": stock.min_stock if stock else 0,
+                    "quantity": inv.quantity if inv else 0,
+                    "sellable": inv.sellable if inv else 0,
+                    "reserved": inv.reserved if inv else 0,
+                    "available": inv.available if inv else 0,
+                    "min_stock": inv.min_stock if inv else 0,
                 },
                 "serial_items": None,
             }
-        rows = variant.serialized_stocks.select_related("status", "warehouse").order_by("id")
+        serial_attr_def = InventoryAttributeDefinition.objects.filter(code="serial_number").first()
+        units = InventoryUnit.objects.filter(
+            inventory__variant=variant
+        ).select_related("inventory__warehouse").order_by("id")
+        if serial_attr_def:
+            unit_ids = list(units.values_list("id", flat=True))
+            attr_map = {
+                a.inventory_unit_id: a.value
+                for a in InventoryUnitAttribute.objects.filter(
+                    inventory_unit_id__in=unit_ids,
+                    attribute_definition=serial_attr_def,
+                )
+            }
+        else:
+            attr_map = {}
+        warehouse_cache = {}
         return {
             "variant_id": variant.id,
             **context,
-            "strategy": strategy,
+            "strategy": {"id": 2, "code": "serialized", "name": "Serialized"},
             **summary,
             "total_supply_quantity": total_supply_quantity,
             "inventory": None,
             "serial_items": [
                 {
-                    "id": row.id,
-                    "serial_number": row.serial_number,
-                    "on_sale": row.sellable,
-                    "reserved": row.reserved,
-                    "status": {"code": row.status.code, "name": row.status.name},
-                    "warehouse": self.serialize_warehouse(row.warehouse),
-                    "editable": self._is_editable(row),
+                    "id": unit.id,
+                    "serial_number": attr_map.get(unit.id, ""),
+                    "on_sale": unit.state == InventoryUnitStateEnum.IN_STOCK.value,
+                    "reserved": unit.state == InventoryUnitStateEnum.RESERVED.value,
+                    "status": {"code": unit.state, "name": unit.get_state_display()},
+                    "warehouse": self._get_warehouse_for_unit(unit, warehouse_cache),
+                    "editable": unit.state == InventoryUnitStateEnum.IN_STOCK.value,
                 }
-                for row in rows
+                for unit in units
             ],
         }
 
     @transaction.atomic
     def adjust_variant_stock(self, variant, *, inventory=None, serial_items=None):
         variant = type(variant).objects.select_for_update().select_related(
-            "inventory_strategy", "product"
+            "product"
         ).prefetch_related(
             "product__categories", "selections__attribute", "selections__option"
         ).get(pk=variant.pk)
-        strategy_code = variant.inventory_strategy.code
-        self.apply_variant_inventory(
-            variant,
-            strategy_code=strategy_code,
-            inventory=inventory,
-            serial_items=serial_items,
-            inventory_submitted=True,
-        )
+        inv_type = self._detect_inventory_type(variant)
+        if inv_type == "serialized":
+            self._apply_serialized_snapshot(variant, serial_items)
+        else:
+            warehouse = self.get_default_warehouse(lock=True)
+            self._apply_normal(variant, warehouse, inventory)
         return type(variant).objects.select_related(
-            "inventory_strategy", "product"
+            "product"
         ).prefetch_related(
             "product__categories", "selections__attribute", "selections__option"
         ).get(pk=variant.pk)
+
+    @staticmethod
+    def _get_warehouse_for_unit(unit, cache):
+        wh = unit.inventory.warehouse
+        if wh.id not in cache:
+            cache[wh.id] = InventoryService.serialize_warehouse(wh)
+        return cache[wh.id]
 
     @staticmethod
     def serialize_warehouse(warehouse):
@@ -594,42 +623,35 @@ class InventoryService:
         }
 
     def validate_variant_deletion(self, variant):
-        stocks = variant.warehouse_stocks.all()
-        has_normal_stock = stocks.filter(quantity__gt=0).exists()
-        has_serialized_stock = variant.serialized_stocks.exists()
-        if has_normal_stock or has_serialized_stock:
+        has_stock = Inventory.objects.filter(variant=variant, quantity__gt=0).exists()
+        has_units = InventoryUnit.objects.filter(inventory__variant=variant).exists()
+        if has_stock or has_units:
             raise self.ValidationError({
                 "inventory": [_('A variant with stock cannot be deleted.')]
             })
-        stocks.delete()
+        Inventory.objects.filter(variant=variant).delete()
 
     @transaction.atomic
     def receive_normal_stock(self, *, variant, warehouse, quantity):
-        # Additive receiving: increases quantity by the supplied delta;
-        # sellable is not touched — the seller must manually mark items as
-        # sellable through the stock editing UI.  reserved is never touched.
-        stock = WarehouseStock.objects.select_for_update().filter(
-            variant=variant, warehouse=warehouse
-        ).first()
-        if stock is None:
-            WarehouseStock.objects.create(
-                variant=variant,
-                warehouse=warehouse,
-                quantity=quantity,
-                sellable=0,
-                reserved=0,
-                min_stock=0,
-            )
-            return
-        stock.quantity += quantity
-        stock.save(update_fields=["quantity"])
+        from domains.business.models import BusinessProfile
+
+        business = BusinessProfile.objects.get(id=1)
+        inventory, created = Inventory.objects.select_for_update().get_or_create(
+            business=business,
+            warehouse=warehouse,
+            variant=variant,
+            defaults={"quantity": quantity, "sellable": 0, "reserved": 0},
+        )
+        if not created:
+            inventory.quantity += quantity
+            inventory.save(update_fields=["quantity"])
 
     @transaction.atomic
     def receive_serialized_stock(self, *, variant, warehouse, serial_numbers, supply):
-        in_stock = SerializedStockStatus.objects.filter(code="in_stock").first()
-        if in_stock is None:
+        serial_attr_def = InventoryAttributeDefinition.objects.filter(code="serial_number").first()
+        if serial_attr_def is None:
             raise self.ValidationError({
-                "serial_items": [_('Inventory setup is missing the in_stock serialized status.')]
+                "serial_items": [_('Inventory setup is missing the serial_number attribute definition.')]
             })
         normalized = [self.normalize_serial(value) for value in serial_numbers]
         if any(not value for value in normalized):
@@ -641,21 +663,492 @@ class InventoryService:
             raise self.ValidationError({
                 "serial_items": [_('Serial numbers must be globally unique, ignoring case.')]
             })
+        from domains.business.models import BusinessProfile
+
+        business = BusinessProfile.objects.get(id=1)
+        inventory, _ = Inventory.objects.get_or_create(
+            business=business,
+            warehouse=warehouse,
+            variant=variant,
+            defaults={"quantity": 0, "sellable": 0, "reserved": 0},
+        )
         try:
             with transaction.atomic():
-                SerializedStock.objects.bulk_create([
-                    SerializedStock(
-                        variant=variant,
-                        warehouse=warehouse,
-                        status=in_stock,
-                        serial_number=value,
-                        sellable=True,
-                        reserved=False,
+                units = []
+                attrs = []
+                for value in normalized:
+                    unit = InventoryUnit(
+                        inventory=inventory,
+                        state=InventoryUnitStateEnum.IN_STOCK.value,
                         supply=supply,
                     )
-                    for value in normalized
-                ])
+                    units.append(unit)
+                created_units = InventoryUnit.objects.bulk_create(units)
+                for unit, value in zip(created_units, normalized):
+                    attrs.append(InventoryUnitAttribute(
+                        inventory_unit=unit,
+                        attribute_definition=serial_attr_def,
+                        value=value,
+                    ))
+                InventoryUnitAttribute.objects.bulk_create(attrs)
         except IntegrityError as exc:
             raise self.ValidationError({
                 "serial_items": [_('Serial numbers must be globally unique, ignoring case.')]
             }) from exc
+        self._sync_inventory_summary(inventory)
+
+    def _validate_transition(self, current_state, target_state):
+        allowed = _VALID_TRANSITIONS.get(current_state, set())
+        if target_state not in allowed:
+            raise self.ValidationError({
+                "state": [
+                    _('Cannot transition from "%(current)s" to "%(target)s".')
+                    % {"current": current_state, "target": target_state}
+                ]
+            })
+
+    def _get_inventory(self, inventory_id, *, lock=False):
+        qs = Inventory.objects.select_related("variant", "warehouse")
+        if lock:
+            qs = qs.select_for_update()
+        return qs.filter(pk=inventory_id).first()
+
+    def _get_unit(self, unit_id, *, lock=False):
+        qs = InventoryUnit.objects.select_related("inventory")
+        if lock:
+            qs = qs.select_for_update()
+        return qs.filter(pk=unit_id).first()
+
+    def _sync_inventory_summary(self, inventory):
+        units = InventoryUnit.objects.filter(inventory=inventory)
+        inventory.quantity = units.count()
+        inventory.sellable = units.filter(
+            state=InventoryUnitStateEnum.IN_STOCK.value
+        ).count()
+        inventory.reserved = units.filter(
+            state=InventoryUnitStateEnum.RESERVED.value
+        ).count()
+        inventory.save(update_fields=["quantity", "sellable", "reserved"])
+
+    def _ensure_business(self):
+        from domains.business.models import BusinessProfile
+        return BusinessProfile.objects.get(id=1)
+
+    @transaction.atomic
+    def receive_stock(self, inventory_id, *, quantity=None, unit_count=None):
+        inventory = self._get_inventory(inventory_id, lock=True)
+        if inventory is None:
+            raise self.ValidationError({"inventory": [_('Inventory not found.')]})
+        is_serialized = InventoryUnit.objects.filter(inventory=inventory).exists()
+        if is_serialized or unit_count is not None:
+            if unit_count is None:
+                raise self.ValidationError({
+                    "unit_count": [_('Unit count is required for serialized inventory.')]
+                })
+            if unit_count <= 0:
+                raise self.ValidationError({
+                    "unit_count": [_('Unit count must be greater than zero.')]
+                })
+            units = [
+                InventoryUnit(
+                    inventory=inventory,
+                    state=InventoryUnitStateEnum.IN_STOCK.value,
+                )
+                for _ in range(unit_count)
+            ]
+            InventoryUnit.objects.bulk_create(units)
+            self._sync_inventory_summary(inventory)
+        else:
+            if quantity is None or quantity <= 0:
+                raise self.ValidationError({
+                    "quantity": [_('Quantity must be greater than zero.')]
+                })
+            inventory.quantity += quantity
+            inventory.save(update_fields=["quantity"])
+        return inventory
+
+    @transaction.atomic
+    def increase_stock(self, inventory_id, quantity):
+        inventory = self._get_inventory(inventory_id, lock=True)
+        if inventory is None:
+            raise self.ValidationError({"inventory": [_('Inventory not found.')]})
+        if InventoryUnit.objects.filter(inventory=inventory).exists():
+            raise self.ValidationError({
+                "inventory": [_('Use receive_stock for serialized inventory.')]
+            })
+        if quantity <= 0:
+            raise self.ValidationError({
+                "quantity": [_('Quantity must be greater than zero.')]
+            })
+        inventory.quantity += quantity
+        inventory.sellable += quantity
+        inventory.save(update_fields=["quantity", "sellable"])
+        return inventory
+
+    @transaction.atomic
+    def decrease_stock(self, inventory_id, quantity):
+        inventory = self._get_inventory(inventory_id, lock=True)
+        if inventory is None:
+            raise self.ValidationError({"inventory": [_('Inventory not found.')]})
+        if InventoryUnit.objects.filter(inventory=inventory).exists():
+            raise self.ValidationError({
+                "inventory": [_('Use unit-level operations for serialized inventory.')]
+            })
+        if quantity <= 0:
+            raise self.ValidationError({
+                "quantity": [_('Quantity must be greater than zero.')]
+            })
+        if quantity > inventory.sellable:
+            raise self.ValidationError({
+                "quantity": [
+                    _('Cannot decrease more than sellable. Available: %(available)s.')
+                    % {"available": inventory.sellable}
+                ]
+            })
+        inventory.sellable -= quantity
+        inventory.quantity -= quantity
+        inventory.save(update_fields=["quantity", "sellable"])
+        return inventory
+
+    @transaction.atomic
+    def reserve_stock(self, inventory_id, *, quantity=None, unit_ids=None):
+        inventory = self._get_inventory(inventory_id, lock=True)
+        if inventory is None:
+            raise self.ValidationError({"inventory": [_('Inventory not found.')]})
+        has_units = InventoryUnit.objects.filter(inventory=inventory).exists()
+        if has_units or unit_ids is not None:
+            if not unit_ids:
+                raise self.ValidationError({
+                    "unit_ids": [_('Unit IDs are required for serialized inventory.')]
+                })
+            units = list(
+                InventoryUnit.objects.select_for_update().filter(
+                    id__in=unit_ids, inventory=inventory
+                )
+            )
+            if len(units) != len(unit_ids):
+                raise self.ValidationError({
+                    "unit_ids": [_('One or more unit IDs are invalid.')]
+                })
+            for unit in units:
+                if unit.state != InventoryUnitStateEnum.IN_STOCK.value:
+                    raise self.ValidationError({
+                        "unit_ids": [
+                            _('Unit %(id)s is in state "%(state)s" and cannot be reserved.')
+                            % {"id": unit.id, "state": unit.state}
+                        ]
+                    })
+            for unit in units:
+                unit.state = InventoryUnitStateEnum.RESERVED.value
+                unit.save(update_fields=["state"])
+            self._sync_inventory_summary(inventory)
+        else:
+            if quantity is None or quantity <= 0:
+                raise self.ValidationError({
+                    "quantity": [_('Quantity must be greater than zero.')]
+                })
+            if quantity > inventory.available:
+                raise self.ValidationError({
+                    "quantity": [
+                        _('Cannot reserve more than available. Available: %(available)s.')
+                        % {"available": inventory.available}
+                    ]
+                })
+            inventory.reserved += quantity
+            inventory.save(update_fields=["reserved"])
+        return inventory
+
+    @transaction.atomic
+    def release_reservation(self, inventory_id, *, quantity=None, unit_ids=None):
+        inventory = self._get_inventory(inventory_id, lock=True)
+        if inventory is None:
+            raise self.ValidationError({"inventory": [_('Inventory not found.')]})
+        has_units = InventoryUnit.objects.filter(inventory=inventory).exists()
+        if has_units or unit_ids is not None:
+            if not unit_ids:
+                raise self.ValidationError({
+                    "unit_ids": [_('Unit IDs are required for serialized inventory.')]
+                })
+            units = list(
+                InventoryUnit.objects.select_for_update().filter(
+                    id__in=unit_ids, inventory=inventory
+                )
+            )
+            if len(units) != len(unit_ids):
+                raise self.ValidationError({
+                    "unit_ids": [_('One or more unit IDs are invalid.')]
+                })
+            for unit in units:
+                if unit.state != InventoryUnitStateEnum.RESERVED.value:
+                    raise self.ValidationError({
+                        "unit_ids": [
+                            _('Unit %(id)s is in state "%(state)s" and is not reserved.')
+                            % {"id": unit.id, "state": unit.state}
+                        ]
+                    })
+            for unit in units:
+                unit.state = InventoryUnitStateEnum.IN_STOCK.value
+                unit.save(update_fields=["state"])
+            self._sync_inventory_summary(inventory)
+        else:
+            if quantity is None or quantity <= 0:
+                raise self.ValidationError({
+                    "quantity": [_('Quantity must be greater than zero.')]
+                })
+            if quantity > inventory.reserved:
+                raise self.ValidationError({
+                    "quantity": [
+                        _('Cannot release more than reserved. Reserved: %(reserved)s.')
+                        % {"reserved": inventory.reserved}
+                    ]
+                })
+            inventory.reserved -= quantity
+            inventory.save(update_fields=["reserved"])
+        return inventory
+
+    @transaction.atomic
+    def sell_stock(self, inventory_id, *, quantity=None, unit_ids=None):
+        inventory = self._get_inventory(inventory_id, lock=True)
+        if inventory is None:
+            raise self.ValidationError({"inventory": [_('Inventory not found.')]})
+        has_units = InventoryUnit.objects.filter(inventory=inventory).exists()
+        if has_units or unit_ids is not None:
+            if not unit_ids:
+                raise self.ValidationError({
+                    "unit_ids": [_('Unit IDs are required for serialized inventory.')]
+                })
+            units = list(
+                InventoryUnit.objects.select_for_update().filter(
+                    id__in=unit_ids, inventory=inventory
+                )
+            )
+            if len(units) != len(unit_ids):
+                raise self.ValidationError({
+                    "unit_ids": [_('One or more unit IDs are invalid.')]
+                })
+            for unit in units:
+                if unit.state not in (
+                    InventoryUnitStateEnum.IN_STOCK.value,
+                    InventoryUnitStateEnum.RESERVED.value,
+                ):
+                    raise self.ValidationError({
+                        "unit_ids": [
+                            _('Unit %(id)s is in state "%(state)s" and cannot be sold.')
+                            % {"id": unit.id, "state": unit.state}
+                        ]
+                    })
+            for unit in units:
+                unit.state = InventoryUnitStateEnum.SOLD.value
+                unit.save(update_fields=["state"])
+            self._sync_inventory_summary(inventory)
+        else:
+            if quantity is None or quantity <= 0:
+                raise self.ValidationError({
+                    "quantity": [_('Quantity must be greater than zero.')]
+                })
+            if quantity > inventory.sellable:
+                raise self.ValidationError({
+                    "quantity": [
+                        _('Cannot sell more than sellable. Sellable: %(sellable)s.')
+                        % {"sellable": inventory.sellable}
+                    ]
+                })
+            reserved_to_release = min(quantity, inventory.reserved)
+            inventory.reserved -= reserved_to_release
+            inventory.sellable -= quantity
+            inventory.quantity -= quantity
+            inventory.save(update_fields=["quantity", "sellable", "reserved"])
+        return inventory
+
+    @transaction.atomic
+    def return_stock(self, inventory_id, *, quantity=None, unit_ids=None):
+        inventory = self._get_inventory(inventory_id, lock=True)
+        if inventory is None:
+            raise self.ValidationError({"inventory": [_('Inventory not found.')]})
+        has_units = InventoryUnit.objects.filter(inventory=inventory).exists()
+        if has_units or unit_ids is not None:
+            if not unit_ids:
+                raise self.ValidationError({
+                    "unit_ids": [_('Unit IDs are required for serialized inventory.')]
+                })
+            units = list(
+                InventoryUnit.objects.select_for_update().filter(
+                    id__in=unit_ids, inventory=inventory
+                )
+            )
+            if len(units) != len(unit_ids):
+                raise self.ValidationError({
+                    "unit_ids": [_('One or more unit IDs are invalid.')]
+                })
+            for unit in units:
+                if unit.state != InventoryUnitStateEnum.SOLD.value:
+                    raise self.ValidationError({
+                        "unit_ids": [
+                            _('Unit %(id)s is in state "%(state)s" and cannot be returned.')
+                            % {"id": unit.id, "state": unit.state}
+                        ]
+                    })
+            for unit in units:
+                unit.state = InventoryUnitStateEnum.RETURNED.value
+                unit.save(update_fields=["state"])
+            self._sync_inventory_summary(inventory)
+        else:
+            if quantity is None or quantity <= 0:
+                raise self.ValidationError({
+                    "quantity": [_('Quantity must be greater than zero.')]
+                })
+            inventory.quantity += quantity
+            inventory.sellable += quantity
+            inventory.save(update_fields=["quantity", "sellable"])
+        return inventory
+
+    @transaction.atomic
+    def mark_damaged(self, inventory_id, unit_ids):
+        inventory = self._get_inventory(inventory_id, lock=True)
+        if inventory is None:
+            raise self.ValidationError({"inventory": [_('Inventory not found.')]})
+        if not InventoryUnit.objects.filter(inventory=inventory).exists():
+            raise self.ValidationError({
+                "inventory": [_('Mark damaged is only available for serialized inventory.')]
+            })
+        if not unit_ids:
+            raise self.ValidationError({
+                "unit_ids": [_('Unit IDs are required.')]
+            })
+        units = list(
+            InventoryUnit.objects.select_for_update().filter(
+                id__in=unit_ids, inventory=inventory
+            )
+        )
+        if len(units) != len(unit_ids):
+            raise self.ValidationError({
+                "unit_ids": [_('One or more unit IDs are invalid.')]
+            })
+        for unit in units:
+            self._validate_transition(unit.state, InventoryUnitStateEnum.DAMAGED.value)
+        for unit in units:
+            unit.state = InventoryUnitStateEnum.DAMAGED.value
+            unit.save(update_fields=["state"])
+        self._sync_inventory_summary(inventory)
+        return inventory
+
+    @transaction.atomic
+    def mark_lost(self, inventory_id, unit_ids):
+        inventory = self._get_inventory(inventory_id, lock=True)
+        if inventory is None:
+            raise self.ValidationError({"inventory": [_('Inventory not found.')]})
+        if not InventoryUnit.objects.filter(inventory=inventory).exists():
+            raise self.ValidationError({
+                "inventory": [_('Mark lost is only available for serialized inventory.')]
+            })
+        if not unit_ids:
+            raise self.ValidationError({
+                "unit_ids": [_('Unit IDs are required.')]
+            })
+        units = list(
+            InventoryUnit.objects.select_for_update().filter(
+                id__in=unit_ids, inventory=inventory
+            )
+        )
+        if len(units) != len(unit_ids):
+            raise self.ValidationError({
+                "unit_ids": [_('One or more unit IDs are invalid.')]
+            })
+        for unit in units:
+            self._validate_transition(unit.state, InventoryUnitStateEnum.LOST.value)
+        for unit in units:
+            unit.state = InventoryUnitStateEnum.LOST.value
+            unit.save(update_fields=["state"])
+        self._sync_inventory_summary(inventory)
+        return inventory
+
+    @transaction.atomic
+    def transfer_stock(self, source_inventory_id, destination_inventory_id, *, quantity=None, unit_ids=None, notes=""):
+        source = self._get_inventory(source_inventory_id, lock=True)
+        destination = self._get_inventory(destination_inventory_id, lock=True)
+        if source is None:
+            raise self.ValidationError({"source_inventory": [_('Source inventory not found.')]})
+        if destination is None:
+            raise self.ValidationError({"destination_inventory": [_('Destination inventory not found.')]})
+        if source.id == destination.id:
+            raise self.ValidationError({"destination_inventory": [_('Source and destination cannot be the same.')]})
+        if source.variant_id != destination.variant_id:
+            raise self.ValidationError({
+                "destination_inventory": [_('Source and destination must hold the same variant.')]
+            })
+
+        has_source_units = InventoryUnit.objects.filter(inventory=source).exists()
+        if has_source_units or unit_ids is not None:
+            self._transfer_serialized(source, destination, unit_ids=unit_ids, notes=notes)
+        else:
+            self._transfer_normal(source, destination, quantity=quantity, notes=notes)
+        return Inventory.objects.select_related("variant", "warehouse").filter(pk=source.id).first()
+
+    @transaction.atomic
+    def _transfer_normal(self, source, destination, *, quantity, notes):
+        if quantity is None or quantity <= 0:
+            raise self.ValidationError({
+                "quantity": [_('Quantity must be greater than zero.')]
+            })
+        if quantity > source.sellable:
+            raise self.ValidationError({
+                "quantity": [
+                    _('Cannot transfer more than sellable. Available: %(available)s.')
+                    % {"available": source.sellable}
+                ]
+            })
+        source.sellable -= quantity
+        source.quantity -= quantity
+        source.save(update_fields=["quantity", "sellable"])
+        destination.quantity += quantity
+        destination.save(update_fields=["quantity"])
+        InventoryTransfer.objects.create(
+            source_inventory=source,
+            destination_inventory=destination,
+            variant=source.variant,
+            quantity=quantity,
+            unit_count=0,
+            notes=notes,
+        )
+        return source
+
+    @transaction.atomic
+    def _transfer_serialized(self, source, destination, *, unit_ids, notes):
+        if not unit_ids:
+            raise self.ValidationError({
+                "unit_ids": [_('Unit IDs are required for serialized inventory.')]
+            })
+        units = list(
+            InventoryUnit.objects.select_for_update().filter(
+                id__in=unit_ids, inventory=source
+            )
+        )
+        if len(units) != len(unit_ids):
+            raise self.ValidationError({
+                "unit_ids": [_('One or more unit IDs are invalid.')]
+            })
+        for unit in units:
+            if unit.state not in (
+                InventoryUnitStateEnum.IN_STOCK.value,
+                InventoryUnitStateEnum.RESERVED.value,
+            ):
+                raise self.ValidationError({
+                    "unit_ids": [
+                        _('Unit %(id)s is in state "%(state)s" and cannot be transferred.')
+                        % {"id": unit.id, "state": unit.state}
+                    ]
+                })
+        for unit in units:
+            unit.inventory_id = destination.id
+            unit.save(update_fields=["inventory_id"])
+        self._sync_inventory_summary(source)
+        self._sync_inventory_summary(destination)
+        InventoryTransfer.objects.create(
+            source_inventory=source,
+            destination_inventory=destination,
+            variant=source.variant,
+            quantity=len(units),
+            unit_count=len(units),
+            notes=notes,
+        )
+        return source

@@ -87,13 +87,19 @@ class VariantStockWriteSerializer(ClosedSerializer):
         return attrs
 
 
-class VariantInventoryDetailSerializer(serializers.Serializer):
+class StrategySerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    code = serializers.CharField()
+    name = serializers.CharField()
+
+
+class InventoryVariantDetailSerializer(serializers.Serializer):
     variant_id = serializers.IntegerField()
     sku = serializers.CharField()
     product = NamedObjectSerializer()
     category = NamedObjectSerializer()
     selections = SelectionSerializer(many=True)
-    strategy = InventoryStrategySerializer()
+    strategy = StrategySerializer()
     total_item_count = serializers.IntegerField()
     sellable_item_count = serializers.IntegerField()
     available_item_count = serializers.IntegerField()
@@ -121,7 +127,7 @@ class InventoryVariantRowSerializer(serializers.Serializer):
     product_name = serializers.CharField()
     category_id = serializers.IntegerField()
     category_name = serializers.CharField()
-    strategy = InventoryStrategySerializer()
+    strategy = StrategySerializer()
     total = serializers.IntegerField()
     sellable = serializers.IntegerField()
     reserved = serializers.IntegerField()

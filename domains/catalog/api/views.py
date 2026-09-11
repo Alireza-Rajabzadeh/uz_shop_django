@@ -943,10 +943,7 @@ class ProductVariantFormOptions(APIView):
                 "category": (lambda c: c.id if c else None)(product.categories.order_by("id").first()),
                 "category_name": (lambda c: c.name if c else None)(product.categories.order_by("id").first()),
             },
-            "inventory_strategies": [
-                {"id": strategy.id, "code": strategy.code, "name": strategy.name}
-                for strategy in inventory_service.get_strategies()
-            ],
+            "inventory_strategies": [],
             "default_warehouse": inventory_service.serialize_warehouse(warehouse),
             "attributes": product_service.get_variant_form_options(
                 product, request.query_params.get("search")

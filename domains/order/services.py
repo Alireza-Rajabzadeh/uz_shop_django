@@ -13,7 +13,14 @@ from domains.files.services import FileService
 from domains.payments.services import PaymentService
 from domains.shipment.services import ShipmentCalculationService
 from domains.inventory.enums.SerializedStockStatusEnum import SerializedStockStatusEnum
-from domains.inventory.models import SerializedStock, SerializedStockStatus, WarehouseStock
+from domains.inventory.enums.InventoryUnitStateEnum import InventoryUnitStateEnum
+from domains.inventory.models import (
+    Inventory,
+    InventoryUnit,
+    SerializedStock,
+    SerializedStockStatus,
+    WarehouseStock,
+)
 from domains.location.models import City, Country, State
 
 from .models import (
@@ -61,6 +68,12 @@ class OrderService:
     shipment_service = ShipmentCalculationService()
 
     # ───────────────────────── shared helpers ─────────────────────────
+
+    @staticmethod
+    def _default_strategy_id():
+        from domains.inventory.models import InventoryStrategy
+        strategy = InventoryStrategy.objects.filter(code="normal").first()
+        return strategy.id if strategy else None
 
     def _status(self, name):
         return OrderStatus.objects.filter(name=name).first()
@@ -194,7 +207,6 @@ class OrderService:
             cart.items.select_related(
                 "variant",
                 "variant__product",
-                "variant__inventory_strategy",
             )
             .prefetch_related(
                 "variant__selections__attribute", "variant__selections__option"
@@ -242,15 +254,17 @@ class OrderService:
                 discount_value=line["discount_value"],
                 discount_amount=line["line_discount"],
                 final_price=line["line_total"],
-                inventory_strategy_id=variant.inventory_strategy_id,
+                inventory_strategy_id=self._default_strategy_id(),
                 variant_info=self._variant_info_snapshot(variant),
             )
-            for (inventory_type, inventory_id, quantity) in line["reservations"]:
+            for (inventory_type, inventory_id, quantity, linked_inv, linked_unit) in line["reservations"]:
                 OrderItemReservation.objects.create(
                     order_item=order_item,
                     inventory_type=inventory_type,
                     inventory_id=inventory_id,
                     quantity=quantity,
+                    linked_inventory=linked_inv,
+                    linked_unit=linked_unit,
                 )
             subtotal += line["unit_price"] * item.quantity
             discount_total += line["line_discount"]
@@ -278,49 +292,140 @@ class OrderService:
             item.delete()
         return order
 
+    @staticmethod
+    def _detect_variant_inventory_type(variant):
+        if Inventory.objects.filter(variant=variant).exists():
+            has_units = InventoryUnit.objects.filter(
+                inventory__variant=variant
+            ).exists()
+            return "serialized_new" if has_units else "normal_new"
+        if variant.warehouse_stocks.exists():
+            return "normal"
+        if hasattr(variant, 'serialized_stocks') and variant.serialized_stocks.exists():
+            return "serialized"
+        return "normal"
+
     def _reserve_return_item(self, variant, quantity, reservations):
-        if variant.inventory_strategy.code == "normal":
-            stock = (
-                WarehouseStock.objects.select_for_update()
-                .filter(variant=variant, warehouse__is_default=True)
-                .first()
-            )
-            if stock is None:
-                raise self.ValidationError({
-                    "inventory": [_("No warehouse is configured for this item.")]
-                })
-            if stock.available < quantity:
-                raise self.ValidationError({
-                    "items": [
-                        _("Item %(sku)s does not have enough stock.")
-                        % {"sku": variant.sku}
-                    ]
-                })
-            stock.reserved += quantity
-            stock.save(update_fields=["reserved"])
-            reservations.append(("warehouse_stock", stock.id, quantity))
+        from domains.inventory.models import WarehouseStock
+        inv_type = self._detect_variant_inventory_type(variant)
+        if inv_type == "normal_new":
+            self._reserve_new_normal(variant, quantity, reservations)
+        elif inv_type == "serialized_new":
+            self._reserve_new_serialized(variant, quantity, reservations)
+        elif inv_type == "normal":
+            self._reserve_warehouse_stock(variant, quantity, reservations)
         else:
-            rows = list(
-                SerializedStock.objects.select_for_update()
-                .filter(
-                    variant=variant,
-                    status_id=SerializedStockStatusEnum.IN_STOCK.value,
-                    sellable=True,
-                    reserved=False,
-                )
-                .order_by("id")[: quantity]
+            self._reserve_serialized_stock(variant, quantity, reservations)
+
+    def _reserve_new_normal(self, variant, quantity, reservations):
+        inventory = (
+            Inventory.objects.select_for_update()
+            .filter(variant=variant)
+            .first()
+        )
+        if inventory is None:
+            raise self.ValidationError({
+                "inventory": [_("No inventory is configured for this item.")]
+            })
+        available = inventory.available
+        if available < quantity:
+            raise self.ValidationError({
+                "items": [
+                    _("Item %(sku)s does not have enough stock.")
+                    % {"sku": variant.sku}
+                ]
+            })
+        inventory.reserved += quantity
+        inventory.save(update_fields=["reserved"])
+        reservations.append(("inventory", inventory.id, quantity, inventory, None))
+
+    def _reserve_new_serialized(self, variant, quantity, reservations):
+        inventory = Inventory.objects.select_for_update().filter(
+            variant=variant
+        ).first()
+        if inventory is None:
+            raise self.ValidationError({
+                "inventory": [_("No inventory is configured for this item.")]
+            })
+        units = list(
+            InventoryUnit.objects.select_for_update()
+            .filter(
+                inventory=inventory,
+                state=InventoryUnitStateEnum.IN_STOCK.value,
             )
-            if len(rows) < quantity:
-                raise self.ValidationError({
-                    "items": [
-                        _("Item %(sku)s does not have enough stock.")
-                        % {"sku": variant.sku}
-                    ]
-                })
-            for row in rows:
-                row.reserved = True
-                row.save(update_fields=["reserved"])
-                reservations.append(("serialized_stock", row.id, 1))
+            .order_by("id")[:quantity]
+        )
+        if len(units) < quantity:
+            raise self.ValidationError({
+                "items": [
+                    _("Item %(sku)s does not have enough stock.")
+                    % {"sku": variant.sku}
+                ]
+            })
+        for unit in units:
+            unit.state = InventoryUnitStateEnum.RESERVED.value
+            unit.save(update_fields=["state"])
+            reservations.append(("inventory_unit", unit.id, 1, inventory, unit))
+        self._sync_new_inventory(inventory)
+
+    def _reserve_warehouse_stock(self, variant, quantity, reservations):
+        stock = (
+            WarehouseStock.objects.select_for_update()
+            .filter(variant=variant, warehouse__is_default=True)
+            .first()
+        )
+        if stock is None:
+            raise self.ValidationError({
+                "inventory": [_("No warehouse is configured for this item.")]
+            })
+        if stock.available < quantity:
+            raise self.ValidationError({
+                "items": [
+                    _("Item %(sku)s does not have enough stock.")
+                    % {"sku": variant.sku}
+                ]
+            })
+        stock.reserved += quantity
+        stock.save(update_fields=["reserved"])
+        reservations.append(("warehouse_stock", stock.id, quantity, None, None))
+
+    def _reserve_serialized_stock(self, variant, quantity, reservations):
+        rows = list(
+            SerializedStock.objects.select_for_update()
+            .filter(
+                variant=variant,
+                status_id=SerializedStockStatusEnum.IN_STOCK.value,
+                sellable=True,
+                reserved=False,
+            )
+            .order_by("id")[: quantity]
+        )
+        if len(rows) < quantity:
+            raise self.ValidationError({
+                "items": [
+                    _("Item %(sku)s does not have enough stock.")
+                    % {"sku": variant.sku}
+                ]
+            })
+        for row in rows:
+            row.reserved = True
+            row.save(update_fields=["reserved"])
+            reservations.append(("serialized_stock", row.id, 1, None, None))
+
+    @staticmethod
+    def _sync_new_inventory(inventory):
+        inventory.quantity = InventoryUnit.objects.filter(
+            inventory=inventory
+        ).count()
+        inventory.sellable = InventoryUnit.objects.filter(
+            inventory=inventory,
+            state=InventoryUnitStateEnum.IN_STOCK.value,
+        ).count()
+        inventory.reserved = InventoryUnit.objects.filter(
+            inventory=inventory,
+            state=InventoryUnitStateEnum.RESERVED.value,
+        ).count()
+        inventory.save(update_fields=["quantity", "sellable", "reserved"])
 
     # ───────────────────────── reads / expiry ─────────────────────────
 
@@ -379,7 +484,7 @@ class OrderService:
             Order.objects.select_related("status")
             .filter(customer=customer)
             .prefetch_related(
-                "items__inventory_strategy",
+                "items",
                 "payments__payment_method",
                 "status__status_actions__order_action",
             )
@@ -731,9 +836,26 @@ class OrderService:
 
     def release_reservations(self, order):
         """Return an order's reserved stock back to the sellable pool."""
+        from domains.inventory.enums.InventoryUnitStateEnum import InventoryUnitStateEnum
         for order_item in order.items.prefetch_related("reservations"):
             for reservation in order_item.reservations.all():
-                if reservation.inventory_type == "warehouse_stock":
+                if reservation.linked_inventory_id is not None:
+                    if reservation.linked_unit_id is not None:
+                        InventoryUnit.objects.filter(
+                            id=reservation.linked_unit_id,
+                            state=InventoryUnitStateEnum.RESERVED.value,
+                        ).update(state=InventoryUnitStateEnum.IN_STOCK.value)
+                        if reservation.linked_inventory_id:
+                            inv = Inventory.objects.filter(
+                                id=reservation.linked_inventory_id
+                            ).first()
+                            if inv:
+                                self._sync_new_inventory(inv)
+                    else:
+                        Inventory.objects.filter(
+                            id=reservation.linked_inventory_id,
+                        ).update(reserved=F("reserved") - reservation.quantity)
+                elif reservation.inventory_type == "warehouse_stock":
                     WarehouseStock.objects.filter(id=reservation.inventory_id).update(
                         reserved=F("reserved") - reservation.quantity
                     )
@@ -748,11 +870,22 @@ class OrderService:
 
         supply_service = InventorySupplyService()
         sold_status = None
-        for order_item in order.items.prefetch_related("reservations").select_related(
-            "inventory_strategy"
-        ):
+        for order_item in order.items.prefetch_related("reservations"):
             for reservation in order_item.reservations.all():
-                if reservation.inventory_type == "warehouse_stock":
+                if reservation.linked_inventory_id is not None:
+                    if reservation.linked_unit_id is not None:
+                        InventoryUnit.objects.filter(
+                            id=reservation.linked_unit_id,
+                        ).update(state=InventoryUnitStateEnum.SOLD.value)
+                    else:
+                        Inventory.objects.filter(
+                            id=reservation.linked_inventory_id,
+                        ).update(
+                            reserved=F("reserved") - reservation.quantity,
+                            sellable=F("sellable") - reservation.quantity,
+                            quantity=F("quantity") - reservation.quantity,
+                        )
+                elif reservation.inventory_type == "warehouse_stock":
                     WarehouseStock.objects.filter(id=reservation.inventory_id).update(
                         reserved=F("reserved") - reservation.quantity,
                         sellable=F("sellable") - reservation.quantity,
@@ -767,8 +900,16 @@ class OrderService:
                         sellable=False,
                         status_id=sold_status.id,
                     )
+            # Sync new inventory summary after unit state changes
+            if any(r.linked_unit_id for r in order_item.reservations.all()):
+                inv = next(
+                    (r.linked_inventory for r in order_item.reservations.all()
+                     if r.linked_inventory_id is not None),
+                    None,
+                )
+                if inv:
+                    self._sync_new_inventory(inv)
             # Finalized sale: consume FIFO cost layers for COGS tracking.
-            # Runs inside the caller's transaction (payment approval).
             supply_service.consume_order_item(order_item)
 
     @staticmethod
@@ -966,7 +1107,7 @@ class OrderService:
 
     def _order_payload(self, order):
         item_rows = list(
-            order.items.select_related("inventory_strategy").order_by("id")
+            order.items.order_by("id")
         )
         thumbnails = self._product_thumbnails(
             [row.variant_info.get("product_id") for row in item_rows]
@@ -994,10 +1135,6 @@ class OrderService:
                 ),
                 "discount_amount": str(item.discount_amount),
                 "final_price": str(item.final_price),
-                "inventory_strategy": {
-                    "id": item.inventory_strategy_id,
-                    "code": item.inventory_strategy.code,
-                },
                 "selections": item.variant_info.get("selections", []),
             }
             for item in item_rows

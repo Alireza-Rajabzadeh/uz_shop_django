@@ -13,7 +13,6 @@ from domains.catalog.models import (
     ProductVariants,
     ProductVariantStatus,
 )
-from domains.inventory.models import InventoryStrategy
 from domains.marketplace.models import BusinessOffer
 from domains.vendor.models import Vendor, VendorStatus
 
@@ -40,13 +39,9 @@ class BusinessOfferModelTests(APITestCase):
         product_status = ProductStatus.objects.create(name="active")
         self.product = Product.objects.create(name="Test Product", status=product_status)
         self.product.categories.add(self.category)
-        self.normal, _ = InventoryStrategy.objects.get_or_create(
-            code="normal", defaults={"name": "Normal"}
-        )
         self.variant_status = ProductVariantStatus.objects.create(name="active")
         self.variant = ProductVariants.objects.create(
             product=self.product,
-            inventory_strategy=self.normal,
             status=self.variant_status,
             sku="TEST-SKU-001",
             combination_key="BLK-128GB",
@@ -176,12 +171,8 @@ class BusinessOfferAPITests(APITestCase):
         product_status = ProductStatus.objects.create(name="active")
         self.product = Product.objects.create(name="API Product", status=product_status)
         self.product.categories.add(self.category)
-        self.normal, _ = InventoryStrategy.objects.get_or_create(
-            code="normal", defaults={"name": "Normal"}
-        )
         self.variant = ProductVariants.objects.create(
             product=self.product,
-            inventory_strategy=self.normal,
             sku="API-SKU-001",
             combination_key="BLK-128GB",
         )

@@ -14,17 +14,15 @@ from domains.inventory.enums.VariantPriceHistorySourceEnum import (
 from domains.inventory.models import (
     InventorySupply,
     VariantPriceHistory,
-    VariantPricing,
 )
 from domains.inventory.services.price_history_mongo import log_price_change
 from domains.marketplace.models import BusinessOffer
 
 
 class InventoryPricingService:
-    # Per-variant pricing configuration plus read-only cost-basis and
-    # suggested-price calculations. Nothing here writes to catalog prices;
-    # results are computed on demand from received supply layers and never
-    # persisted.
+    # Per-business-variant pricing configuration plus read-only cost-basis
+    # and suggested-price calculations. Pricing config (expected_profit_percentage,
+    # cost_strategy) lives on BusinessOffer, not on a shared VariantPricing model.
 
     class ValidationError(Exception):
         def __init__(self, errors):
@@ -38,7 +36,10 @@ class InventoryPricingService:
         ]
 
     def get_variant_pricing(self, variant):
-        return VariantPricing.objects.filter(variant=variant).first()
+        """Return the active BusinessOffer for this variant, or None."""
+        return BusinessOffer.objects.filter(
+            variant=variant, is_active=True
+        ).first()
 
     @transaction.atomic
     def update_variant_pricing(self, variant, *, expected_profit_percentage=None, cost_strategy=None):
@@ -55,20 +56,27 @@ class InventoryPricingService:
                     ]
                 })
 
-        pricing = VariantPricing.objects.select_for_update().filter(variant=variant).first()
-        if pricing is None:
-            pricing = VariantPricing(variant=variant)
+        offer = BusinessOffer.objects.select_for_update().filter(
+            variant=variant, is_active=True
+        ).first()
+        if offer is None:
+            raise self.ValidationError({
+                "pricing": [
+                    _(
+                        "No active business offer exists for this variant. "
+                        "Create a BusinessOffer before updating pricing configuration."
+                    )
+                ]
+            })
         if expected_profit_percentage is not None:
-            pricing.expected_profit_percentage = Decimal(str(expected_profit_percentage))
+            offer.expected_profit_percentage = Decimal(str(expected_profit_percentage))
         if cost_strategy is not None:
-            pricing.cost_strategy = cost_strategy
-        pricing.save()
-        return pricing
+            offer.cost_strategy = cost_strategy
+        offer.save(update_fields=["expected_profit_percentage", "cost_strategy", "updated_at"])
+        return offer
 
     @transaction.atomic
     def apply_price(self, variant, *, price=None):
-        from domains.marketplace.models import BusinessOffer
-
         variant = (
             ProductVariants.objects.select_for_update()
             .select_related("product")
@@ -225,16 +233,8 @@ class InventoryPricingService:
             "cost_basis": basis.quantize(money) if basis is not None else None,
             "suggested_price": suggested_price.quantize(money) if suggested_price is not None else None,
             "available_supply_quantity": sum(row.remaining_quantity for row in rows),
-            "catalog_price": self._get_offer_price(variant),
+            "catalog_price": config.price,
         }
-
-    @staticmethod
-    def _get_offer_price(variant):
-        from domains.marketplace.models import BusinessOffer
-        offer = BusinessOffer.objects.filter(
-            variant=variant, is_active=True
-        ).first()
-        return getattr(offer, "price", None)
 
     # ─────────────────── admin pricing overview / list ───────────────────
 
@@ -245,7 +245,7 @@ class InventoryPricingService:
     def _overview_for_rows(self, variant, config, rows, offer_price=None):
         """Shared overview builder; rows must be newest-first and annotated."""
         if offer_price is None:
-            offer_price = self._get_offer_price(variant)
+            offer_price = config.price if config is not None else None
         latest_cost = self._landed_unit_cost(rows[0]) if rows else None
         fifo_next_cost = self._landed_unit_cost(rows[-1]) if rows else None
         weighted_average_cost = (
@@ -311,11 +311,13 @@ class InventoryPricingService:
                 raise self.ValidationError({
                     "strategy": [_('Unsupported pricing cost strategy.')]
                 })
-            queryset = queryset.filter(pk__in=VariantPricing.objects.filter(
-                cost_strategy=strategy
+            queryset = queryset.filter(pk__in=BusinessOffer.objects.filter(
+                cost_strategy=strategy, is_active=True
             ).values_list("variant_id", flat=True))
         if has_pricing is not None:
-            configured_ids = VariantPricing.objects.values_list("variant_id", flat=True)
+            configured_ids = BusinessOffer.objects.filter(
+                is_active=True
+            ).values_list("variant_id", flat=True)
             queryset = (
                 queryset.filter(pk__in=configured_ids)
                 if has_pricing
@@ -361,12 +363,8 @@ class InventoryPricingService:
     def get_pricing_overview_map(self, variants):
         """Batch overview for one page of variants (constant query count)."""
         variant_ids = [variant.id for variant in variants]
-        configs = {
-            pricing.variant_id: pricing
-            for pricing in VariantPricing.objects.filter(variant_id__in=variant_ids)
-        }
-        offer_prices = {
-            offer.variant_id: offer.price
+        offers = {
+            offer.variant_id: offer
             for offer in BusinessOffer.objects.filter(
                 variant_id__in=variant_ids, is_active=True,
             )
@@ -387,8 +385,7 @@ class InventoryPricingService:
             rows_by_variant[supply.variant_id].append(supply)
         return {
             variant.id: self._overview_for_rows(
-                variant, configs.get(variant.id), rows_by_variant.get(variant.id, []),
-                offer_price=offer_prices.get(variant.id),
+                variant, offers.get(variant.id), rows_by_variant.get(variant.id, []),
             )
             for variant in variants
         }
