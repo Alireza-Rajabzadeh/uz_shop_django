@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from domains.business.models import BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessWorkingDay
+from domains.business.models import BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessWorkingDay, SocialMedia, SocialMediaIcon
 from domains.files.models import File
 from domains.files.services import FileService
 
@@ -34,11 +34,6 @@ class BusinessProfileSerializer(serializers.ModelSerializer):
         model = BusinessProfile
         fields = "__all__"
         read_only_fields = ["id", "created_at", "updated_at"]
-
-    def validate(self, attrs):
-        if self.instance is None and BusinessProfile.objects.exists():
-            raise serializers.ValidationError("Only one business profile may exist.")
-        return attrs
 
     def validate_light_logo_id(self, value):
         if value is not None and (
@@ -89,33 +84,26 @@ class PublicBusinessPhoneSerializer(serializers.ModelSerializer):
         fields = ["key", "title", "number", "extension", "position"]
 
 
-class BusinessSocialLinkSerializer(ImmutableKeySerializer):
-    logo_file_id = serializers.PrimaryKeyRelatedField(
-        source="logo_file",
+class SocialMediaIconSerializer(serializers.ModelSerializer):
+    file_id = serializers.PrimaryKeyRelatedField(
+        source="file",
         queryset=File.objects.select_related("status"),
-        required=False,
-        allow_null=True,
         write_only=True,
     )
-    logo_file = serializers.SerializerMethodField()
+    file = serializers.SerializerMethodField()
 
     class Meta:
-        model = BusinessSocialLink
-        fields = [
-            "id", "key", "title", "platform", "url", "logo_file_id",
-            "logo_file", "visibility", "status", "position", "created_at", "updated_at",
-        ]
+        model = SocialMediaIcon
+        fields = ["id", "file_id", "file", "label", "position", "created_at", "updated_at"]
         read_only_fields = ["id", "created_at", "updated_at"]
 
-    def validate_logo_file_id(self, value):
-        if value is not None and (
-            value.status.name != FileService.STATUS_AVAILABLE or value.file_type != "image"
-        ):
+    def validate_file_id(self, value):
+        if value.status.name != FileService.STATUS_AVAILABLE or value.file_type != "image":
             raise serializers.ValidationError("Select an available image file.")
         return value
 
-    def get_logo_file(self, obj):
-        file = obj.logo_file
+    def get_file(self, obj):
+        file = obj.file
         if file is None:
             return None
         try:
@@ -131,18 +119,93 @@ class BusinessSocialLinkSerializer(ImmutableKeySerializer):
         }
 
 
-class PublicBusinessSocialLinkSerializer(serializers.ModelSerializer):
-    logo_url = serializers.SerializerMethodField()
+class SocialMediaSerializer(serializers.ModelSerializer):
+    icons = SocialMediaIconSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = SocialMedia
+        fields = ["id", "name", "fa_name", "slug", "is_active", "position", "icons", "created_at", "updated_at"]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class PublicSocialMediaSerializer(serializers.ModelSerializer):
+    icons = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SocialMedia
+        fields = ["id", "name", "fa_name", "slug", "position", "icons"]
+
+    def get_icons(self, obj):
+        icons = obj.icons.all()
+        result = []
+        for icon in icons:
+            try:
+                url = FileService().url(icon.file)
+            except FileService.Error:
+                url = None
+            result.append({
+                "id": icon.id,
+                "label": icon.label,
+                "url": url,
+                "position": icon.position,
+            })
+        return result
+
+
+class BusinessSocialLinkSerializer(ImmutableKeySerializer):
+    social_media_id = serializers.PrimaryKeyRelatedField(
+        source="social_media",
+        queryset=SocialMedia.objects.all(),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
+    social_media = PublicSocialMediaSerializer(read_only=True)
+    icon_id = serializers.PrimaryKeyRelatedField(
+        source="icon",
+        queryset=SocialMediaIcon.objects.all(),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
+    icon = serializers.SerializerMethodField()
 
     class Meta:
         model = BusinessSocialLink
-        fields = ["key", "title", "platform", "url", "logo_url", "position"]
+        fields = [
+            "id", "key", "title", "social_media_id", "social_media",
+            "url", "icon_id", "icon", "visibility", "status",
+            "position", "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
 
-    def get_logo_url(self, obj):
-        if obj.logo_file is None:
+    def get_icon(self, obj):
+        if obj.icon is None:
             return None
         try:
-            return FileService().url(obj.logo_file)
+            url = FileService().url(obj.icon.file)
+        except FileService.Error:
+            url = None
+        return {
+            "id": obj.icon.id,
+            "label": obj.icon.label,
+            "url": url,
+        }
+
+
+class PublicBusinessSocialLinkSerializer(serializers.ModelSerializer):
+    social_media = PublicSocialMediaSerializer(read_only=True)
+    icon_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BusinessSocialLink
+        fields = ["key", "title", "social_media", "url", "icon_url", "position"]
+
+    def get_icon_url(self, obj):
+        if obj.icon is None:
+            return None
+        try:
+            return FileService().url(obj.icon.file)
         except FileService.Error:
             return None
 

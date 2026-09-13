@@ -10,6 +10,7 @@ from core.management.seeders.order import OrderSeeder
 from core.management.seeders.payments import PaymentsSeeder
 from core.management.seeders.customers import CustomerSeeder
 from core.management.seeders.location import LocationSeeder
+from core.management.seeders.social_media import SocialMediaSeeder
 from core.management.seeders.variant_attributes import VariantAttributeSeeder
 from core.management.seeders.vendor_statuses import VendorStatusSeeder
 
@@ -31,6 +32,7 @@ class Command(BaseCommand):
             CustomerSeeder(),
             OrderSeeder(),
             PaymentsSeeder(),
+            SocialMediaSeeder(),
         ]
 
         for seeder in seeders:

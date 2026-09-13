@@ -141,3 +141,14 @@ class FileVerify(AdminFileAPIView):
         except FileService.Error as exc:
             self.service_error(exc)
         return api_response(True, "File verified.", FileReadSerializer(file).data)
+
+
+class FileDirectoryList(AdminFileAPIView):
+    def get(self, request):
+        raw_keys = file_service.directories()
+        dirs = set()
+        for key in raw_keys:
+            parts = key.split("/")
+            if len(parts) > 1:
+                dirs.add(parts[0])
+        return api_response(True, "", sorted(dirs))

@@ -4,7 +4,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.exceptions import APIException, NotFound, Throttled, ValidationError
 from core.responses import api_response
 from domains.vendor.auth import VendorJWTAuthentication
-from .serializers import (
+from ..serializers import (
     VendorRegisterSerializer,
     VendorRegisterConfirmationSerializer,
     VendorLoginSerializer,
@@ -17,13 +17,13 @@ from .serializers import (
     VendorPasswordChangeSerializer,
     VendorPreferenceSerializer,
 )
-from .services.auth_service import (
+from ..services.auth_service import (
     VendorAuthService,
     VendorConfirmationError,
     VendorConfirmationThrottled,
     VendorConfirmationUnavailable,
 )
-from .models import VendorPreference
+from ..models import VendorPreference
 
 
 class VendorRegister(APIView):

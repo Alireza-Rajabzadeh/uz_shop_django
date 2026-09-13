@@ -68,6 +68,7 @@ class FileListQuerySerializer(serializers.Serializer):
         required=False, choices=["image", "video", "document", "other"]
     )
     storage_alias = serializers.CharField(required=False, max_length=50)
+    directory = serializers.CharField(required=False, max_length=500)
     ordering = serializers.ChoiceField(
         required=False,
         default="-created_at",

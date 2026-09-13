@@ -41,6 +41,11 @@ class VendorRegisterSerializer(serializers.Serializer):
         return attrs
 
 
+class VendorRegisterConfirmationSerializer(serializers.Serializer):
+    request_id = serializers.CharField(required=True, max_length=64)
+    code = serializers.RegexField(r"^[0-9]{6}$", required=True)
+
+
 class VendorLoginSerializer(serializers.Serializer):
     phone = serializers.CharField(required=True, max_length=20)
     password = serializers.CharField(required=True, write_only=True)

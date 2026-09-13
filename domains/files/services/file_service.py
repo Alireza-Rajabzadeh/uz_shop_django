@@ -215,7 +215,7 @@ class FileService:
         file.save(update_fields=["metadata", "updated_at"])
         return file
 
-    def list(self, *, search="", status=None, file_type=None, storage_alias=None, ordering="-created_at"):
+    def list(self, *, search="", status=None, file_type=None, storage_alias=None, directory=None, ordering="-created_at"):
         queryset = File.objects.select_related("status", "created_by")
         if search:
             queryset = queryset.filter(
@@ -229,10 +229,19 @@ class FileService:
             queryset = queryset.filter(file_type=file_type)
         if storage_alias:
             queryset = queryset.filter(storage_alias=storage_alias)
+        if directory:
+            queryset = queryset.filter(object_key__startswith=directory)
         field = ordering.lstrip("-")
         if field not in self.ORDERING_FIELDS:
             raise self.Error("Invalid file ordering.")
         return queryset.order_by(ordering, "-created_at")
+
+    def directories(self):
+        return (
+            File.objects.exclude(object_key="")
+            .values_list("object_key", flat=True)
+            .order_by("object_key")
+        )
 
     def orphans(
         self,

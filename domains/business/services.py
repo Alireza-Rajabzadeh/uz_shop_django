@@ -9,6 +9,6 @@ class BusinessService:
             "phones": BusinessPhone.objects.filter(status=RecordStatus.ACTIVE, visibility=Visibility.PUBLIC),
             "social_links": BusinessSocialLink.objects.filter(
                 status=RecordStatus.ACTIVE, visibility=Visibility.PUBLIC
-            ).select_related("logo_file__status"),
+            ).select_related("social_media", "icon__file__status"),
             "working_hours": BusinessWorkingDay.objects.all(),
         }

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessWorkingDay
+from .models import BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessWorkingDay, SocialMedia, SocialMediaIcon
 
 
 @admin.register(BusinessProfile)
@@ -21,12 +21,27 @@ class BusinessPhoneAdmin(admin.ModelAdmin):
 
 @admin.register(BusinessSocialLink)
 class BusinessSocialLinkAdmin(admin.ModelAdmin):
-    list_display = ("title", "platform", "logo_file", "visibility", "status", "position")
-    list_filter = ("platform", "visibility", "status")
+    list_display = ("title", "social_media", "visibility", "status", "position")
+    list_filter = ("visibility", "status")
     search_fields = ("key", "title", "url")
 
     def get_readonly_fields(self, request, obj=None):
         return ("key",) if obj else ()
+
+
+@admin.register(SocialMedia)
+class SocialMediaAdmin(admin.ModelAdmin):
+    list_display = ("name", "fa_name", "slug", "is_active", "position")
+    list_filter = ("is_active",)
+    search_fields = ("name", "fa_name", "slug")
+    prepopulated_fields = {"slug": ("name",)}
+
+
+@admin.register(SocialMediaIcon)
+class SocialMediaIconAdmin(admin.ModelAdmin):
+    list_display = ("social_media", "label", "file", "position")
+    list_filter = ("social_media",)
+    search_fields = ("label",)
 
 
 @admin.register(BusinessWorkingDay)

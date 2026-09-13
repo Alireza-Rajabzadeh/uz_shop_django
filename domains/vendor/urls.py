@@ -1,6 +1,7 @@
 from django.urls import path
 from .views import (
     VendorRegister,
+    VendorRegisterConfirmation,
     VendorLogin,
     VendorLoginConfirmation,
     VendorPasswordForgot,
@@ -11,6 +12,15 @@ from .views import (
     VendorChangePassword,
     VendorPreferenceView,
 )
+from .views.business import (
+    VendorBusinessProfileView,
+    VendorBusinessPhoneListCreateView,
+    VendorBusinessPhoneDetailView,
+    VendorBusinessSocialLinkListCreateView,
+    VendorBusinessSocialLinkDetailView,
+    VendorBusinessWorkingDayListCreateView,
+    VendorBusinessWorkingDayDetailView,
+)
 from .admin_views import (
     AdminVendorList,
     AdminVendorDetail,
@@ -19,6 +29,7 @@ from .admin_views import (
 
 urlpatterns = [
     path("register", VendorRegister.as_view()),
+    path("register/confirmation", VendorRegisterConfirmation.as_view()),
     path("login", VendorLogin.as_view()),
     path("login/confirmation", VendorLoginConfirmation.as_view()),
     path("password/forgot", VendorPasswordForgot.as_view()),
@@ -34,6 +45,13 @@ urlpatterns = [
     path("me", VendorMe.as_view()),
     path("me/password", VendorChangePassword.as_view()),
     path("preferences", VendorPreferenceView.as_view()),
+    path("business/profile", VendorBusinessProfileView.as_view()),
+    path("business/phones", VendorBusinessPhoneListCreateView.as_view()),
+    path("business/phones/<int:pk>", VendorBusinessPhoneDetailView.as_view()),
+    path("business/social-links", VendorBusinessSocialLinkListCreateView.as_view()),
+    path("business/social-links/<int:pk>", VendorBusinessSocialLinkDetailView.as_view()),
+    path("business/working-days", VendorBusinessWorkingDayListCreateView.as_view()),
+    path("business/working-days/<int:pk>", VendorBusinessWorkingDayDetailView.as_view()),
     path("vendors", AdminVendorList.as_view()),
     path("vendors/<int:vendor_id>", AdminVendorDetail.as_view()),
     path("statuses", AdminVendorStatusList.as_view()),

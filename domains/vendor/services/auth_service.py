@@ -16,7 +16,6 @@ from core.services import (
 )
 from domains.vendor.models import Vendor, VendorPreference
 from domains.vendor.enums.VendorStatusEnum import VendorStatusEnum
-from domains.notifications.services import NotificationError, SMSService
 
 logger = logging.getLogger(__name__)
 
@@ -38,15 +37,91 @@ class VendorConfirmationUnavailable(VendorConfirmationError):
 
 
 class VendorAuthService:
-    def register(self, validated_data):
+    def request_registration(self, validated_data, ttl=120):
         password = validated_data.pop("password")
         validated_data.pop("password_confirmation")
 
-        vendor = Vendor(**validated_data, status_id=VendorStatusEnum.ACTIVE.value)
+        vendor = Vendor(**validated_data, status_id=VendorStatusEnum.PENDING.value)
         vendor.set_password(password)
         vendor.save()
 
         VendorPreference.objects.create(vendor=vendor)
+
+        confirmed_requests = ConfirmedRequestService()
+        try:
+            generated = confirmed_requests.generate_code(
+                purpose="vendor_register",
+                subject=vendor.pk,
+                payload={
+                    "vendor_id": vendor.pk,
+                    "credential_fingerprint": self._credential_fingerprint(vendor),
+                },
+                ttl=ttl,
+            )
+        except ConfirmedRequestThrottled as exc:
+            raise VendorConfirmationThrottled(exc.retry_after) from exc
+
+        message = _(
+            "Your UzShop registration confirmation code is %(code)s. "
+            "It expires in %(minutes)s minutes."
+        ) % {
+            "code": generated.code,
+            "minutes": max(generated.expires_in // 60, 1),
+        }
+
+        self._queue_sms(vendor.pk, message, generated.expires_at)
+
+        now = timezone.now()
+        remaining_ttl = max(int((generated.expires_at - now).total_seconds()), 0)
+        resend_after = max(int((generated.resend_at - now).total_seconds()), 0)
+        return {
+            "request_id": generated.request_id,
+            "expires_in": remaining_ttl,
+            "resend_after": resend_after,
+            "destination": self._mask_phone(vendor.phone),
+        }
+
+    def confirm_registration(self, request_id, code):
+        try:
+            payload = ConfirmedRequestService().get_code(
+                request_id=request_id,
+                code=code,
+                purpose="vendor_register",
+            )
+        except ConfirmedRequestInvalid as exc:
+            raise VendorConfirmationError(
+                {"code": [_("The confirmation code is invalid or expired.")]}
+            ) from exc
+
+        try:
+            vendor = Vendor.objects.select_related("status").get(
+                pk=payload["vendor_id"]
+            )
+        except (Vendor.DoesNotExist, KeyError, TypeError):
+            raise VendorConfirmationError(
+                {"code": [_("The confirmation code is invalid or expired.")]}
+            )
+
+        if payload.get("credential_fingerprint") != self._credential_fingerprint(vendor):
+            raise VendorConfirmationError(
+                {"code": [_("The confirmation request is no longer valid.")]}
+            )
+        if vendor.status_id != VendorStatusEnum.PENDING.value:
+            raise VendorConfirmationError(
+                {"detail": [_("Account is not pending confirmation.")]}
+            )
+
+        with transaction.atomic():
+            vendor = Vendor.objects.select_for_update().select_related("status").get(
+                pk=vendor.pk
+            )
+            if vendor.status_id != VendorStatusEnum.PENDING.value:
+                raise VendorConfirmationError(
+                    {"detail": [_("Account is not pending confirmation.")]}
+                )
+            vendor.status_id = VendorStatusEnum.ACTIVE.value
+            vendor.last_login = timezone.now()
+            vendor.save(update_fields=["status", "last_login", "updated_at"])
 
         return self._build_auth_response(vendor)
 
@@ -66,29 +141,15 @@ class VendorAuthService:
         except ConfirmedRequestThrottled as exc:
             raise VendorConfirmationThrottled(exc.retry_after) from exc
 
-        try:
-            notification = SMSService().send(
-                receiver=vendor.phone,
-                message=_(
-                    "Your UzShop login confirmation code is %(code)s. "
-                    "It expires in %(minutes)s minutes."
-                ) % {
-                    "code": generated.code,
-                    "minutes": max(generated.expires_in // 60, 1),
-                },
-                sensitive=True,
-                expires_at=generated.expires_at,
-            )
-        except NotificationError as exc:
-            confirmed_requests.cancel(generated.request_id)
-            raise VendorConfirmationUnavailable(
-                {"detail": [_("The confirmation code could not be sent.")]}
-            ) from exc
-        if notification.status == "failed":
-            confirmed_requests.cancel(generated.request_id)
-            raise VendorConfirmationUnavailable(
-                {"detail": [_("The confirmation code could not be sent.")]}
-            )
+        message = _(
+            "Your UzShop login confirmation code is %(code)s. "
+            "It expires in %(minutes)s minutes."
+        ) % {
+            "code": generated.code,
+            "minutes": max(generated.expires_in // 60, 1),
+        }
+
+        self._queue_sms(vendor.pk, message, generated.expires_at)
 
         now = timezone.now()
         remaining_ttl = max(int((generated.expires_at - now).total_seconds()), 0)
@@ -153,29 +214,15 @@ class VendorAuthService:
         except ConfirmedRequestThrottled as exc:
             raise VendorConfirmationThrottled(exc.retry_after) from exc
 
-        try:
-            notification = SMSService().send(
-                receiver=vendor.phone,
-                message=_(
-                    "Your UzShop phone verification code is %(code)s. "
-                    "It expires in %(minutes)s minutes."
-                ) % {
-                    "code": generated.code,
-                    "minutes": max(generated.expires_in // 60, 1),
-                },
-                sensitive=True,
-                expires_at=generated.expires_at,
-            )
-        except NotificationError as exc:
-            confirmed_requests.cancel(generated.request_id)
-            raise VendorConfirmationUnavailable(
-                {"detail": [_("The confirmation code could not be sent.")]}
-            ) from exc
-        if notification.status == "failed":
-            confirmed_requests.cancel(generated.request_id)
-            raise VendorConfirmationUnavailable(
-                {"detail": [_("The confirmation code could not be sent.")]}
-            )
+        message = _(
+            "Your UzShop phone verification code is %(code)s. "
+            "It expires in %(minutes)s minutes."
+        ) % {
+            "code": generated.code,
+            "minutes": max(generated.expires_in // 60, 1),
+        }
+
+        self._queue_sms(vendor.pk, message, generated.expires_at)
 
         now = timezone.now()
         return {
@@ -246,13 +293,21 @@ class VendorAuthService:
         except ConfirmedRequestThrottled as exc:
             raise VendorConfirmationThrottled(exc.retry_after) from exc
 
-        from domains.vendor.tasks import deliver_password_reset_sms
+        message = _(
+            "Your UzShop password reset code is %(code)s. "
+            "It expires in %(minutes)s minutes."
+        ) % {
+            "code": generated.code,
+            "minutes": max(generated.expires_in // 60, 1),
+        }
+
+        from domains.vendor.tasks import deliver_vendor_sms
 
         try:
-            deliver_password_reset_sms.apply_async(
+            deliver_vendor_sms.apply_async(
                 args=[
                     vendor.pk if eligible else None,
-                    generated.code,
+                    message,
                     generated.expires_at.isoformat(),
                 ],
                 expires=generated.expires_at,
@@ -266,33 +321,6 @@ class VendorAuthService:
             "resend_after": generated.resend_after,
             "destination": self._mask_phone(phone),
         }
-
-    def deliver_password_reset_code(self, vendor_id, code, expires_at):
-        if vendor_id is None or expires_at <= timezone.now():
-            return
-        vendor = Vendor.objects.select_related("status").filter(
-            pk=vendor_id,
-            status__is_active=True,
-        ).first()
-        if vendor is None:
-            return
-        try:
-            SMSService().send(
-                receiver=vendor.phone,
-                message=_(
-                    "Your UzShop password reset code is %(code)s. "
-                    "It expires in %(minutes)s minutes."
-                ) % {
-                    "code": code,
-                    "minutes": max(int((expires_at - timezone.now()).total_seconds()) // 60, 1),
-                },
-                sensitive=True,
-                expires_at=expires_at,
-            )
-        except NotificationError:
-            logger.warning(
-                "Password reset SMS could not be created for vendor %s", vendor.pk
-            )
 
     def reset_password(self, request_id, code, new_password):
         confirmed_requests = ConfirmedRequestService()
@@ -364,6 +392,9 @@ class VendorAuthService:
         if not vendor.status.is_active:
             raise ValidationError(_("Account is inactive."))
 
+        if vendor.status_id != VendorStatusEnum.ACTIVE.value:
+            raise ValidationError(_("Account is not active."))
+
         return vendor
 
     @staticmethod
@@ -375,6 +406,18 @@ class VendorAuthService:
         if len(phone) <= 8:
             return "*" * len(phone)
         return f"{phone[:4]}{'*' * (len(phone) - 8)}{phone[-4:]}"
+
+    @staticmethod
+    def _queue_sms(vendor_id, message, expires_at):
+        from domains.vendor.tasks import deliver_vendor_sms
+
+        try:
+            deliver_vendor_sms.apply_async(
+                args=[vendor_id, message, expires_at.isoformat()],
+                expires=expires_at,
+            )
+        except Exception:
+            logger.exception("Could not queue SMS delivery for vendor %s", vendor_id)
 
     def update_profile(self, vendor, validated_data):
         for attr, value in validated_data.items():

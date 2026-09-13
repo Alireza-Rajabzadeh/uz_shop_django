@@ -8,11 +8,16 @@ from core.permissions import AdminModelPermissions
 from core.responses import api_response
 from core.services import CacheService
 from domains.business.cache import BUSINESS_CACHE_KEY
-from domains.business.models import BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessWorkingDay
+from domains.business.models import BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessWorkingDay, SocialMedia, SocialMediaIcon
 from domains.business.services import BusinessService
 from domains.users.auth import AdminJWTAuthentication
 
-from .serializers import BusinessPhoneSerializer, BusinessProfileSerializer, BusinessSocialLinkSerializer, BusinessWorkingDaySerializer, PublicBusinessPhoneSerializer, PublicBusinessProfileSerializer, PublicBusinessSocialLinkSerializer, PublicBusinessWorkingDaySerializer
+from .serializers import (
+    BusinessPhoneSerializer, BusinessProfileSerializer, BusinessSocialLinkSerializer,
+    BusinessWorkingDaySerializer, PublicBusinessPhoneSerializer, PublicBusinessProfileSerializer,
+    PublicBusinessSocialLinkSerializer, PublicBusinessWorkingDaySerializer, PublicSocialMediaSerializer,
+    SocialMediaIconSerializer, SocialMediaSerializer,
+)
 
 
 class AdminBusinessBase(APIView):
@@ -96,6 +101,15 @@ class PublicBusinessView(APIView):
         return api_response(data=data)
 
 
+class PublicSocialMediaListView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        social_medias = SocialMedia.objects.filter(is_active=True).prefetch_related("icons__file__status")
+        return api_response(data=PublicSocialMediaSerializer(social_medias, many=True).data)
+
+
 class ProfileList(AdminBusinessListCreate):
     model, serializer_class = BusinessProfile, BusinessProfileSerializer
     search_fields = ("business_name", "display_name", "legal_name", "email")
@@ -112,11 +126,55 @@ class PhoneDetail(AdminBusinessDetail, PhoneList): pass
 
 class SocialLinkList(AdminBusinessListCreate):
     model, serializer_class = BusinessSocialLink, BusinessSocialLinkSerializer
-    search_fields = ("key", "title", "platform", "url")
-    filter_fields = ("visibility", "status", "platform")
-    ordering_fields = AdminBusinessBase.ordering_fields + ("position", "title", "key", "platform")
+    search_fields = ("key", "title", "url")
+    filter_fields = ("visibility", "status")
+    ordering_fields = AdminBusinessBase.ordering_fields + ("position", "title", "key")
+
+    def queryset(self, request):
+        queryset = super().queryset(request)
+        return queryset.select_related("social_media", "icon__file__status")
+
 
 class SocialLinkDetail(AdminBusinessDetail, SocialLinkList): pass
+
+
+class SocialMediaList(AdminBusinessListCreate):
+    model, serializer_class = SocialMedia, SocialMediaSerializer
+    search_fields = ("name", "fa_name", "slug")
+    filter_fields = ("is_active",)
+    ordering_fields = AdminBusinessBase.ordering_fields + ("position", "name", "slug")
+
+    def queryset(self, request):
+        queryset = super().queryset(request)
+        return queryset.prefetch_related("icons__file__status")
+
+
+class SocialMediaDetail(AdminBusinessDetail, SocialMediaList): pass
+
+
+class SocialMediaIconList(APIView):
+    authentication_classes = [AdminJWTAuthentication]
+    permission_classes = [AdminModelPermissions]
+    model = SocialMediaIcon
+
+    def post(self, request, pk):
+        social_media = get_object_or_404(SocialMedia, pk=pk)
+        serializer = SocialMediaIconSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(social_media=social_media)
+        return api_response(data=serializer.data, status_code=201)
+
+
+class SocialMediaIconDetail(APIView):
+    authentication_classes = [AdminJWTAuthentication]
+    permission_classes = [AdminModelPermissions]
+    model = SocialMediaIcon
+
+    def delete(self, request, pk, icon_pk):
+        icon = get_object_or_404(SocialMediaIcon, pk=icon_pk, social_media_id=pk)
+        icon.delete()
+        return api_response()
+
 
 class WorkingDayList(AdminBusinessListCreate):
     model, serializer_class = BusinessWorkingDay, BusinessWorkingDaySerializer
