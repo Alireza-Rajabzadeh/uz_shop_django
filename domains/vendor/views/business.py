@@ -1,4 +1,6 @@
+from django.db import transaction
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
@@ -11,6 +13,9 @@ from ..serializers.business import (
     VendorBusinessProfileSerializer,
     VendorBusinessSocialLinkSerializer,
     VendorBusinessWorkingDaySerializer,
+    VendorBusinessWorkingDayUpsertSerializer,
+    VendorPhoneReorderSerializer,
+    VendorSocialLinkReorderSerializer,
 )
 
 
@@ -134,6 +139,96 @@ class VendorBusinessSocialLinkDetailView(APIView):
         return api_response()
 
 
+class VendorBusinessSocialLinkReorderView(APIView):
+    authentication_classes = [VendorJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def patch(self, request):
+        business = _get_business(request)
+        if not business:
+            return api_response(False, "Business profile not found.", status_code=400)
+
+        serializer = VendorSocialLinkReorderSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        ordered_ids = serializer.validated_data["social_links"]
+
+        links = list(
+            BusinessSocialLink.objects.select_for_update(of=("self",))
+            .filter(business=business)
+            .order_by("position", "id")
+        )
+        existing_ids = {link.id for link in links}
+
+        if len(ordered_ids) != len(set(ordered_ids)) or set(ordered_ids) != existing_ids:
+            return api_response(
+                False,
+                "Provide every social link exactly once.",
+                status_code=400,
+            )
+
+        by_id = {link.id: link for link in links}
+        ordered = [by_id[link_id] for link_id in ordered_ids]
+        updated_at = timezone.now()
+        for position, link in enumerate(ordered):
+            link.position = position
+            link.updated_at = updated_at
+        BusinessSocialLink.objects.bulk_update(ordered, ["position", "updated_at"])
+
+        links_qs = BusinessSocialLink.objects.filter(business=business).select_related(
+            "social_media", "icon__file__status"
+        )
+        return api_response(
+            True,
+            "Social links reordered.",
+            VendorBusinessSocialLinkSerializer(links_qs, many=True).data,
+        )
+
+
+class VendorBusinessPhoneReorderView(APIView):
+    authentication_classes = [VendorJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def patch(self, request):
+        business = _get_business(request)
+        if not business:
+            return api_response(False, "Business profile not found.", status_code=400)
+
+        serializer = VendorPhoneReorderSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        ordered_ids = serializer.validated_data["phones"]
+
+        phones = list(
+            BusinessPhone.objects.select_for_update(of=("self",))
+            .filter(business=business)
+            .order_by("position", "id")
+        )
+        existing_ids = {phone.id for phone in phones}
+
+        if len(ordered_ids) != len(set(ordered_ids)) or set(ordered_ids) != existing_ids:
+            return api_response(
+                False,
+                "Provide every phone exactly once.",
+                status_code=400,
+            )
+
+        by_id = {phone.id: phone for phone in phones}
+        ordered = [by_id[phone_id] for phone_id in ordered_ids]
+        updated_at = timezone.now()
+        for position, phone in enumerate(ordered):
+            phone.position = position
+            phone.updated_at = updated_at
+        BusinessPhone.objects.bulk_update(ordered, ["position", "updated_at"])
+
+        phones_qs = BusinessPhone.objects.filter(business=business)
+        return api_response(
+            True,
+            "Phones reordered.",
+            VendorBusinessPhoneSerializer(phones_qs, many=True).data,
+        )
+
+
 class VendorBusinessWorkingDayListCreateView(APIView):
     authentication_classes = [VendorJWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -155,6 +250,47 @@ class VendorBusinessWorkingDayListCreateView(APIView):
         return api_response(data=serializer.data, status_code=201)
 
 
+class VendorBusinessWorkingDayUpsertView(APIView):
+    authentication_classes = [VendorJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def patch(self, request):
+        business = _get_business(request)
+        if not business:
+            return api_response(False, "Business profile not found.", status_code=400)
+
+        serializer = VendorBusinessWorkingDayUpsertSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        day, _created = BusinessWorkingDay.objects.select_for_update().get_or_create(
+            vendor=request.user,
+            weekday=data["weekday"],
+            defaults={
+                "is_open": data["is_open"],
+                "opens_at": data.get("opens_at"),
+                "closes_at": data.get("closes_at"),
+                "second_opens_at": data.get("second_opens_at"),
+                "second_closes_at": data.get("second_closes_at"),
+                "description": data.get("description", ""),
+            },
+        )
+        if not _created:
+            day.is_open = data["is_open"]
+            day.opens_at = data.get("opens_at")
+            day.closes_at = data.get("closes_at")
+            day.second_opens_at = data.get("second_opens_at")
+            day.second_closes_at = data.get("second_closes_at")
+            day.description = data.get("description", "")
+            day.save()
+
+        days = BusinessWorkingDay.objects.filter(vendor=request.user)
+        return api_response(
+            data=VendorBusinessWorkingDaySerializer(days, many=True).data,
+        )
+
+
 class VendorBusinessWorkingDayDetailView(APIView):
     authentication_classes = [VendorJWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -174,3 +310,16 @@ class VendorBusinessWorkingDayDetailView(APIView):
     def delete(self, request, pk):
         self.get_object().delete()
         return api_response()
+
+
+class VendorBusinessDashboardView(APIView):
+    authentication_classes = [VendorJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile = _get_business(request)
+        working_days = BusinessWorkingDay.objects.filter(vendor=request.user).order_by("weekday") if profile else []
+        return api_response(data={
+            "profile": VendorBusinessProfileSerializer(profile).data if profile else None,
+            "working_days": VendorBusinessWorkingDaySerializer(working_days, many=True).data,
+        })

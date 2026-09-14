@@ -113,6 +113,7 @@ class VendorBusinessPhoneSerializer(serializers.ModelSerializer):
 
 class VendorBusinessSocialLinkSerializer(serializers.ModelSerializer):
     key = serializers.CharField(required=False, allow_blank=True)
+    title = serializers.CharField(required=False, allow_blank=True)
     social_media_id = serializers.PrimaryKeyRelatedField(
         source="social_media",
         queryset=SocialMedia.objects.all(),
@@ -188,7 +189,27 @@ class VendorBusinessSocialLinkSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         if not validated_data.get("key"):
             validated_data["key"] = self._generate_key(self.context["business"])
+        if not validated_data.get("title"):
+            social_media = validated_data.get("social_media")
+            if social_media:
+                validated_data["title"] = social_media.fa_name or social_media.name
+            else:
+                validated_data["title"] = validated_data.get("key", "link")
         return super().create(validated_data)
+
+
+class VendorSocialLinkReorderSerializer(serializers.Serializer):
+    social_links = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=False,
+    )
+
+
+class VendorPhoneReorderSerializer(serializers.Serializer):
+    phones = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=False,
+    )
 
 
 class VendorBusinessWorkingDaySerializer(serializers.ModelSerializer):
@@ -213,12 +234,30 @@ class VendorBusinessWorkingDaySerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Both second interval times are required.")
         if second[0] is not None and (second[0] >= second[1] or second[0] < first[1]):
             raise serializers.ValidationError("Second interval must be ordered and cannot overlap the first.")
-        weekday = attrs.get("weekday", getattr(self.instance, "weekday", None))
-        if weekday is not None:
-            vendor = self.context["vendor"]
-            qs = BusinessWorkingDay.objects.filter(vendor=vendor, weekday=weekday)
-            if self.instance:
-                qs = qs.exclude(pk=self.instance.pk)
-            if qs.exists():
-                raise serializers.ValidationError({"weekday": "A working day for this weekday already exists."})
+        return attrs
+
+
+class VendorBusinessWorkingDayUpsertSerializer(serializers.Serializer):
+    weekday = serializers.IntegerField(min_value=0, max_value=6)
+    is_open = serializers.BooleanField()
+    opens_at = serializers.TimeField(required=False, allow_null=True, default=None)
+    closes_at = serializers.TimeField(required=False, allow_null=True, default=None)
+    second_opens_at = serializers.TimeField(required=False, allow_null=True, default=None)
+    second_closes_at = serializers.TimeField(required=False, allow_null=True, default=None)
+    description = serializers.CharField(required=False, allow_blank=True, default="")
+
+    def validate(self, attrs):
+        is_open = attrs["is_open"]
+        opens_at = attrs.get("opens_at")
+        closes_at = attrs.get("closes_at")
+        second_opens_at = attrs.get("second_opens_at")
+        second_closes_at = attrs.get("second_closes_at")
+        if is_open and (opens_at is None or closes_at is None or opens_at >= closes_at):
+            raise serializers.ValidationError("Open days require opens_at before closes_at.")
+        if not is_open and any([opens_at, closes_at, second_opens_at, second_closes_at]):
+            raise serializers.ValidationError("Closed days cannot have time intervals.")
+        if (second_opens_at is None) != (second_closes_at is None):
+            raise serializers.ValidationError("Both second interval times are required.")
+        if second_opens_at is not None and (second_opens_at >= second_closes_at or second_opens_at < closes_at):
+            raise serializers.ValidationError("Second interval must be ordered and cannot overlap the first.")
         return attrs
