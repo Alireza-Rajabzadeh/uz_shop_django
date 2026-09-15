@@ -24,6 +24,24 @@ from .views.business import (
     VendorBusinessWorkingDayUpsertView,
     VendorBusinessWorkingDayDetailView,
     VendorBusinessDashboardView,
+    VendorBusinessCategoryView,
+)
+from .views.products import (
+    VendorProductFilterOptionsView,
+    VendorProductListView,
+    VendorProductDetailView,
+    VendorProductUpdateView,
+    VendorProductFormOptionsView,
+    VendorProductDetailDefinitionsView,
+    VendorFileUploadView,
+    VendorProductFileListCreateView,
+    VendorProductFileDetailView,
+    VendorProductFileReorderView,
+    VendorProductVariantListCreateView,
+    VendorProductVariantFormOptionsView,
+    VendorProductVariantDetailView,
+    VendorVariantStatusView,
+    VendorVariantStatusesView,
 )
 from .admin_views import (
     AdminVendorList,
@@ -60,6 +78,27 @@ urlpatterns = [
     path("business/working-days/upsert", VendorBusinessWorkingDayUpsertView.as_view()),
     path("business/working-days/<int:pk>", VendorBusinessWorkingDayDetailView.as_view()),
     path("business/dashboard", VendorBusinessDashboardView.as_view()),
+    path("business/categories", VendorBusinessCategoryView.as_view()),
+    # Products
+    path("products", VendorProductListView.as_view()),
+    path("products/<int:id>", VendorProductDetailView.as_view()),
+    path("products/<int:id>/update", VendorProductUpdateView.as_view()),
+    path("products/<int:product_id>/files", VendorProductFileListCreateView.as_view()),
+    path("products/<int:product_id>/files/reorder", VendorProductFileReorderView.as_view()),
+    path("products/<int:product_id>/files/<int:relation_id>", VendorProductFileDetailView.as_view()),
+    path("products/<int:product_id>/variants", VendorProductVariantListCreateView.as_view()),
+    path("products/<int:product_id>/variant-form-options", VendorProductVariantFormOptionsView.as_view()),
+    path("products/<int:product_id>/detail-definitions", VendorProductDetailDefinitionsView.as_view()),
+    # Product filter/form options
+    path("product-filter-options", VendorProductFilterOptionsView.as_view()),
+    path("product-form-options", VendorProductFormOptionsView.as_view()),
+    # Standalone variant endpoints
+    path("variants/<int:variant_id>", VendorProductVariantDetailView.as_view()),
+    path("variants/<int:variant_id>/status", VendorVariantStatusView.as_view()),
+    path("variant-statuses", VendorVariantStatusesView.as_view()),
+    # File upload
+    path("files/upload", VendorFileUploadView.as_view()),
+    # Admin vendor management
     path("vendors", AdminVendorList.as_view()),
     path("vendors/<int:vendor_id>", AdminVendorDetail.as_view()),
     path("statuses", AdminVendorStatusList.as_view()),

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from domains.business.models import BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessWorkingDay, SocialMedia, SocialMediaIcon
+from domains.business.models import BusinessCategory, BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessWorkingDay, SocialMedia, SocialMediaIcon
 from domains.files.models import File
 from domains.files.services import FileService
 
@@ -258,3 +258,48 @@ class PublicBusinessWorkingDaySerializer(serializers.ModelSerializer):
     class Meta:
         model = BusinessWorkingDay
         exclude = ["created_at", "updated_at"]
+
+
+class BusinessCategorySerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source="category.name", read_only=True)
+    category_fa_name = serializers.CharField(source="category.fa_name", read_only=True)
+    category_slug = serializers.CharField(source="category.slug", read_only=True)
+
+    class Meta:
+        model = BusinessCategory
+        fields = ["id", "category", "category_name", "category_fa_name", "category_slug", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+
+class BusinessCategoryUpsertSerializer(serializers.Serializer):
+    category_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=True,
+    )
+
+    def validate_category_ids(self, value):
+        from domains.catalog.models import Category
+
+        existing = set(Category.objects.filter(id__in=value).values_list("id", flat=True))
+        missing = set(value) - existing
+        if missing:
+            raise serializers.ValidationError(f"Category IDs not found: {sorted(missing)}")
+
+        non_roots = set(
+            Category.objects.filter(id__in=value, parent__isnull=False)
+            .values_list("id", flat=True)
+        )
+        if non_roots:
+            raise serializers.ValidationError(
+                f"Only root categories can be selected. Child category IDs: {sorted(non_roots)}"
+            )
+        return value
+
+
+class CategoryBrowseSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    name = serializers.CharField()
+    fa_name = serializers.CharField(allow_null=True)
+    slug = serializers.SlugField()
+    has_children = serializers.BooleanField()
+    selected = serializers.BooleanField()

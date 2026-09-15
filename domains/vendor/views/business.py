@@ -5,7 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
 from core.responses import api_response
-from domains.business.models import BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessWorkingDay
+from domains.business.models import BusinessCategory, BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessWorkingDay
 from domains.vendor.auth import VendorJWTAuthentication
 
 from ..serializers.business import (
@@ -17,6 +17,7 @@ from ..serializers.business import (
     VendorPhoneReorderSerializer,
     VendorSocialLinkReorderSerializer,
 )
+from domains.business.api.serializers import BusinessCategorySerializer, BusinessCategoryUpsertSerializer, CategoryBrowseSerializer
 
 
 def _get_business(request):
@@ -323,3 +324,77 @@ class VendorBusinessDashboardView(APIView):
             "profile": VendorBusinessProfileSerializer(profile).data if profile else None,
             "working_days": VendorBusinessWorkingDaySerializer(working_days, many=True).data,
         })
+
+
+class VendorBusinessCategoryView(APIView):
+    authentication_classes = [VendorJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from django.db.models import Exists, OuterRef, Q
+        from domains.catalog.models import Category
+
+        business = _get_business(request)
+        parent_id = request.query_params.get("parent")
+
+        if parent_id is not None:
+            try:
+                parent_id = int(parent_id)
+            except (TypeError, ValueError):
+                return api_response(False, "Invalid parent id.", status_code=400)
+            queryset = Category.objects.filter(parent_id=parent_id)
+        else:
+            queryset = Category.objects.filter(parent__isnull=True)
+
+        queryset = queryset.order_by("name")
+
+        selected_ids = set()
+        if business:
+            selected_ids = set(
+                BusinessCategory.objects.filter(business=business)
+                .values_list("category_id", flat=True)
+            )
+
+        categories = []
+        for cat in queryset:
+            categories.append({
+                "id": cat.id,
+                "name": cat.name,
+                "fa_name": cat.fa_name,
+                "slug": cat.slug,
+                "has_children": cat.children.exists(),
+                "selected": cat.id in selected_ids,
+            })
+
+        return api_response(data=CategoryBrowseSerializer(categories, many=True).data)
+
+    @transaction.atomic
+    def put(self, request):
+        business = _get_business(request)
+        if not business:
+            return api_response(False, "Business profile not found.", status_code=400)
+
+        serializer = BusinessCategoryUpsertSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        category_ids = serializer.validated_data["category_ids"]
+
+        existing_ids = set(
+            BusinessCategory.objects.filter(business=business)
+            .values_list("category_id", flat=True)
+        )
+        new_ids = set(category_ids)
+
+        to_remove = existing_ids - new_ids
+        to_add = new_ids - existing_ids
+
+        if to_remove:
+            BusinessCategory.objects.filter(business=business, category_id__in=to_remove).delete()
+
+        if to_add:
+            BusinessCategory.objects.bulk_create([
+                BusinessCategory(business=business, category_id=cid)
+                for cid in to_add
+            ])
+
+        categories = BusinessCategory.objects.filter(business=business).select_related("category")
+        return api_response(data=BusinessCategorySerializer(categories, many=True).data)

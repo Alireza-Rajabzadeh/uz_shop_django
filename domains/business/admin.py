@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessWorkingDay, SocialMedia, SocialMediaIcon
+from .models import BusinessCategory, BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessWorkingDay, SocialMedia, SocialMediaIcon
 
 
 @admin.register(BusinessProfile)
@@ -47,3 +47,10 @@ class SocialMediaIconAdmin(admin.ModelAdmin):
 @admin.register(BusinessWorkingDay)
 class BusinessWorkingDayAdmin(admin.ModelAdmin):
     list_display = ("weekday", "is_open", "opens_at", "closes_at")
+
+
+@admin.register(BusinessCategory)
+class BusinessCategoryAdmin(admin.ModelAdmin):
+    list_display = ("business", "category", "created_at")
+    list_filter = ("business",)
+    search_fields = ("business__display_name", "category__name")

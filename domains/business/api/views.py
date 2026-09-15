@@ -4,15 +4,18 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 
+from django.db import transaction
+
 from core.permissions import AdminModelPermissions
 from core.responses import api_response
 from core.services import CacheService
 from domains.business.cache import BUSINESS_CACHE_KEY
-from domains.business.models import BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessWorkingDay, SocialMedia, SocialMediaIcon
+from domains.business.models import BusinessCategory, BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessWorkingDay, SocialMedia, SocialMediaIcon
 from domains.business.services import BusinessService
 from domains.users.auth import AdminJWTAuthentication
 
 from .serializers import (
+    BusinessCategorySerializer, BusinessCategoryUpsertSerializer,
     BusinessPhoneSerializer, BusinessProfileSerializer, BusinessSocialLinkSerializer,
     BusinessWorkingDaySerializer, PublicBusinessPhoneSerializer, PublicBusinessProfileSerializer,
     PublicBusinessSocialLinkSerializer, PublicBusinessWorkingDaySerializer, PublicSocialMediaSerializer,
@@ -183,3 +186,47 @@ class WorkingDayList(AdminBusinessListCreate):
     ordering_fields = AdminBusinessBase.ordering_fields + ("weekday",)
 
 class WorkingDayDetail(AdminBusinessDetail, WorkingDayList): pass
+
+
+class AdminBusinessCategoryView(APIView):
+    authentication_classes = [AdminJWTAuthentication]
+    permission_classes = [AdminModelPermissions]
+    model = BusinessCategory
+
+    def get(self, request):
+        business = BusinessProfile.objects.first()
+        if not business:
+            return api_response(data=[])
+        categories = BusinessCategory.objects.filter(business=business).select_related("category")
+        return api_response(data=BusinessCategorySerializer(categories, many=True).data)
+
+    @transaction.atomic
+    def put(self, request):
+        business = BusinessProfile.objects.first()
+        if not business:
+            return api_response(False, "Business profile not found.", status_code=400)
+
+        serializer = BusinessCategoryUpsertSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        category_ids = serializer.validated_data["category_ids"]
+
+        existing_ids = set(
+            BusinessCategory.objects.filter(business=business)
+            .values_list("category_id", flat=True)
+        )
+        new_ids = set(category_ids)
+
+        to_remove = existing_ids - new_ids
+        to_add = new_ids - existing_ids
+
+        if to_remove:
+            BusinessCategory.objects.filter(business=business, category_id__in=to_remove).delete()
+
+        if to_add:
+            BusinessCategory.objects.bulk_create([
+                BusinessCategory(business=business, category_id=cid)
+                for cid in to_add
+            ])
+
+        categories = BusinessCategory.objects.filter(business=business).select_related("category")
+        return api_response(data=BusinessCategorySerializer(categories, many=True).data)
