@@ -35,6 +35,13 @@ class InventorySupply(models.Model):
             ),
         ]
 
+    business = models.ForeignKey(
+        "business.BusinessProfile",
+        on_delete=models.PROTECT,
+        related_name="supplies",
+        null=True,
+        blank=True,
+    )
     variant = models.ForeignKey(
         "catalog.ProductVariants",
         on_delete=models.PROTECT,

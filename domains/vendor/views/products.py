@@ -30,6 +30,7 @@ from domains.catalog.services import ProductService, ProductFileService
 from domains.files.api.serializers import FileUploadSerializer
 from domains.files.services import FileService
 from domains.inventory.services import InventoryService
+from domains.inventory.services.inventory_pricing_service import InventoryPricingService
 from domains.vendor.auth import VendorJWTAuthentication
 
 
@@ -37,6 +38,7 @@ product_service = ProductService()
 product_file_service = ProductFileService()
 file_service = FileService()
 inventory_service = InventoryService()
+pricing_service = InventoryPricingService()
 
 
 def _get_business_category_ids(vendor):
@@ -452,7 +454,7 @@ class VendorProductVariantFormOptionsView(APIView):
                 "category": (lambda c: c.id if c else None)(product.categories.order_by("id").first()),
                 "category_name": (lambda c: c.name if c else None)(product.categories.order_by("id").first()),
             },
-            "inventory_strategies": [],
+            "inventory_strategies": pricing_service.get_strategies(),
             "default_warehouse": inventory_service.serialize_warehouse(warehouse),
             "attributes": product_service.get_variant_form_options(
                 product, request.query_params.get("search")

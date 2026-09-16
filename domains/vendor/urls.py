@@ -43,6 +43,24 @@ from .views.products import (
     VendorVariantStatusView,
     VendorVariantStatusesView,
 )
+from .views.inventory import (
+    VendorVariantInventoryDetailView,
+    VendorVariantPricingView,
+    VendorVariantPricingHistoryView,
+    VendorPricingStrategiesView,
+    VendorSupplyCostTypesView,
+    VendorVariantSupplyListView,
+    VendorSupplyDetailView,
+    VendorSupplyReceiveView,
+    VendorWarehouseListView,
+    VendorWarehouseDetailView,
+    VendorInventoryOverviewView,
+    VendorSupplyOverviewView,
+    VendorWarehouseStatusesView,
+    VendorCountryOptionsView,
+    VendorStateOptionsView,
+    VendorCityOptionsView,
+)
 from .admin_views import (
     AdminVendorList,
     AdminVendorDetail,
@@ -95,7 +113,26 @@ urlpatterns = [
     # Standalone variant endpoints
     path("variants/<int:variant_id>", VendorProductVariantDetailView.as_view()),
     path("variants/<int:variant_id>/status", VendorVariantStatusView.as_view()),
+    path("variants/<int:variant_id>/inventory", VendorVariantInventoryDetailView.as_view()),
+    path("variants/<int:variant_id>/pricing", VendorVariantPricingView.as_view()),
+    path("variants/<int:variant_id>/pricing/history", VendorVariantPricingHistoryView.as_view()),
+    path("variants/<int:variant_id>/supplies", VendorVariantSupplyListView.as_view()),
     path("variant-statuses", VendorVariantStatusesView.as_view()),
+    # Inventory lookups
+    path("inventory/overview", VendorInventoryOverviewView.as_view()),
+    path("pricing-strategies", VendorPricingStrategiesView.as_view()),
+    path("supply-cost-types", VendorSupplyCostTypesView.as_view()),
+    path("warehouse-statuses", VendorWarehouseStatusesView.as_view()),
+    path("warehouses", VendorWarehouseListView.as_view()),
+    path("warehouses/<int:warehouse_id>", VendorWarehouseDetailView.as_view()),
+    # Location options
+    path("location-options/countries", VendorCountryOptionsView.as_view()),
+    path("location-options/states", VendorStateOptionsView.as_view()),
+    path("location-options/cities", VendorCityOptionsView.as_view()),
+    # Supply CRUD
+    path("supplies/overview", VendorSupplyOverviewView.as_view()),
+    path("supplies/<int:supply_id>", VendorSupplyDetailView.as_view()),
+    path("supplies/<int:supply_id>/receive", VendorSupplyReceiveView.as_view()),
     # File upload
     path("files/upload", VendorFileUploadView.as_view()),
     # Admin vendor management

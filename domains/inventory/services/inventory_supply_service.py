@@ -232,6 +232,7 @@ class InventorySupplyService:
                     variant=supply.variant,
                     warehouse=supply.warehouse,
                     quantity=supply.quantity,
+                    business=supply.business,
                 )
         except InventoryService.ValidationError as exc:
             # Normalize the stock service's errors into this service's contract.
@@ -246,7 +247,7 @@ class InventorySupplyService:
         from domains.business.models import BusinessProfile
         from domains.inventory.models import InventoryAttributeDefinition, InventoryUnitAttribute
 
-        business = BusinessProfile.objects.get(id=1)
+        business = supply.business or BusinessProfile.objects.get(id=1)
         inventory, _ = Inventory.objects.select_for_update().get_or_create(
             business=business,
             warehouse=supply.warehouse,

@@ -632,10 +632,11 @@ class InventoryService:
         Inventory.objects.filter(variant=variant).delete()
 
     @transaction.atomic
-    def receive_normal_stock(self, *, variant, warehouse, quantity):
+    def receive_normal_stock(self, *, variant, warehouse, quantity, business=None):
         from domains.business.models import BusinessProfile
 
-        business = BusinessProfile.objects.get(id=1)
+        if business is None:
+            business = BusinessProfile.objects.get(id=1)
         inventory, created = Inventory.objects.select_for_update().get_or_create(
             business=business,
             warehouse=warehouse,
@@ -647,7 +648,7 @@ class InventoryService:
             inventory.save(update_fields=["quantity"])
 
     @transaction.atomic
-    def receive_serialized_stock(self, *, variant, warehouse, serial_numbers, supply):
+    def receive_serialized_stock(self, *, variant, warehouse, serial_numbers, supply, business=None):
         serial_attr_def = InventoryAttributeDefinition.objects.filter(code="serial_number").first()
         if serial_attr_def is None:
             raise self.ValidationError({
@@ -665,7 +666,8 @@ class InventoryService:
             })
         from domains.business.models import BusinessProfile
 
-        business = BusinessProfile.objects.get(id=1)
+        if business is None:
+            business = BusinessProfile.objects.get(id=1)
         inventory, _ = Inventory.objects.get_or_create(
             business=business,
             warehouse=warehouse,
