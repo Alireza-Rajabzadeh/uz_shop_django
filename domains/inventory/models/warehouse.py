@@ -6,9 +6,9 @@ class Warehouse(models.Model):
         db_table = "inventory_warehouse"
         constraints = [
             models.UniqueConstraint(
-                fields=["is_default"],
+                fields=["business", "is_default"],
                 condition=models.Q(is_default=True),
-                name="inventory_single_default_warehouse",
+                name="inventory_single_default_warehouse_per_business",
             ),
         ]
 

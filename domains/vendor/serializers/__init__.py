@@ -22,3 +22,9 @@ from .admin import (
     VendorStatusSerializer,
     AdminVendorSerializer,
 )
+from .products import (
+    VendorProductSimilarSerializer,
+    VendorProductCreateSerializer,
+    VendorProductListSerializer,
+    VendorProductDetailSerializer,
+)

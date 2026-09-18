@@ -154,9 +154,10 @@ class InventoryService:
     def create_warehouse(self, **values):
         list(WarehouseStatus.objects.select_for_update().order_by().values_list("id", flat=True))
         list(Warehouse.objects.select_for_update().order_by().values_list("id", flat=True))
-        values["is_default"] = not Warehouse.objects.exists() or values.get("is_default", False)
+        business = values.get("business")
+        values["is_default"] = not Warehouse.objects.filter(business=business).exists() or values.get("is_default", False)
         if values["is_default"]:
-            Warehouse.objects.filter(is_default=True).update(is_default=False)
+            Warehouse.objects.filter(business=business, is_default=True).update(is_default=False)
         warehouse = Warehouse.objects.create(code=f"NEW-{uuid.uuid4().hex[:12]}", **values)
         warehouse.code = f"WH-{warehouse.id:05d}"
         try:
@@ -169,22 +170,23 @@ class InventoryService:
     def update_warehouse(self, warehouse, **values):
         list(Warehouse.objects.select_for_update().order_by().values_list("id", flat=True))
         warehouse = self.get_warehouse(warehouse.id, lock=True)
+        business = warehouse.business
         make_default = values.get("is_default") is True
         if values.get("is_default") is False and warehouse.is_default:
-            if Warehouse.objects.exclude(pk=warehouse.pk).exists():
+            if Warehouse.objects.filter(business=business).exclude(pk=warehouse.pk).exists():
                 raise self.ValidationError({
                     "is_default": [_('Switch another warehouse to default instead.')]
                 })
             values["is_default"] = True
         if make_default:
-            current_default = Warehouse.objects.filter(is_default=True).exclude(pk=warehouse.pk).first()
+            current_default = Warehouse.objects.filter(business=business, is_default=True).exclude(pk=warehouse.pk).first()
             if current_default and Inventory.objects.filter(
                 warehouse=current_default, quantity__gt=0
             ).exists():
                 raise self.ValidationError({
                     "is_default": [_('The default warehouse cannot be changed while it contains stock.')]
                 })
-            Warehouse.objects.exclude(pk=warehouse.pk).filter(is_default=True).update(is_default=False)
+            Warehouse.objects.filter(business=business).exclude(pk=warehouse.pk).filter(is_default=True).update(is_default=False)
         for field, value in values.items():
             setattr(warehouse, field, value)
         warehouse.save()

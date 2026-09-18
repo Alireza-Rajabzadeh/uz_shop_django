@@ -712,7 +712,14 @@ class ProductListCreate(APIView):
     def get(self, request):
         query = ProductListQuerySerializer(data=request.query_params)
         query.is_valid(raise_exception=True)
-        products = product_service.search_products(**query.validated_data)
+        filters = query.validated_data
+        vendor_created = filters.pop("vendor_created", None)
+        products = product_service.search_products(**filters)
+        if vendor_created is True:
+            products = products.filter(creator_model="vendor.vendor", created_by_vendor__isnull=False)
+        elif vendor_created is False:
+            from django.db.models import Q
+            products = products.exclude(creator_model="vendor.vendor", created_by_vendor__isnull=False)
         paginator = PageNumberPagination()
         page = paginator.paginate_queryset(products, request, view=self)
         serializer = ProductListSerializer(page, many=True)

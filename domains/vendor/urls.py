@@ -42,6 +42,9 @@ from .views.products import (
     VendorProductVariantDetailView,
     VendorVariantStatusView,
     VendorVariantStatusesView,
+    VendorProductSimilarSearchView,
+    VendorProductCreateView,
+    VendorProductEditableCheckView,
 )
 from .views.inventory import (
     VendorVariantInventoryDetailView,
@@ -99,7 +102,10 @@ urlpatterns = [
     path("business/categories", VendorBusinessCategoryView.as_view()),
     # Products
     path("products", VendorProductListView.as_view()),
+    path("products/create", VendorProductCreateView.as_view()),
+    path("products/similar", VendorProductSimilarSearchView.as_view()),
     path("products/<int:id>", VendorProductDetailView.as_view()),
+    path("products/<int:id>/editable", VendorProductEditableCheckView.as_view()),
     path("products/<int:id>/update", VendorProductUpdateView.as_view()),
     path("products/<int:product_id>/files", VendorProductFileListCreateView.as_view()),
     path("products/<int:product_id>/files/reorder", VendorProductFileReorderView.as_view()),

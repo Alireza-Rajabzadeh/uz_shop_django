@@ -1,4 +1,5 @@
 from django.shortcuts import get_object_or_404
+from rest_framework.exceptions import ValidationError, NotFound, PermissionDenied
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
@@ -12,7 +13,6 @@ from domains.catalog.api.serializers import (
     ProductFileWriteSerializer,
     ProductFileReorderSerializer,
     ProductListSerializer,
-    ProductSerializer,
     ProductVariantSerializer,
     ProductVariantWriteSerializer,
     ProductVariantStatusSerializer,
@@ -32,6 +32,14 @@ from domains.files.services import FileService
 from domains.inventory.services import InventoryService
 from domains.inventory.services.inventory_pricing_service import InventoryPricingService
 from domains.vendor.auth import VendorJWTAuthentication
+from domains.vendor.services.vendor_product_service import VendorProductService
+from domains.vendor.serializers.products import (
+    VendorProductSimilarSerializer,
+    VendorProductCreateSerializer,
+    VendorProductUpdateSerializer,
+    VendorProductListSerializer,
+    VendorProductDetailSerializer,
+)
 
 
 product_service = ProductService()
@@ -39,6 +47,7 @@ product_file_service = ProductFileService()
 file_service = FileService()
 inventory_service = InventoryService()
 pricing_service = InventoryPricingService()
+vendor_product_service = VendorProductService()
 
 
 def _get_business_category_ids(vendor):
@@ -120,13 +129,16 @@ class VendorProductListView(APIView):
             **({"brand_id": brand_id} if brand_id else {}),
             **({"status_id": status_id} if status_id else {}),
             **({"search": search} if search else {}),
+        ).annotate(
+            editable=vendor_product_service.get_editable_annotation(request.user),
+            created_by_me=vendor_product_service.get_created_by_me_annotation(request.user),
         )
 
         from rest_framework.pagination import PageNumberPagination
 
         paginator = PageNumberPagination()
         page = paginator.paginate_queryset(products, request, view=self)
-        serializer = ProductListSerializer(page, many=True)
+        serializer = VendorProductListSerializer(page, many=True)
         return api_response(data=paginator.get_paginated_response(serializer.data).data)
 
 
@@ -139,8 +151,90 @@ class VendorProductDetailView(APIView):
         if not category_ids:
             return api_response(False, "Business profile not found.", status_code=404)
         product = _get_vendor_product(id, category_ids)
-        serialized = ProductDetailReadSerializer(product).data
+        serialized = VendorProductDetailSerializer(product).data
+        serialized["editable"] = vendor_product_service.can_vendor_edit(product, request.user)
+        serialized["created_by_me"] = product.created_by_vendor_id == request.user.pk
         return api_response(data=serialized)
+
+
+# ─────────────────────── Product Creation Flow ───────────────────────
+
+
+class VendorProductSimilarSearchView(APIView):
+    authentication_classes = [VendorJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        name = request.query_params.get("name", "").strip()
+        if not name:
+            return api_response(False, "Product name is required.", status_code=400)
+
+        category_ids_raw = request.query_params.getlist("category_ids")
+        category_ids = None
+        if category_ids_raw:
+            category_ids = []
+            for raw_id in category_ids_raw:
+                for part in raw_id.split(","):
+                    part = part.strip()
+                    if part:
+                        try:
+                            category_ids.append(int(part))
+                        except ValueError:
+                            pass
+            if not category_ids:
+                category_ids = None
+
+        results = vendor_product_service.find_similar_products(
+            name=name,
+            category_ids=category_ids,
+        )
+        serializer = VendorProductSimilarSerializer(results, many=True)
+        return api_response(data=serializer.data)
+
+
+class VendorProductCreateView(APIView):
+    authentication_classes = [VendorJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = VendorProductCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        brand = None
+        if data.get("brand_id"):
+            brand = Brand.objects.get(pk=data["brand_id"])
+
+        try:
+            product = vendor_product_service.create_vendor_product(
+                vendor=request.user,
+                name=data["name"],
+                category_ids=data["category_ids"],
+                brand=brand,
+                description=data.get("description", ""),
+                details=data.get("details", []),
+            )
+        except Exception as exc:
+            raise ValidationError(str(exc)) from exc
+
+        result = VendorProductDetailSerializer(product).data
+        result["editable"] = True
+        result["created_by_me"] = True
+        return api_response(True, "Product created.", result, status_code=201)
+
+
+class VendorProductEditableCheckView(APIView):
+    authentication_classes = [VendorJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, id):
+        _, category_ids = _get_business_category_ids(request.user)
+        if not category_ids:
+            return api_response(data={"editable": False})
+        product = _get_vendor_product(id, category_ids)
+        return api_response(data={
+            "editable": vendor_product_service.can_vendor_edit(product, request.user),
+        })
 
 
 # ─────────────────────── Product Update (Edit) ───────────────────────
@@ -155,7 +249,10 @@ class VendorProductUpdateView(APIView):
         if not category_ids:
             return api_response(False, "Business profile not found.", status_code=404)
         product = _get_vendor_product(id, category_ids)
-        serialized = ProductSerializer(product).data
+        if not vendor_product_service.can_vendor_edit(product, request.user):
+            raise PermissionDenied("You do not have permission to edit this product.")
+        serialized = VendorProductDetailSerializer(product).data
+        serialized["editable"] = True
         return api_response(data=serialized)
 
     def patch(self, request, id):
@@ -163,10 +260,14 @@ class VendorProductUpdateView(APIView):
         if not category_ids:
             return api_response(False, "Business profile not found.", status_code=404)
         product = _get_vendor_product(id, category_ids)
-        serializer = ProductSerializer(product, data=request.data, partial=True)
+        if not vendor_product_service.can_vendor_edit(product, request.user):
+            raise PermissionDenied("You do not have permission to edit this product.")
+        serializer = VendorProductUpdateSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        product_service.update_product(product, **serializer.validated_data)
-        result = ProductSerializer(product).data
+        vendor_product_service.update_vendor_product(product, request.user, **serializer.validated_data)
+        product.refresh_from_db()
+        result = VendorProductDetailSerializer(product).data
+        result["editable"] = vendor_product_service.can_vendor_edit(product, request.user)
         return api_response(data=result)
 
 
@@ -420,6 +521,8 @@ class VendorProductVariantListCreateView(APIView):
         if not category_ids:
             return api_response(False, "Business profile not found.", status_code=404)
         product = _get_vendor_product(product_id, category_ids)
+        if not vendor_product_service.can_add_variant(product):
+            raise PermissionDenied("Variants cannot be added until the product is confirmed by an admin.")
         serializer = ProductVariantWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
@@ -427,7 +530,6 @@ class VendorProductVariantListCreateView(APIView):
                 product, **serializer.validated_data
             )
         except ProductService.ValidationError as exc:
-            from rest_framework.exceptions import ValidationError
             raise ValidationError(exc.errors) from exc
         result = ProductVariantSerializer(variant).data
         return api_response(True, "Variant added.", result, status_code=201)

@@ -25,6 +25,10 @@ class Product(models.Model):
                 fields=["status", "id"],
                 name="catalog_product_status_idx",
             ),
+            models.Index(
+                fields=["created_by_vendor"],
+                name="catalog_product_vendor_idx",
+            ),
             GinIndex(
                 fields=["name"],
                 name="catalog_product_name_trgm_idx",
@@ -60,9 +64,18 @@ class Product(models.Model):
         null=True,
         blank=True,
     )
-    
-    description = models.TextField(blank=True,null=True)
+
+    description = models.TextField(blank=True, null=True)
     json_description = models.JSONField(default=dict, blank=True)
+
+    created_by_vendor = models.ForeignKey(
+        "vendor.Vendor",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_products",
+    )
+    creator_model = models.CharField(max_length=50, blank=True, default="")
     
 
     

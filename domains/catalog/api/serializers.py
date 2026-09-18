@@ -196,6 +196,7 @@ class ProductListQuerySerializer(serializers.Serializer):
     price_max = serializers.DecimalField(
         max_digits=15, decimal_places=2, min_value=0, required=False
     )
+    vendor_created = serializers.BooleanField(required=False)
 
     def validate(self, attrs):
         operator = attrs.get("price_operator")
@@ -449,6 +450,8 @@ class ProductListSerializer(serializers.ModelSerializer):
     brand_fa_name = serializers.CharField(source="brand.fa_name", read_only=True, allow_null=True)
     variant_count = serializers.IntegerField(read_only=True)
     thumbnail_url = serializers.SerializerMethodField()
+    created_by_vendor_name = serializers.SerializerMethodField()
+    creator_model = serializers.CharField(read_only=True)
 
     def get_category_name(self, obj):
         category = primary_category(obj)
@@ -467,12 +470,18 @@ class ProductListSerializer(serializers.ModelSerializer):
         except FileService.Error:
             return None
 
+    def get_created_by_vendor_name(self, obj):
+        if obj.created_by_vendor_id:
+            return getattr(obj.created_by_vendor, "business_name", None) or getattr(obj.created_by_vendor, "name", None)
+        return None
+
     class Meta:
         model = Product
         fields = [
             "id", "name", "categories", "category_name", "category_fa_name", "brand",
             "brand_name", "brand_fa_name", "status", "status_name",
             "description", "json_description", "variant_count", "thumbnail_url",
+            "created_by_vendor_name", "creator_model",
         ]
 
 
