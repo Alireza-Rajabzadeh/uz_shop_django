@@ -12,6 +12,7 @@ class VendorProductSimilarSerializer(serializers.Serializer):
     status_name = serializers.CharField(allow_null=True)
     similarity = serializers.IntegerField()
     exact = serializers.BooleanField()
+    thumbnail_url = serializers.URLField(allow_null=True)
 
 
 class VendorProductCreateSerializer(serializers.Serializer):

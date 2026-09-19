@@ -63,8 +63,19 @@ class VendorProductService:
 
     @staticmethod
     def find_similar_products(name, category_ids=None, limit=10, threshold=65):
+        from core.services import FileService
+        from django.db.models import Prefetch
+        from domains.catalog.models import ProductFile
+
         normalized = " ".join(name.split()).casefold()
-        queryset = Product.objects.select_related("brand", "status").prefetch_related("categories")
+        queryset = Product.objects.select_related("brand", "status").prefetch_related(
+            "categories",
+            Prefetch(
+                "files",
+                queryset=ProductFile.objects.filter(role="thumbnail", file__file_type="image").select_related("file"),
+                to_attr="prefetched_thumbnails",
+            ),
+        )
 
         if category_ids:
             queryset = queryset.filter(categories__id__in=category_ids).distinct()
@@ -82,6 +93,15 @@ class VendorProductService:
                         "name": product.brand.name,
                         "fa_name": product.brand.fa_name,
                     }
+                
+                thumbnail_url = None
+                thumbnails = getattr(product, "prefetched_thumbnails", [])
+                if thumbnails:
+                    try:
+                        thumbnail_url = FileService().url(thumbnails[0].file)
+                    except Exception:
+                        thumbnail_url = None
+                
                 matches.append({
                     "id": product.id,
                     "name": product.name,
@@ -93,6 +113,7 @@ class VendorProductService:
                     "status_name": product.status.name if product.status_id else None,
                     "similarity": score,
                     "exact": exact,
+                    "thumbnail_url": thumbnail_url,
                 })
 
         matches.sort(key=lambda m: (not m["exact"], -m["similarity"], m["name"].casefold()))
