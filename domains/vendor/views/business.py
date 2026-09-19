@@ -368,6 +368,50 @@ class VendorBusinessCategoryView(APIView):
 
         return api_response(data=CategoryBrowseSerializer(categories, many=True).data)
 
+
+class VendorCategorySearchView(APIView):
+    authentication_classes = [VendorJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from django.db.models import Q
+        from domains.catalog.models import Category
+
+        q = request.query_params.get("q", "").strip()
+        if not q:
+            return api_response(data=[])
+
+        categories = Category.objects.filter(
+            Q(name__icontains=q) | Q(fa_name__icontains=q)
+        ).select_related("parent").order_by("name")[:50]
+
+        category_map = {c.id: c for c in categories}
+        results = []
+        for cat in categories:
+            path_parts = [cat.name]
+            parent_id = cat.parent_id
+            seen = {cat.id}
+            while parent_id and parent_id not in seen:
+                seen.add(parent_id)
+                parent = category_map.get(parent_id)
+                if not parent:
+                    parent = Category.objects.filter(id=parent_id).select_related("parent").first()
+                    if parent:
+                        category_map[parent.id] = parent
+                if not parent:
+                    break
+                path_parts.append(parent.name)
+                parent_id = parent.parent_id
+            results.append({
+                "id": cat.id,
+                "name": cat.name,
+                "fa_name": cat.fa_name,
+                "slug": cat.slug,
+                "path": " / ".join(reversed(path_parts)),
+            })
+
+        return api_response(data=results)
+
     @transaction.atomic
     def put(self, request):
         business = _get_business(request)

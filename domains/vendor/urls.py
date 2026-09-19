@@ -25,6 +25,7 @@ from .views.business import (
     VendorBusinessWorkingDayDetailView,
     VendorBusinessDashboardView,
     VendorBusinessCategoryView,
+    VendorCategorySearchView,
 )
 from .views.products import (
     VendorProductFilterOptionsView,
@@ -100,6 +101,7 @@ urlpatterns = [
     path("business/working-days/<int:pk>", VendorBusinessWorkingDayDetailView.as_view()),
     path("business/dashboard", VendorBusinessDashboardView.as_view()),
     path("business/categories", VendorBusinessCategoryView.as_view()),
+    path("business/categories/search", VendorCategorySearchView.as_view()),
     # Products
     path("products", VendorProductListView.as_view()),
     path("products/create", VendorProductCreateView.as_view()),

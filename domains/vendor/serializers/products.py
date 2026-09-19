@@ -94,7 +94,13 @@ class VendorProductListSerializer(ProductListSerializer):
     editable = serializers.BooleanField(read_only=True)
     created_by_me = serializers.BooleanField(read_only=True)
 
+    class Meta(ProductListSerializer.Meta):
+        fields = ProductListSerializer.Meta.fields + ["editable", "created_by_me"]
+
 
 class VendorProductDetailSerializer(ProductDetailReadSerializer):
     editable = serializers.BooleanField(read_only=True)
     created_by_me = serializers.BooleanField(read_only=True)
+
+    class Meta(ProductDetailReadSerializer.Meta):
+        fields = ProductDetailReadSerializer.Meta.fields + ["editable", "created_by_me"]
