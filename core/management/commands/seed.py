@@ -1,6 +1,7 @@
 from django.core.management.base import BaseCommand
 
 from core.management.seeders.brands import BrandSeeder
+from core.management.seeders.business_payment_statuses import BusinessPaymentStatusSeeder
 from core.management.seeders.categories import CategorySeeder
 from core.management.seeders.category_details import CategoryDetailSeeder
 from core.management.seeders.inventory import InventorySeeder
@@ -25,6 +26,7 @@ class Command(BaseCommand):
             BrandSeeder(),
             VariantAttributeSeeder(),
             VendorStatusSeeder(),
+            BusinessPaymentStatusSeeder(),
             CategoryDetailSeeder(),
             ProductStatusSeeder(),
             ProductVariantStatusSeeder(),
