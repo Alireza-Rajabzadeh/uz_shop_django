@@ -103,13 +103,12 @@ class VendorBusinessPaymentMethodDetail(BusinessPaymentAPIView):
 
 class VendorBusinessPaymentChannelList(BusinessPaymentAPIView):
     def get(self, request):
-        business = self._get_business(request)
         query = ChannelListQuerySerializer(data=request.query_params)
         query.is_valid(raise_exception=True)
         values = query.validated_data.copy()
         values.pop("page", None)
         data = self.paginated(
-            service.list_channels(business, **values),
+            service.list_channels(**values),
             request,
             self,
             payload=lambda rows: [
@@ -119,14 +118,13 @@ class VendorBusinessPaymentChannelList(BusinessPaymentAPIView):
         return api_response(data=data)
 
     def post(self, request):
-        business = self._get_business(request)
         serializer = BusinessPaymentChannelWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         values = serializer.validated_data.copy()
         methods = values.pop("payment_method_ids", [])
         channel = service_call(
             lambda: service.create_channel(
-                business, supported_methods=methods, **values
+                supported_methods=methods, **values
             )
         )
         return api_response(
@@ -136,15 +134,13 @@ class VendorBusinessPaymentChannelList(BusinessPaymentAPIView):
 
 class VendorBusinessPaymentChannelDetail(BusinessPaymentAPIView):
     def get(self, request, channel_id):
-        business = self._get_business(request)
-        channel = service_call(lambda: service.get_channel(business, channel_id))
+        channel = service_call(lambda: service.get_channel(channel_id))
         return api_response(
             data=service.channel_payload(channel, masked=False)
         )
 
     def patch(self, request, channel_id):
-        business = self._get_business(request)
-        channel = service_call(lambda: service.get_channel(business, channel_id))
+        channel = service_call(lambda: service.get_channel(channel_id))
         serializer = BusinessPaymentChannelWriteSerializer(
             channel, data=request.data, partial=True
         )
@@ -153,7 +149,7 @@ class VendorBusinessPaymentChannelDetail(BusinessPaymentAPIView):
         methods = values.pop("payment_method_ids", None)
         channel = service_call(
             lambda: service.update_channel(
-                business, channel, supported_methods=methods, **values
+                channel, supported_methods=methods, **values
             )
         )
         return api_response(
@@ -163,8 +159,7 @@ class VendorBusinessPaymentChannelDetail(BusinessPaymentAPIView):
 
 class VendorBusinessPaymentChannelMethods(BusinessPaymentAPIView):
     def post(self, request, channel_id):
-        business = self._get_business(request)
-        channel = service_call(lambda: service.get_channel(business, channel_id))
+        channel = service_call(lambda: service.get_channel(channel_id))
         serializer = BusinessPaymentChannelWriteSerializer(
             channel,
             data={"payment_method_ids": request.data.get("payment_method_ids")},
@@ -174,7 +169,7 @@ class VendorBusinessPaymentChannelMethods(BusinessPaymentAPIView):
         methods = serializer.validated_data["payment_method_ids"]
         channel = service_call(
             lambda: service.update_channel(
-                business, channel, supported_methods=methods
+                channel, supported_methods=methods
             )
         )
         return api_response(

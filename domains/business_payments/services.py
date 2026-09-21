@@ -62,8 +62,6 @@ class BusinessPaymentService:
         if not method.is_active:
             return False, "Payment method is inactive."
         if channel is not None:
-            if channel.business_id != business.id:
-                return False, "Payment channel does not belong to this business."
             if not channel.is_active:
                 return False, "Payment channel is inactive."
         if method.code == "online" and channel is not None:
@@ -105,7 +103,7 @@ class BusinessPaymentService:
                     if reason:
                         reasons.append(reason)
                     continue
-                channel_data = self.channel_payload(channel, masked=False)
+                channel_data = self.channel_payload(channel, masked=False, business=business)
                 channel_data.pop("extra_data", None)
                 channels.append(channel_data)
             payload.append({
@@ -196,7 +194,7 @@ class BusinessPaymentService:
                 {"payment_method": [_("This payment method is not available.")]}
             )
         channel = BusinessPaymentChannel.objects.filter(
-            business=business, id=payment_channel_id, is_active=True
+            id=payment_channel_id, is_active=True
         ).first()
         if channel is None:
             raise self.ValidationError(
@@ -332,12 +330,10 @@ class BusinessPaymentService:
         return queryset.order_by(ordering, "id")
 
     def list_channels(
-        self, business, *, search="", is_active=None, supported_method=None,
+        self, *, search="", is_active=None, supported_method=None,
         ordering="id",
     ):
-        queryset = BusinessPaymentChannel.objects.filter(
-            business=business
-        ).select_related(
+        queryset = BusinessPaymentChannel.objects.all().select_related(
             "logo_file__status"
         ).prefetch_related(
             "supported_methods__payment_method"
@@ -367,15 +363,15 @@ class BusinessPaymentService:
             return value
         return f"{'*' * max(len(value) - 4, 4)}{value[-4:]}"
 
-    def channel_payload(self, channel, *, masked):
+    def channel_payload(self, channel, *, masked, business=None):
         methods = [
             support.payment_method for support in channel.supported_methods.all()
         ]
         method_rows = []
         for method in methods:
             available, reason = self.method_availability(
-                channel.business, method, channel
-            )
+                business, method, channel
+            ) if business else (True, None)
             method_rows.append({
                 "id": method.id,
                 "code": method.code,
@@ -440,7 +436,7 @@ class BusinessPaymentService:
             )
 
     @staticmethod
-    def validate_supported_methods(business, channel_code, methods):
+    def validate_supported_methods(channel_code, methods):
         online = next((m for m in methods if m.code == "online"), None)
         if online and online.is_active:
             available, reason = provider_availability(channel_code)
@@ -450,29 +446,25 @@ class BusinessPaymentService:
                 )
 
     @transaction.atomic
-    def create_channel(self, business, *, supported_methods, **values):
+    def create_channel(self, *, supported_methods, **values):
         self.validate_logo(values.get("logo_file"))
-        self.validate_supported_methods(business, values["code"], supported_methods)
-        channel = BusinessPaymentChannel.objects.create(
-            business=business, **values
-        )
+        self.validate_supported_methods(values["code"], supported_methods)
+        channel = BusinessPaymentChannel.objects.create(**values)
         BusinessPaymentChannelSupportedMethod.objects.bulk_create([
             BusinessPaymentChannelSupportedMethod(
                 payment_channel=channel, payment_method=method
             )
             for method in supported_methods
         ])
-        return self.get_channel(business, channel.id)
+        return self.get_channel(channel.id)
 
     @transaction.atomic
-    def update_channel(self, business, channel, *, supported_methods=None, **values):
-        if channel.business_id != business.id:
-            raise self.NotFoundError("Payment channel not found.")
+    def update_channel(self, channel, *, supported_methods=None, **values):
         if "logo_file" in values:
             self.validate_logo(values["logo_file"])
         methods = supported_methods
         if methods is not None:
-            self.validate_supported_methods(business, channel.code, methods)
+            self.validate_supported_methods(channel.code, methods)
         for field, value in values.items():
             setattr(channel, field, value)
         channel.save()
@@ -484,11 +476,11 @@ class BusinessPaymentService:
                 )
                 for method in methods
             ])
-        return self.get_channel(business, channel.id)
+        return self.get_channel(channel.id)
 
-    def get_channel(self, business, channel_id):
+    def get_channel(self, channel_id):
         try:
-            return self.list_channels(business=business).get(id=channel_id)
+            return self.list_channels().get(id=channel_id)
         except BusinessPaymentChannel.DoesNotExist as exc:
             raise self.NotFoundError("Payment channel not found.") from exc
 

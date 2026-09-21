@@ -64,11 +64,6 @@ class BusinessPaymentMethod(ImmutableCodeModel):
 
 
 class BusinessPaymentChannel(ImmutableCodeModel):
-    business = models.ForeignKey(
-        "business.BusinessProfile",
-        on_delete=models.CASCADE,
-        related_name="business_payment_channels",
-    )
     code = models.CharField(max_length=100)
     name = models.CharField(max_length=100)
     fa_name = models.CharField(max_length=100, blank=True, default="")
@@ -92,13 +87,13 @@ class BusinessPaymentChannel(ImmutableCodeModel):
         ordering = ["id"]
         constraints = [
             models.UniqueConstraint(
-                fields=["business", "code"],
-                name="bpc_business_code_unique",
+                fields=["code"],
+                name="bpc_code_unique",
             ),
         ]
 
     def __str__(self):
-        return f"{self.business} - {self.name}"
+        return self.name
 
 
 class BusinessPaymentChannelSupportedMethod(models.Model):
