@@ -63,7 +63,7 @@ class VendorProductService:
 
     @staticmethod
     def find_similar_products(name, category_ids=None, limit=10, threshold=65):
-        from core.services import FileService
+        from domains.files.services.file_service import FileService
         from django.db.models import Prefetch
         from domains.catalog.models import ProductFile
 
@@ -71,7 +71,7 @@ class VendorProductService:
         queryset = Product.objects.select_related("brand", "status").prefetch_related(
             "categories",
             Prefetch(
-                "files",
+                "product_files",
                 queryset=ProductFile.objects.filter(role="thumbnail", file__file_type="image").select_related("file"),
                 to_attr="prefetched_thumbnails",
             ),

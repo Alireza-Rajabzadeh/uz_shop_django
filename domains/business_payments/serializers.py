@@ -1,4 +1,8 @@
+import re
+
 from rest_framework import serializers
+
+from core.utils.transliteration import to_english_letters
 
 from .models import (
     BusinessPayment,
@@ -8,7 +12,7 @@ from .models import (
 )
 
 
-class ListQuerySerializer(serializers.Serializer):
+class BaseListQuerySerializer(serializers.Serializer):
     search = serializers.CharField(required=False, allow_blank=True, default="")
     is_active = serializers.ChoiceField(
         choices=["true", "false"], required=False, allow_blank=True, default=""
@@ -27,7 +31,23 @@ class ListQuerySerializer(serializers.Serializer):
         return result
 
 
-class ChannelListQuerySerializer(ListQuerySerializer):
+class ListQuerySerializer(BaseListQuerySerializer):
+    has_point_to_channel = serializers.ChoiceField(
+        choices=["true", "false"], required=False, allow_blank=True, default=""
+    )
+
+    def to_internal_value(self, data):
+        result = super().to_internal_value(data)
+        if result["has_point_to_channel"] == "true":
+            result["has_point_to_channel"] = True
+        elif result["has_point_to_channel"] == "false":
+            result["has_point_to_channel"] = False
+        else:
+            result["has_point_to_channel"] = None
+        return result
+
+
+class ChannelListQuerySerializer(BaseListQuerySerializer):
     supported_method = serializers.IntegerField(required=False, min_value=1)
 
 
@@ -62,6 +82,7 @@ class BusinessPaymentMethodReadSerializer(serializers.ModelSerializer):
             "code",
             "name",
             "fa_name",
+            "description",
             "icon",
             "point_to_channel_field",
             "requires_documents",
@@ -101,27 +122,9 @@ class BusinessPaymentMethodReadSerializer(serializers.ModelSerializer):
         return None
 
 
-class BusinessPaymentMethodUpdateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = BusinessPaymentMethod
-        fields = [
-            "name",
-            "fa_name",
-            "icon_file",
-            "point_to_channel_field",
-            "requires_documents",
-            "is_active",
-        ]
-
-    def validate(self, attrs):
-        if "code" in self.initial_data:
-            raise serializers.ValidationError(
-                {"code": "Code is immutable."}
-            )
-        return attrs
-
-
 class BusinessPaymentChannelWriteSerializer(serializers.ModelSerializer):
+    code = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    name = serializers.CharField(required=False, allow_blank=True, max_length=100)
     payment_method_ids = serializers.ListField(
         child=serializers.IntegerField(min_value=1),
         required=False,
@@ -149,6 +152,38 @@ class BusinessPaymentChannelWriteSerializer(serializers.ModelSerializer):
         if self.instance and self.instance.pk:
             self.fields["code"].read_only = True
 
+    def validate_code(self, value):
+        value = to_english_letters(value)
+        if not value:
+            return ""
+        if not value.isascii():
+            raise serializers.ValidationError(
+                "Code must contain English letters only."
+            )
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_\-]*", value):
+            raise serializers.ValidationError(
+                "Code must use English letters, digits, '_' or '-'."
+            )
+        existing = BusinessPaymentChannel.objects.filter(code=value)
+        business = self.context.get("business")
+        if business is not None:
+            existing = existing.filter(business=business)
+        if self.instance and self.instance.pk:
+            existing = existing.exclude(pk=self.instance.pk)
+        if existing.exists():
+            raise serializers.ValidationError(
+                "A channel with this code already exists."
+            )
+        return value
+
+    def validate_name(self, value):
+        value = to_english_letters(value)
+        if value and not value.isascii():
+            raise serializers.ValidationError(
+                "Name must contain English letters only."
+            )
+        return value
+
     def validate_payment_method_ids(self, value):
         if not value:
             return value
@@ -162,6 +197,8 @@ class BusinessPaymentChannelWriteSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"code": "Code is immutable."}
             )
+        if self.instance and self.instance.pk and not attrs.get("name"):
+            attrs.pop("name", None)
         return attrs
 
     @property

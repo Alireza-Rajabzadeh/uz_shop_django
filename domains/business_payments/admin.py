@@ -20,15 +20,15 @@ class BusinessPaymentStatusAdmin(admin.ModelAdmin):
 class BusinessPaymentMethodAdmin(admin.ModelAdmin):
     list_display = [
         "id",
-        "business",
         "code",
         "name",
         "fa_name",
+        "description",
         "point_to_channel_field",
         "requires_documents",
         "is_active",
     ]
-    list_select_related = ["business"]
+    search_fields = ["code", "name", "fa_name", "description"]
     readonly_fields = ["code"]
 
 
@@ -36,11 +36,14 @@ class BusinessPaymentMethodAdmin(admin.ModelAdmin):
 class BusinessPaymentChannelAdmin(admin.ModelAdmin):
     list_display = [
         "id",
+        "business",
         "code",
         "name",
         "fa_name",
         "is_active",
     ]
+    list_filter = ["business", "is_active"]
+    list_select_related = ["business"]
     readonly_fields = ["created_at", "updated_at"]
 
     def get_readonly_fields(self, request, obj=None):

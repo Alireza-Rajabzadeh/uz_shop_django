@@ -24,6 +24,7 @@ BusinessPaymentMethod  ← ImmutableCodeModel
     code            CharField(50)               # immutable after creation
     name            CharField(100)
     fa_name         CharField(100)
+    description     TextField(blank)
     icon_file       FK → File                   (SET_NULL, nullable)
     point_to_channel_field   TextChoices        # card_number | account_number | owner_name
     requires_documents       BooleanField
@@ -141,16 +142,17 @@ the resolved business object.
 | `list_methods(business, ...)` | Admin queryset: search, filter, order |
 | `list_channels(business, ...)` | Admin queryset: search, filter, order |
 | `channel_payload(channel, masked)` | Full channel dict, mask sensitive fields |
-| `create_channel(business, ...)` | Create channel + supported methods atomically |
+| `create_channel(business, ...)` | Create channel + supported methods atomically; auto-generates `code` and defaults `name` (from `fa_name`/`code`) when missing |
 | `update_channel(business, channel, ...)` | Update channel, replace supported methods |
-| `get_channel(business, channel_id)` | Single channel detail |
+| `_generate_channel_code(base, business)` | Unique English channel code from slug or random fallback, scoped to business |
+| `get_channel(business, channel_id)` | Single channel detail (owner-scoped; 404 otherwise) |
+| `delete_channel(business, channel_id)` | Delete channel when owner-scoped and zero payments; cascades supported-method rows |
 | `list_payments(business, ...)` | Payment list with search, status filter |
 | `get_payment(business, payment_id)` | Single payment detail |
 | `payment_payload(payment)` | Payment dict with nested status/method/channel |
 | `list_documents(business, payment_id)` | Documents for a payment |
 | `document_payload(document)` | Document dict with file URL |
 | `validate_logo(logo_file)` | File must be available image |
-| `validate_method_icon(icon_file)` | File must be available image |
 | `validate_supported_methods(business, code, methods)` | Online provider check |
 
 ### Exceptions
@@ -183,12 +185,12 @@ review_payment
 
 | Serializer | Purpose |
 |---|---|
-| `ListQuerySerializer` | Method list query params: search, is_active, ordering |
-| `ChannelListQuerySerializer` | Channel list query params: extends ListQuery + supported_method |
+| `BaseListQuerySerializer` | Shared list query params: search, is_active, ordering |
+| `ListQuerySerializer` | Method list query params: extends base + has_point_to_channel |
+| `ChannelListQuerySerializer` | Channel list query params: extends base + supported_method |
 | `PaymentListQuerySerializer` | Payment list query params: search, status (validated against DB), ordering |
 | `BusinessPaymentMethodReadSerializer` | Read: icon (file_payload), supported_channel_count, provider_available/reason |
-| `BusinessPaymentMethodUpdateSerializer` | Write: name, fa_name, icon_file, point_to_channel_field, requires_documents, is_active. Rejects code changes. |
-| `BusinessPaymentChannelWriteSerializer` | Write: code, name, fa_name, account/card/owner, extra_data, is_active, logo_file, payment_method_ids. Code immutable on update. |
+| `BusinessPaymentChannelWriteSerializer` | Write: code, name, fa_name, account/card/owner, extra_data, is_active, logo_file, payment_method_ids. `code`/`name` optional on create. `code` and `name` are English-only: Persian input is converted through `core.utils.transliteration.to_english_letters` (PersianG2p). Code immutable on update. |
 | `ConfirmPaymentSerializer` | Customer payment: payment_method, channel_id, ref_number, documents (image only, ≤10MB) |
 
 ---
@@ -204,9 +206,9 @@ All views extend `BusinessPaymentAPIView`:
 | View | Method | URL | Purpose |
 |---|---|---|---|
 | `VendorBusinessPaymentMethodList` | GET | `methods` | List business payment methods |
-| `VendorBusinessPaymentMethodDetail` | GET/PATCH | `methods/<id>` | Retrieve/update method |
-| `VendorBusinessPaymentChannelList` | GET/POST | `channels` | List/create channels |
-| `VendorBusinessPaymentChannelDetail` | GET/PATCH | `channels/<id>` | Retrieve/update channel |
+| `VendorBusinessPaymentMethodDetail` | GET | `methods/<id>` | Retrieve method (read-only) |
+| `VendorBusinessPaymentChannelList` | GET/POST | `channels` | List/create channels (business-scoped) |
+| `VendorBusinessPaymentChannelDetail` | GET/PATCH/DELETE | `channels/<id>` | Retrieve/update/delete channel (owner-scoped) |
 | `VendorBusinessPaymentChannelMethods` | POST | `channels/<id>/methods` | Replace supported methods |
 | `VendorBusinessPaymentList` | GET | `payments` | List payments |
 | `VendorBusinessPaymentDetail` | GET | `payments/<id>` | Retrieve payment |
@@ -265,6 +267,10 @@ class BusinessPaymentStatusEnum(Enum):
 | `0001_initial` | Creates all original tables, constraints, indexes |
 | `0002_businesspaymentstatus_and_more` | Creates `BusinessPaymentStatus` table, converts `status` from CharField to FK, adds composite index |
 | `0003_seed_statuses_and_add_unique_index` | Seeds status rows, creates partial unique index for one-successful-payment-per-order |
+| `0004_remove_businesspaymentchannel_bpc_business_code_unique_and_more` | Removed channel `business` FK (global channels), unique on `code` alone |
+| `0005_remove_method_business_created_updated` | Removed method `business` FK and timestamps |
+| `0006_businesspaymentmethod_description` | Adds method `description` |
+| `0007_restore_channel_business` | Re-adds channel `business` FK, restores `UNIQUE(business, code)`, backfills existing rows |
 
 ---
 
@@ -281,13 +287,14 @@ class BusinessPaymentStatusEnum(Enum):
 - Online support requires provider
 - Document unique per payment
 
-**`BusinessPaymentVendorAPITests`** (21 tests):
+**`BusinessPaymentVendorAPITests`** (25 tests):
 - Business isolation: each vendor sees only own methods, channels, payments, documents
-- Cross-business access returns 404
+- Cross-business channel access returns 404
 - Channel list masks card numbers, detail shows full
 - Channel create/update with method replacement
 - Method update rejects code change
-- Delete routes return 405
+- Channel delete: owner + zero payments succeeds (cascades support rows); cross-business 404; with payments 400
+- Method delete returns 405
 - Unauthenticated requests return 401
 - Vendor without business returns 404
 

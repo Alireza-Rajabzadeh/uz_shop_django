@@ -86,7 +86,7 @@ class BusinessPaymentModelTests(APITestCase):
 
     def test_method_code_is_immutable(self):
         method = BusinessPaymentMethod.objects.create(
-            business=self.business_a, code="card_to_card",
+            code="card_to_card",
             name="Card", fa_name="کارت",
         )
         method.code = "changed"
@@ -95,49 +95,64 @@ class BusinessPaymentModelTests(APITestCase):
 
     def test_channel_code_is_immutable(self):
         channel = BusinessPaymentChannel.objects.create(
-            business=self.business_a, code="channel_a",
+            business=self.business_a,
+            code="channel_a",
             name="Channel A", fa_name="کانال الف",
         )
         channel.code = "changed"
         with self.assertRaises(ValueError):
             channel.save()
 
-    def test_method_unique_per_business(self):
+    def test_method_code_is_unique(self):
         BusinessPaymentMethod.objects.create(
-            business=self.business_a, code="card_to_card",
+            code="card_to_card",
             name="Card", fa_name="کارت",
         )
         with self.assertRaises(IntegrityError), transaction.atomic():
             BusinessPaymentMethod.objects.create(
-                business=self.business_a, code="card_to_card",
+                code="card_to_card",
                 name="Card 2", fa_name="کارت ۲",
             )
 
-    def test_method_code_can_differ_across_businesses(self):
+    def test_method_code_is_unique_across_all(self):
         BusinessPaymentMethod.objects.create(
-            business=self.business_a, code="card_to_card",
+            code="card_to_card",
             name="Card A", fa_name="کارت الف",
         )
-        method_b = BusinessPaymentMethod.objects.create(
-            business=self.business_b, code="card_to_card",
-            name="Card B", fa_name="کارت ب",
-        )
-        self.assertEqual(method_b.business_id, self.business_b.id)
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            BusinessPaymentMethod.objects.create(
+                code="card_to_card",
+                name="Card B", fa_name="کارت ب",
+            )
 
-    def test_channel_unique_per_business(self):
+    def test_channel_code_is_unique(self):
         BusinessPaymentChannel.objects.create(
-            business=self.business_a, code="channel_a",
+            business=self.business_a,
+            code="channel_a",
             name="Channel A", fa_name="کانال الف",
         )
         with self.assertRaises(IntegrityError), transaction.atomic():
             BusinessPaymentChannel.objects.create(
-                business=self.business_a, code="channel_a",
+                business=self.business_a,
+                code="channel_a",
                 name="Channel A2", fa_name="کانال الف ۲",
             )
 
+    def test_channel_code_can_differ_across_businesses(self):
+        BusinessPaymentChannel.objects.create(
+            business=self.business_a,
+            code="channel_a",
+            name="Channel A", fa_name="کانال الف",
+        )
+        BusinessPaymentChannel.objects.create(
+            business=self.business_b,
+            code="channel_a",
+            name="Channel A B", fa_name="کانال الف ب",
+        )
+
     def test_payment_amount_must_be_positive(self):
         method = BusinessPaymentMethod.objects.create(
-            business=self.business_a, code="card_to_card",
+            code="card_to_card",
             name="Card", fa_name="کارت",
         )
         OrderSeeder().run()
@@ -163,10 +178,10 @@ class BusinessPaymentModelTests(APITestCase):
                 status=self.status_pending,
             )
 
-    def test_only_one_successful_payment_per_order_per_business(self):
+    def test_only_one_successful_payment_per_order(self):
         PaymentsSeeder().run()
         method = BusinessPaymentMethod.objects.create(
-            business=self.business_a, code="card_to_card",
+            code="card_to_card",
             name="Card", fa_name="کارت",
         )
         OrderSeeder().run()
@@ -199,11 +214,12 @@ class BusinessPaymentModelTests(APITestCase):
 
     def test_online_support_requires_provider(self):
         method = BusinessPaymentMethod.objects.create(
-            business=self.business_a, code="online",
+            code="online",
             name="Online", fa_name="آنلاین",
         )
         channel = BusinessPaymentChannel.objects.create(
-            business=self.business_a, code="saman",
+            business=self.business_a,
+            code="saman",
             name="Saman", fa_name="سامان",
         )
         relation = BusinessPaymentChannelSupportedMethod(
@@ -220,7 +236,7 @@ class BusinessPaymentModelTests(APITestCase):
     def test_document_unique_per_payment(self):
         PaymentsSeeder().run()
         method = BusinessPaymentMethod.objects.create(
-            business=self.business_a, code="card_to_card",
+            code="card_to_card",
             name="Card", fa_name="کارت",
         )
         OrderSeeder().run()
@@ -285,20 +301,22 @@ class BusinessPaymentVendorAPITests(APITestCase):
             name="failed", defaults={"title": "Failed", "is_active": True}
         )
         self.method_a = BusinessPaymentMethod.objects.create(
-            business=self.business_a, code="card_to_card",
+            code="card_to_card",
             name="Card A", fa_name="کارت الف",
         )
         self.method_b = BusinessPaymentMethod.objects.create(
-            business=self.business_b, code="card_to_card",
+            code="deposit_to_account",
             name="Card B", fa_name="کارت ب",
         )
         self.channel_a = BusinessPaymentChannel.objects.create(
-            business=self.business_a, code="channel_a",
+            business=self.business_a,
+            code="channel_a",
             name="Channel A", fa_name="کانال الف",
             card_number="6104337890123456",
         )
         self.channel_b = BusinessPaymentChannel.objects.create(
-            business=self.business_b, code="channel_b",
+            business=self.business_b,
+            code="channel_b",
             name="Channel B", fa_name="کانال ب",
             card_number="6219861034567890",
         )
@@ -318,31 +336,52 @@ class BusinessPaymentVendorAPITests(APITestCase):
             HTTP_AUTHORIZATION=f"Bearer {token.access_token}"
         )
 
-    def test_vendor_a_sees_only_own_methods(self):
+    def test_vendor_a_sees_all_methods(self):
         self._auth(self.vendor_a)
         response = self.client.get("/api/vendor/business-payments/methods")
         self.assertEqual(response.status_code, 200)
         codes = [m["code"] for m in response.data["data"]["results"]]
         self.assertIn("card_to_card", codes)
-        self.assertEqual(response.data["data"]["count"], 1)
+        self.assertEqual(response.data["data"]["count"], 2)
 
-    def test_vendor_b_sees_only_own_methods(self):
+    def test_vendor_b_sees_all_methods(self):
         self._auth(self.vendor_b)
         response = self.client.get("/api/vendor/business-payments/methods")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["data"]["count"], 1)
-        self.assertEqual(
-            response.data["data"]["results"][0]["name"], "Card B"
-        )
+        self.assertEqual(response.data["data"]["count"], 2)
 
-    def test_vendor_a_cannot_read_vendor_b_method_detail(self):
+    def test_vendor_a_can_read_any_method_detail(self):
         self._auth(self.vendor_a)
         response = self.client.get(
             f"/api/vendor/business-payments/methods/{self.method_b.id}"
         )
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 200)
 
-    def test_vendor_a_sees_only_own_channels(self):
+    def test_method_list_filters_by_point_to_channel_field(self):
+        BusinessPaymentMethod.objects.create(
+            code="deposit_acc",
+            name="Deposit",
+            fa_name="سپرده",
+            point_to_channel_field="account_number",
+        )
+        self._auth(self.vendor_a)
+        response = self.client.get(
+            "/api/vendor/business-payments/methods?has_point_to_channel=true"
+        )
+        self.assertEqual(response.status_code, 200)
+        results = response.data["data"]["results"]
+        self.assertEqual(response.data["data"]["count"], 1)
+        self.assertEqual(results[0]["code"], "deposit_acc")
+        self.assertIsNotNone(results[0]["point_to_channel_field"])
+
+        response = self.client.get(
+            "/api/vendor/business-payments/methods?has_point_to_channel=false"
+        )
+        self.assertEqual(response.data["data"]["count"], 2)
+        for method in response.data["data"]["results"]:
+            self.assertIsNone(method["point_to_channel_field"])
+
+    def test_vendor_a_sees_own_channels(self):
         self._auth(self.vendor_a)
         response = self.client.get("/api/vendor/business-payments/channels")
         self.assertEqual(response.status_code, 200)
@@ -351,6 +390,14 @@ class BusinessPaymentVendorAPITests(APITestCase):
             response.data["data"]["results"][0]["code"], "channel_a"
         )
 
+    def test_channel_list_ignores_method_only_query_params(self):
+        self._auth(self.vendor_a)
+        response = self.client.get(
+            "/api/vendor/business-payments/channels?has_point_to_channel=true"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["count"], 1)
+
     def test_vendor_a_cannot_read_vendor_b_channel_detail(self):
         self._auth(self.vendor_a)
         response = self.client.get(
@@ -358,14 +405,14 @@ class BusinessPaymentVendorAPITests(APITestCase):
         )
         self.assertEqual(response.status_code, 404)
 
-    def test_vendor_a_cannot_create_channel_with_vendor_b_data(self):
+    def test_vendor_a_can_create_channel(self):
         self._auth(self.vendor_a)
         response = self.client.post(
             "/api/vendor/business-payments/channels",
             {
-                "code": "stolen_channel",
-                "name": "Stolen",
-                "fa_name": "دزدی",
+                "code": "new_channel",
+                "name": "New",
+                "fa_name": "جدید",
                 "payment_method_ids": [self.method_a.id],
             },
             format="json",
@@ -373,7 +420,84 @@ class BusinessPaymentVendorAPITests(APITestCase):
         self.assertEqual(response.status_code, 201)
         channel_id = response.data["data"]["id"]
         channel = BusinessPaymentChannel.objects.get(id=channel_id)
-        self.assertEqual(channel.business_id, self.business_a.id)
+        self.assertEqual(channel.code, "new_channel")
+        self.assertEqual(channel.business, self.business_a)
+
+    def test_vendor_a_can_create_channel_without_code_and_name(self):
+        self._auth(self.vendor_a)
+        response = self.client.post(
+            "/api/vendor/business-payments/channels",
+            {"fa_name": "بانک ملی"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        channel = BusinessPaymentChannel.objects.get(
+            id=response.data["data"]["id"]
+        )
+        self.assertTrue(channel.code)
+        self.assertTrue(channel.code.isascii())
+        self.assertTrue(channel.name)
+        self.assertTrue(channel.name.isascii())
+        self.assertEqual(channel.name, "bank meli")
+
+    def test_vendor_a_can_create_channel_with_empty_payload(self):
+        self._auth(self.vendor_a)
+        response = self.client.post(
+            "/api/vendor/business-payments/channels", {}, format="json"
+        )
+        self.assertEqual(response.status_code, 201)
+        channel = BusinessPaymentChannel.objects.get(
+            id=response.data["data"]["id"]
+        )
+        self.assertTrue(channel.code.isascii())
+        self.assertTrue(channel.name.isascii())
+        self.assertEqual(channel.name, channel.code)
+
+    def test_vendor_create_channel_converts_persian_name_to_english(self):
+        self._auth(self.vendor_a)
+        response = self.client.post(
+            "/api/vendor/business-payments/channels",
+            {"code": "ali_acc", "name": "علی رضایی"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        channel = BusinessPaymentChannel.objects.get(
+            id=response.data["data"]["id"]
+        )
+        self.assertEqual(channel.name, "ali rezayi")
+
+    def test_vendor_create_channel_rejects_non_ascii_name(self):
+        self._auth(self.vendor_a)
+        response = self.client.post(
+            "/api/vendor/business-payments/channels",
+            {"code": "emoji_ch", "name": "\U0001f600"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_vendor_update_channel_converts_persian_name_to_english(self):
+        self._auth(self.vendor_a)
+        response = self.client.patch(
+            f"/api/vendor/business-payments/channels/{self.channel_a.id}",
+            {"name": "بانک تجارت"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        channel = BusinessPaymentChannel.objects.get(id=self.channel_a.id)
+        self.assertTrue(channel.name.isascii())
+        self.assertNotEqual(channel.name, "بانک تجارت")
+
+    def test_vendor_update_channel_blank_name_keeps_existing(self):
+        self._auth(self.vendor_a)
+        original = self.channel_a.name
+        response = self.client.patch(
+            f"/api/vendor/business-payments/channels/{self.channel_a.id}",
+            {"name": ""},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.channel_a.refresh_from_db()
+        self.assertEqual(self.channel_a.name, original)
 
     def test_vendor_a_can_update_own_channel(self):
         self._auth(self.vendor_a)
@@ -389,7 +513,7 @@ class BusinessPaymentVendorAPITests(APITestCase):
         self._auth(self.vendor_a)
         response = self.client.patch(
             f"/api/vendor/business-payments/channels/{self.channel_b.id}",
-            {"name": "Hacked"},
+            {"name": "Updated"},
             format="json",
         )
         self.assertEqual(response.status_code, 404)
@@ -543,13 +667,13 @@ class BusinessPaymentVendorAPITests(APITestCase):
         response = self.client.get("/api/vendor/business-payments/methods")
         self.assertEqual(response.status_code, 401)
 
-    def test_vendor_without_business_gets_404(self):
+    def test_vendor_without_business_can_access_methods(self):
         vendor_no_biz = _make_vendor(
             "+9900000005", "1000000005", self.vendor_status
         )
         self._auth(vendor_no_biz)
         response = self.client.get("/api/vendor/business-payments/methods")
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 200)
 
     def test_channel_list_masks_card_number(self):
         self._auth(self.vendor_a)
@@ -573,11 +697,22 @@ class BusinessPaymentVendorAPITests(APITestCase):
         method = response.data["data"]["results"][0]
         self.assertEqual(method["supported_channel_count"], 1)
 
+    def test_method_list_includes_description(self):
+        self.method_a.description = "Pay with card to card."
+        self.method_a.save(update_fields=["description"])
+        self._auth(self.vendor_a)
+        response = self.client.get(
+            f"/api/vendor/business-payments/methods/{self.method_a.id}"
+        )
+        self.assertEqual(
+            response.data["data"]["description"], "Pay with card to card."
+        )
+
     def test_channel_create_and_method_replacement(self):
         self._auth(self.vendor_a)
         deposit = BusinessPaymentMethod.objects.create(
-            business=self.business_a, code="deposit_to_account",
-            name="Deposit", fa_name="واریز",
+            code="credit",
+            name="Credit", fa_name="اعتباری",
         )
         response = self.client.post(
             "/api/vendor/business-payments/channels",
@@ -602,14 +737,8 @@ class BusinessPaymentVendorAPITests(APITestCase):
         )
         self.assertEqual(support.payment_method, deposit)
 
-    def test_delete_routes_do_not_exist(self):
+    def test_method_delete_not_allowed(self):
         self._auth(self.vendor_a)
-        self.assertEqual(
-            self.client.delete(
-                f"/api/vendor/business-payments/channels/{self.channel_a.id}"
-            ).status_code,
-            405,
-        )
         self.assertEqual(
             self.client.delete(
                 f"/api/vendor/business-payments/methods/{self.method_a.id}"
@@ -617,11 +746,69 @@ class BusinessPaymentVendorAPITests(APITestCase):
             405,
         )
 
-    def test_method_update_rejects_code_change(self):
+    def test_delete_channel_without_payments(self):
+        self._auth(self.vendor_a)
+        response = self.client.delete(
+            f"/api/vendor/business-payments/channels/{self.channel_a.id}"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(
+            BusinessPaymentChannel.objects.filter(id=self.channel_a.id).exists()
+        )
+        self.assertFalse(
+            BusinessPaymentChannelSupportedMethod.objects.filter(
+                payment_channel_id=self.channel_a.id
+            ).exists()
+        )
+
+    def test_delete_channel_cross_business_returns_404(self):
+        self._auth(self.vendor_a)
+        response = self.client.delete(
+            f"/api/vendor/business-payments/channels/{self.channel_b.id}"
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(
+            BusinessPaymentChannel.objects.filter(id=self.channel_b.id).exists()
+        )
+
+    def test_delete_channel_with_payments_returns_400(self):
+        OrderSeeder().run()
+        PaymentsSeeder().run()
+        customer_status = CustomerStatus.objects.create(
+            name="bp-del", title="Active"
+        )
+        customer = Customer.objects.create_user(
+            phone="09120001014", password="password", first_name="T",
+            last_name="C", customer_code="CUS-BP-014", status=customer_status,
+        )
+        order = Order.objects.create(
+            customer=customer,
+            status=OrderStatus.objects.get(name="payment_pending"),
+            address_info={}, subtotal=Decimal("100.00"),
+            discount_amount=Decimal("0.00"), shipping_amount=Decimal("0.00"),
+            total_amount=Decimal("100.00"),
+            reservation_expires_at=timezone.now() + timezone.timedelta(minutes=10),
+        )
+        BusinessPayment.objects.create(
+            business=self.business_a, order=order,
+            payment_method=self.method_a, amount=Decimal("100.00"),
+            payment_channel=self.channel_a,
+            status=self.status_pending,
+        )
+        self._auth(self.vendor_a)
+        response = self.client.delete(
+            f"/api/vendor/business-payments/channels/{self.channel_a.id}"
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertTrue(
+            BusinessPaymentChannel.objects.filter(id=self.channel_a.id).exists()
+        )
+
+    def test_method_patch_not_allowed(self):
         self._auth(self.vendor_a)
         response = self.client.patch(
             f"/api/vendor/business-payments/methods/{self.method_a.id}",
             {"code": "changed"},
             format="json",
         )
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 405)

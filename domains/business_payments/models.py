@@ -23,14 +23,10 @@ class BusinessPaymentMethod(ImmutableCodeModel):
         ACCOUNT_NUMBER = "account_number", "Account number"
         OWNER_NAME = "owner_name", "Owner name"
 
-    business = models.ForeignKey(
-        "business.BusinessProfile",
-        on_delete=models.CASCADE,
-        related_name="business_payment_methods",
-    )
-    code = models.CharField(max_length=50)
+    code = models.CharField(max_length=50, unique=True)
     name = models.CharField(max_length=100)
     fa_name = models.CharField(max_length=100)
+    description = models.TextField(blank=True, default="")
     icon_file = models.ForeignKey(
         "files.File",
         on_delete=models.SET_NULL,
@@ -46,24 +42,21 @@ class BusinessPaymentMethod(ImmutableCodeModel):
     )
     requires_documents = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = "business_payment_method"
         ordering = ["id"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["business", "code"],
-                name="bpm_business_code_unique",
-            ),
-        ]
 
     def __str__(self):
-        return f"{self.business} - {self.name}"
+        return self.name
 
 
 class BusinessPaymentChannel(ImmutableCodeModel):
+    business = models.ForeignKey(
+        "business.BusinessProfile",
+        on_delete=models.CASCADE,
+        related_name="business_payment_channels",
+    )
     code = models.CharField(max_length=100)
     name = models.CharField(max_length=100)
     fa_name = models.CharField(max_length=100, blank=True, default="")
@@ -87,8 +80,8 @@ class BusinessPaymentChannel(ImmutableCodeModel):
         ordering = ["id"]
         constraints = [
             models.UniqueConstraint(
-                fields=["code"],
-                name="bpc_code_unique",
+                fields=["business", "code"],
+                name="bpc_business_code_unique",
             ),
         ]
 

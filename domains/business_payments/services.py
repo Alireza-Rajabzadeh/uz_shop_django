@@ -1,8 +1,12 @@
+import re
+from uuid import uuid4
+
 from django.db import transaction
 from django.db.models import Count, Q
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
+from core.utils.transliteration import to_english_letters
 from domains.business.models import BusinessProfile
 from domains.files.models import File
 from domains.files.services import FileService
@@ -42,23 +46,21 @@ class BusinessPaymentService:
         return BusinessPaymentStatus.objects.get(name=name)
 
     @staticmethod
-    def has_available_channel(business):
+    def has_available_channel():
         methods = BusinessPaymentMethod.objects.filter(
-            business=business, is_active=True
+            is_active=True
         ).prefetch_related("supported_channels__payment_channel")
         for method in methods:
             for support in method.supported_channels.all():
                 available, _ = BusinessPaymentService.method_availability(
-                    business, method, support.payment_channel
+                    method, support.payment_channel
                 )
                 if available:
                     return True
         return False
 
     @staticmethod
-    def method_availability(business, method, channel=None):
-        if method.business_id != business.id:
-            return False, "Payment method does not belong to this business."
+    def method_availability(method, channel=None):
         if not method.is_active:
             return False, "Payment method is inactive."
         if channel is not None:
@@ -86,9 +88,9 @@ class BusinessPaymentService:
 
     logo_payload = file_payload
 
-    def customer_methods_payload(self, business):
+    def customer_methods_payload(self):
         methods = BusinessPaymentMethod.objects.filter(
-            business=business, is_active=True
+            is_active=True
         ).prefetch_related(
             "supported_channels__payment_channel__logo_file__status"
         ).select_related("icon_file__status").order_by("id")
@@ -98,12 +100,12 @@ class BusinessPaymentService:
             reasons = []
             for support in method.supported_channels.all():
                 channel = support.payment_channel
-                available, reason = self.method_availability(business, method, channel)
+                available, reason = self.method_availability(method, channel)
                 if not available:
                     if reason:
                         reasons.append(reason)
                     continue
-                channel_data = self.channel_payload(channel, masked=False, business=business)
+                channel_data = self.channel_payload(channel, masked=False)
                 channel_data.pop("extra_data", None)
                 channels.append(channel_data)
             payload.append({
@@ -111,6 +113,7 @@ class BusinessPaymentService:
                 "code": method.code,
                 "name": method.name,
                 "fa_name": method.fa_name,
+                "description": method.description,
                 "icon": self.file_payload(method.icon_file),
                 "point_to_channel_field": method.point_to_channel_field,
                 "requires_documents": method.requires_documents,
@@ -187,14 +190,14 @@ class BusinessPaymentService:
                 )]
             })
         method = BusinessPaymentMethod.objects.filter(
-            business=business, code=payment_method_code, is_active=True
+            code=payment_method_code, is_active=True
         ).first()
         if method is None:
             raise self.ValidationError(
                 {"payment_method": [_("This payment method is not available.")]}
             )
         channel = BusinessPaymentChannel.objects.filter(
-            id=payment_channel_id, is_active=True
+            id=payment_channel_id, business=business, is_active=True
         ).first()
         if channel is None:
             raise self.ValidationError(
@@ -311,10 +314,11 @@ class BusinessPaymentService:
         "created_at", "updated_at",
     }
 
-    def list_methods(self, business, *, search="", is_active=None, ordering="id"):
-        queryset = BusinessPaymentMethod.objects.filter(
-            business=business
-        ).annotate(
+    def list_methods(
+        self, *, search="", is_active=None, has_point_to_channel=None,
+        ordering="id",
+    ):
+        queryset = BusinessPaymentMethod.objects.all().annotate(
             supported_channel_count=Count("supported_channels", distinct=True)
         )
         if search:
@@ -322,18 +326,25 @@ class BusinessPaymentService:
                 Q(code__icontains=search)
                 | Q(name__icontains=search)
                 | Q(fa_name__icontains=search)
+                | Q(description__icontains=search)
             )
         if is_active is not None:
             queryset = queryset.filter(is_active=is_active)
+        if has_point_to_channel is not None:
+            queryset = queryset.filter(
+                point_to_channel_field__isnull=not has_point_to_channel
+            )
         if ordering.lstrip("-") not in self.METHOD_ORDERING_FIELDS:
             ordering = "id"
         return queryset.order_by(ordering, "id")
 
     def list_channels(
-        self, *, search="", is_active=None, supported_method=None,
+        self, business, *, search="", is_active=None, supported_method=None,
         ordering="id",
     ):
-        queryset = BusinessPaymentChannel.objects.all().select_related(
+        queryset = BusinessPaymentChannel.objects.filter(
+            business=business
+        ).select_related(
             "logo_file__status"
         ).prefetch_related(
             "supported_methods__payment_method"
@@ -363,20 +374,19 @@ class BusinessPaymentService:
             return value
         return f"{'*' * max(len(value) - 4, 4)}{value[-4:]}"
 
-    def channel_payload(self, channel, *, masked, business=None):
+    def channel_payload(self, channel, *, masked):
         methods = [
             support.payment_method for support in channel.supported_methods.all()
         ]
         method_rows = []
         for method in methods:
-            available, reason = self.method_availability(
-                business, method, channel
-            ) if business else (True, None)
+            available, reason = self.method_availability(method, channel)
             method_rows.append({
                 "id": method.id,
                 "code": method.code,
                 "name": method.name,
                 "fa_name": method.fa_name,
+                "description": method.description,
                 "icon": self.file_payload(method.icon_file),
                 "point_to_channel_field": method.point_to_channel_field,
                 "requires_documents": method.requires_documents,
@@ -424,18 +434,6 @@ class BusinessPaymentService:
             )
 
     @staticmethod
-    def validate_method_icon(icon_file):
-        if icon_file is None:
-            return
-        if (
-            icon_file.status.name != FileService.STATUS_AVAILABLE
-            or icon_file.file_type != "image"
-        ):
-            raise BusinessPaymentService.ValidationError(
-                {"icon_file_id": ["Select an available image file."]}
-            )
-
-    @staticmethod
     def validate_supported_methods(channel_code, methods):
         online = next((m for m in methods if m.code == "online"), None)
         if online and online.is_active:
@@ -445,9 +443,46 @@ class BusinessPaymentService:
                     {"payment_method_ids": [reason]}
                 )
 
+    @staticmethod
+    def _generate_channel_code(base="", business=None):
+        slug = (
+            re.sub(
+                r"[^A-Za-z0-9]+",
+                "_",
+                to_english_letters(base or ""),
+            )
+            .strip("_")
+            .lower()[:80]
+        )
+        scope = (
+            BusinessPaymentChannel.objects.filter(business=business)
+            if business is not None
+            else BusinessPaymentChannel.objects.all()
+        )
+        if slug and not scope.filter(code=slug).exists():
+            return slug
+        while True:
+            candidate = (
+                f"{slug}_{uuid4().hex[:6]}" if slug else f"channel_{uuid4().hex[:8]}"
+            )[:100]
+            if not scope.filter(code=candidate).exists():
+                return candidate
+
     @transaction.atomic
-    def create_channel(self, *, supported_methods, **values):
+    def create_channel(self, business, *, supported_methods, **values):
         self.validate_logo(values.get("logo_file"))
+        code = (values.get("code") or "").strip()
+        name = (values.get("name") or "").strip()
+        fa_name = (values.get("fa_name") or "").strip()
+        if not name and fa_name:
+            name = to_english_letters(fa_name)
+        if not code:
+            code = self._generate_channel_code(name or fa_name, business=business)
+        if not name:
+            name = code
+        values["code"] = code
+        values["name"] = name
+        values["business"] = business
         self.validate_supported_methods(values["code"], supported_methods)
         channel = BusinessPaymentChannel.objects.create(**values)
         BusinessPaymentChannelSupportedMethod.objects.bulk_create([
@@ -456,12 +491,12 @@ class BusinessPaymentService:
             )
             for method in supported_methods
         ])
-        return self.get_channel(channel.id)
+        return self.get_channel(business, channel.id)
 
     @transaction.atomic
-    def update_channel(self, channel, *, supported_methods=None, **values):
+    def update_channel(self, business, channel, *, supported_methods=None, **values):
         if "logo_file" in values:
-            self.validate_logo(values["logo_file"])
+            self.validate_logo(values.get("logo_file"))
         methods = supported_methods
         if methods is not None:
             self.validate_supported_methods(channel.code, methods)
@@ -476,13 +511,25 @@ class BusinessPaymentService:
                 )
                 for method in methods
             ])
-        return self.get_channel(channel.id)
+        return self.get_channel(business, channel.id)
 
-    def get_channel(self, channel_id):
+    def get_channel(self, business, channel_id):
         try:
-            return self.list_channels().get(id=channel_id)
+            return self.list_channels(business).get(id=channel_id)
         except BusinessPaymentChannel.DoesNotExist as exc:
             raise self.NotFoundError("Payment channel not found.") from exc
+
+    @transaction.atomic
+    def delete_channel(self, business, channel_id):
+        channel = self.get_channel(business, channel_id)
+        if channel.payments.exists():
+            raise self.ValidationError(
+                {"payment_channel": [_(
+                    "This channel has payments and cannot be deleted."
+                )]}
+            )
+        channel.delete()
+        return channel
 
     def list_payments(
         self, business, *, search="", status=None, ordering="-created_at"
