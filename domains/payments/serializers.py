@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from core.utils import CardNumberValidationError, normalize_card_number
 from domains.files.models import File
 
 from .models import PaymentChannel, PaymentMethod
@@ -128,6 +129,14 @@ class PaymentChannelWriteSerializer(serializers.ModelSerializer):
         if self.instance is not None and "code" in data:
             raise serializers.ValidationError({"code": "This field is immutable."})
         return super().to_internal_value(data)
+
+    def validate_card_number(self, value):
+        if value in (None, ""):
+            return value
+        try:
+            return normalize_card_number(value)
+        except CardNumberValidationError as exc:
+            raise serializers.ValidationError(str(exc)) from exc
 
     def validate_payment_method_ids(self, value):
         ids = [method.id for method in value]

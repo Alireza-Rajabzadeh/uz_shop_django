@@ -518,6 +518,59 @@ class BusinessPaymentVendorAPITests(APITestCase):
         )
         self.assertEqual(response.status_code, 404)
 
+    def test_channel_create_rejects_invalid_card_number(self):
+        self._auth(self.vendor_a)
+        response = self.client.post(
+            "/api/vendor/business-payments/channels",
+            {
+                "code": "bad_card",
+                "card_number": "1234",
+                "payment_method_ids": [self.method_a.id],
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("card_number", response.data["errors"])
+
+    def test_channel_create_normalizes_card_number(self):
+        self._auth(self.vendor_a)
+        response = self.client.post(
+            "/api/vendor/business-payments/channels",
+            {
+                "code": "spaced_card",
+                "card_number": "6104 3378-9012 3456",
+                "payment_method_ids": [self.method_a.id],
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        channel = BusinessPaymentChannel.objects.get(
+            id=response.data["data"]["id"]
+        )
+        self.assertEqual(channel.card_number, "6104337890123456")
+
+    def test_channel_update_rejects_invalid_card_number(self):
+        self._auth(self.vendor_a)
+        response = self.client.patch(
+            f"/api/vendor/business-payments/channels/{self.channel_a.id}",
+            {"card_number": "610433789012345a"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.channel_a.refresh_from_db()
+        self.assertEqual(self.channel_a.card_number, "6104337890123456")
+
+    def test_channel_update_allows_clearing_card_number(self):
+        self._auth(self.vendor_a)
+        response = self.client.patch(
+            f"/api/vendor/business-payments/channels/{self.channel_a.id}",
+            {"card_number": None},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.channel_a.refresh_from_db()
+        self.assertIsNone(self.channel_a.card_number)
+
     def test_vendor_a_sees_only_own_payments(self):
         OrderSeeder().run()
         PaymentsSeeder().run()

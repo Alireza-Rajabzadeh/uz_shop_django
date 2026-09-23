@@ -330,6 +330,41 @@ class PaymentAdminAPITests(APITestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["data"]["supported_methods"], [])
 
+    def test_channel_create_rejects_invalid_card_number(self):
+        response = self.client.post(
+            "/api/payments/admin/channels",
+            {
+                "code": "bad_card", "name": "Bad card", "fa_name": "خراب",
+                "card_number": "1234",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("card_number", response.data["errors"])
+
+    def test_channel_create_normalizes_persian_card_number(self):
+        response = self.client.post(
+            "/api/payments/admin/channels",
+            {
+                "code": "persian_card", "name": "Persian card", "fa_name": "فارسی",
+                "card_number": "۶۱۰۴ ۳۳۷۸ ۹۰۱۲ ۳۴۵۶",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        channel = PaymentChannel.objects.get(id=response.data["data"]["id"])
+        self.assertEqual(channel.card_number, "6104337890123456")
+
+    def test_channel_patch_rejects_invalid_card_number(self):
+        response = self.client.patch(
+            f"/api/payments/admin/channels/{self.channel.id}",
+            {"card_number": "610433789012345a"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.channel.refresh_from_db()
+        self.assertEqual(self.channel.card_number, "6104337890123456")
+
     def test_delete_routes_do_not_exist(self):
         self.assertEqual(
             self.client.delete(f"/api/payments/admin/channels/{self.channel.id}").status_code,

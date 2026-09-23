@@ -2,6 +2,7 @@ import re
 
 from rest_framework import serializers
 
+from core.utils import CardNumberValidationError, normalize_card_number
 from core.utils.transliteration import to_english_letters
 
 from .models import (
@@ -183,6 +184,14 @@ class BusinessPaymentChannelWriteSerializer(serializers.ModelSerializer):
                 "Name must contain English letters only."
             )
         return value
+
+    def validate_card_number(self, value):
+        if value in (None, ""):
+            return value
+        try:
+            return normalize_card_number(value)
+        except CardNumberValidationError as exc:
+            raise serializers.ValidationError(str(exc)) from exc
 
     def validate_payment_method_ids(self, value):
         if not value:
