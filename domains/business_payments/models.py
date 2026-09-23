@@ -63,6 +63,13 @@ class BusinessPaymentChannel(ImmutableCodeModel):
     account_number = models.CharField(max_length=50, null=True, blank=True)
     card_number = models.CharField(max_length=30, null=True, blank=True)
     owner_name = models.CharField(max_length=150, null=True, blank=True)
+    bank = models.ForeignKey(
+        "banks.Bank",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="bank_payment_channels",
+    )
     extra_data = models.JSONField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
     logo_file = models.ForeignKey(
