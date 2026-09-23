@@ -107,6 +107,7 @@ INSTALLED_APPS = [
     "domains.business_payments.apps.BusinessPaymentsConfig",
     "domains.content.apps.ContentConfig",
     "domains.marketplace.apps.MarketplaceConfig",
+    "domains.banks.apps.BanksConfig",
     "core",
     "domains.users",
 ]
