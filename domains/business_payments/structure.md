@@ -143,7 +143,7 @@ the resolved business object.
 | `list_channels(business, ...)` | Admin queryset: search, filter, order |
 | `channel_payload(channel, masked)` | Full channel dict, mask sensitive fields |
 | `create_channel(business, ...)` | Create channel + supported methods atomically; auto-generates `code` and defaults `name` (from `fa_name`/`code`) when missing |
-| `update_channel(business, channel, ...)` | Update channel, replace supported methods |
+| `update_channel(business, channel, ...)` | Update channel, replace supported methods. When the channel has payments, only `is_active` may change; any field change or method replacement raises `ValidationError` |
 | `_generate_channel_code(base, business)` | Unique English channel code from slug or random fallback, scoped to business |
 | `get_channel(business, channel_id)` | Single channel detail (owner-scoped; 404 otherwise) |
 | `delete_channel(business, channel_id)` | Delete channel when owner-scoped and zero payments; cascades supported-method rows |

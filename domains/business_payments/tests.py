@@ -804,6 +804,71 @@ class BusinessPaymentVendorAPITests(APITestCase):
             BusinessPaymentChannel.objects.filter(id=self.channel_a.id).exists()
         )
 
+    def _attach_payment(self, channel, method):
+        OrderSeeder().run()
+        PaymentsSeeder().run()
+        customer_status = CustomerStatus.objects.create(
+            name="bp-locked-ch", title="Active"
+        )
+        customer = Customer.objects.create_user(
+            phone="09120001020", password="password", first_name="T",
+            last_name="C", customer_code="CUS-BP-020", status=customer_status,
+        )
+        order = Order.objects.create(
+            customer=customer,
+            status=OrderStatus.objects.get(name="payment_pending"),
+            address_info={}, subtotal=Decimal("100.00"),
+            discount_amount=Decimal("0.00"), shipping_amount=Decimal("0.00"),
+            total_amount=Decimal("100.00"),
+            reservation_expires_at=timezone.now() + timezone.timedelta(minutes=10),
+        )
+        return BusinessPayment.objects.create(
+            business=channel.business, order=order,
+            payment_method=method, payment_channel=channel,
+            amount=Decimal("100.00"), status=self.status_pending,
+        )
+
+    def test_update_channel_with_payments_rejects_field_change(self):
+        self._attach_payment(self.channel_a, self.method_a)
+        self._auth(self.vendor_a)
+        response = self.client.patch(
+            f"/api/vendor/business-payments/channels/{self.channel_a.id}",
+            {"name": "Changed"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.channel_a.refresh_from_db()
+        self.assertEqual(self.channel_a.name, "Channel A")
+
+    def test_update_channel_with_payments_allows_is_active(self):
+        self._attach_payment(self.channel_a, self.method_a)
+        self._auth(self.vendor_a)
+        response = self.client.patch(
+            f"/api/vendor/business-payments/channels/{self.channel_a.id}",
+            {"is_active": False},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.channel_a.refresh_from_db()
+        self.assertFalse(self.channel_a.is_active)
+
+    def test_update_channel_methods_with_payments_returns_400(self):
+        self._attach_payment(self.channel_a, self.method_a)
+        deposit = BusinessPaymentMethod.objects.create(
+            code="credit", name="Credit", fa_name="اعتباری"
+        )
+        self._auth(self.vendor_a)
+        response = self.client.post(
+            f"/api/vendor/business-payments/channels/{self.channel_a.id}/methods",
+            {"payment_method_ids": [deposit.id]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        support = BusinessPaymentChannelSupportedMethod.objects.get(
+            payment_channel=self.channel_a
+        )
+        self.assertEqual(support.payment_method, self.method_a)
+
     def test_method_patch_not_allowed(self):
         self._auth(self.vendor_a)
         response = self.client.patch(

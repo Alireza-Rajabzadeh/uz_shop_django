@@ -495,6 +495,11 @@ class BusinessPaymentService:
 
     @transaction.atomic
     def update_channel(self, business, channel, *, supported_methods=None, **values):
+        if channel.payments.exists():
+            if supported_methods is not None or set(values) - {"is_active"}:
+                raise self.ValidationError({"payment_channel": [_(
+                    "This channel has payments. Only its active status can be changed."
+                )]})
         if "logo_file" in values:
             self.validate_logo(values.get("logo_file"))
         methods = supported_methods
