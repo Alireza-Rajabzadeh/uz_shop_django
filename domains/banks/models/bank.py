@@ -6,7 +6,7 @@ class Bank(models.Model):
         db_table = "banks_bank"
 
     name = models.CharField(max_length=100)
-    code = models.CharField(max_length=20, unique=True)
+    fa_name = models.CharField(max_length=100, unique=True)
     card_number_regex = models.CharField(max_length=255)
     account_number_regex = models.CharField(max_length=255)
     sheba_regex = models.CharField(max_length=255)
