@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand
 
+from core.management.seeders.banks import BankSeeder
 from core.management.seeders.brands import BrandSeeder
 from core.management.seeders.business_payment_statuses import BusinessPaymentStatusSeeder
 from core.management.seeders.categories import CategorySeeder
@@ -27,6 +28,7 @@ class Command(BaseCommand):
             VariantAttributeSeeder(),
             VendorStatusSeeder(),
             BusinessPaymentStatusSeeder(),
+            BankSeeder(),
             CategoryDetailSeeder(),
             ProductStatusSeeder(),
             ProductVariantStatusSeeder(),
