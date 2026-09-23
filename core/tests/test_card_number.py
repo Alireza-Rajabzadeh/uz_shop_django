@@ -1,4 +1,5 @@
 from django.test import SimpleTestCase
+from django.utils import translation
 
 from core.utils import CardNumberValidationError, normalize_card_number
 
@@ -38,3 +39,11 @@ class NormalizeCardNumberTests(SimpleTestCase):
     def test_rejects_empty(self):
         with self.assertRaises(CardNumberValidationError):
             normalize_card_number("")
+
+    def test_length_error_translates_to_farsi(self):
+        with translation.override("fa"):
+            with self.assertRaises(CardNumberValidationError) as ctx:
+                normalize_card_number("1234")
+        self.assertEqual(
+            str(ctx.exception), "شماره کارت باید ۱۶ رقمی باشد."
+        )

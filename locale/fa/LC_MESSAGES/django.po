@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: uz_shop_django\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-23 12:11+0000\n"
+"POT-Creation-Date: 2026-09-23 07:27+0000\n"
 "PO-Revision-Date: 2026-07-23 12:11+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -15,157 +15,1362 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
 
-#: backend/config/settings.py:160
+#: config/settings.py:332
 msgid "English"
 msgstr "انگلیسی"
 
-#: backend/config/settings.py:160
+#: config/settings.py:332
 msgid "Persian"
 msgstr "فارسی"
 
-#: backend/core/exceptions.py:43
+#: core/exceptions.py:43
 msgid "Internal server error"
 msgstr "خطای داخلی سرور"
 
-#: backend/core/exceptions.py:69
+#: core/exceptions.py:69
 msgid "Request failed"
 msgstr "درخواست ناموفق"
 
-#: backend/domains/catalog/services/detail_service.py:24
+#: core/utils/card_number.py:17
+msgid "Card number must be 16 digits."
+msgstr "شماره کارت باید ۱۶ رقمی باشد."
+
+#: core/utils/card_number.py:25 core/utils/card_number.py:40
+msgid "Card number is required."
+msgstr "شماره کارت الزامی است."
+
+#: core/utils/card_number.py:35 core/utils/card_number.py:42
+msgid "Card number must contain digits only."
+msgstr "شماره کارت باید فقط شامل ارقام باشد."
+
+#: domains/business_payments/services.py:137
+#: domains/business_payments/services.py:180 domains/payments/services.py:111
+#: domains/payments/services.py:149
+msgid "The order reservation has expired."
+msgstr ""
+
+#: domains/business_payments/services.py:184 domains/payments/services.py:151
+msgid "This order cannot be paid."
+msgstr ""
+
+#: domains/business_payments/services.py:189 domains/payments/services.py:154
+msgid "This payment method is not available for manual payment."
+msgstr ""
+
+#: domains/business_payments/services.py:197 domains/payments/services.py:158
+#, fuzzy
+#| msgid "No active payment channel is available."
+msgid "This payment method is not available."
+msgstr "در حال حاضر کانال پرداخت فعالی وجود ندارد."
+
+#: domains/business_payments/services.py:204 domains/payments/services.py:161
+#, fuzzy
+#| msgid "No active payment channel is available."
+msgid "This payment channel is not available."
+msgstr "در حال حاضر کانال پرداخت فعالی وجود ندارد."
+
+#: domains/business_payments/services.py:211 domains/payments/services.py:166
+msgid "This channel does not support the selected payment method."
+msgstr ""
+
+#: domains/business_payments/services.py:216 domains/payments/services.py:169
+msgid "At least one payment document is required."
+msgstr ""
+
+#: domains/business_payments/services.py:220 domains/payments/services.py:171
+msgid "No more than 10 payment documents are allowed."
+msgstr ""
+
+#: domains/business_payments/services.py:277 domains/payments/services.py:217
+msgid "This payment is not awaiting review."
+msgstr ""
+
+#: domains/business_payments/services.py:501
+msgid "This channel has payments. Only its active status can be changed."
+msgstr ""
+
+#: domains/business_payments/services.py:533
+msgid "This channel has payments and cannot be deleted."
+msgstr ""
+
+#: domains/business_payments/views.py:150
+msgid "Payment channel deleted."
+msgstr ""
+
+#: domains/cart/address.py:37
+msgid "Provide both receiver name and receiver phone, or neither."
+msgstr ""
+
+#: domains/cart/address.py:45
+#, python-format
+msgid "Provide a saved address or fill the full address (missing: %s)."
+msgstr ""
+
+#: domains/cart/address.py:64
+msgid "Choose a saved address or fill the full address."
+msgstr ""
+
+#: domains/cart/address.py:84
+#, fuzzy
+#| msgid "One or more details are not assigned to the selected category."
+msgid "The state does not belong to the selected country."
+msgstr "یک یا چند جزئیات به دسته‌بندی انتخاب‌شده اختصاص ندارند."
+
+#: domains/cart/address.py:88
+#, fuzzy
+#| msgid "One or more details are not assigned to the selected category."
+msgid "The city does not belong to the selected state."
+msgstr "یک یا چند جزئیات به دسته‌بندی انتخاب‌شده اختصاص ندارند."
+
+#: domains/cart/address.py:98
+#, fuzzy
+#| msgid "Address not found."
+msgid "Saved address not found."
+msgstr "آدرس پیدا نشد."
+
+#: domains/cart/address.py:122
+msgid "One or more selected locations do not exist."
+msgstr ""
+
+#: domains/cart/services.py:76
+#, fuzzy
+#| msgid "Address not found."
+msgid "Cart not found."
+msgstr "آدرس پیدا نشد."
+
+#: domains/cart/services.py:181 domains/cart/services.py:264
+msgid "Requested quantity exceeds available stock."
+msgstr ""
+
+#: domains/cart/services.py:257
+#, python-brace-format
+msgid "Requested quantity exceeds available stock; reduced to {count}."
+msgstr ""
+
+#: domains/cart/services.py:267 domains/cart/services.py:416
+msgid "This product is now only available for pre-order."
+msgstr ""
+
+#: domains/cart/services.py:270 domains/cart/services.py:425
+msgid "This item is no longer available for purchase."
+msgstr ""
+
+#: domains/cart/services.py:324
+#, fuzzy
+#| msgid "The confirmation request is no longer valid."
+msgid "This item is no longer available."
+msgstr "درخواست تایید دیگر معتبر نیست."
+
+#: domains/cart/services.py:365 domains/cart/services.py:443
+#: domains/cart/services.py:460
+#: domains/inventory/services/inventory_service.py:768
+#: domains/inventory/services/inventory_service.py:785
+#: domains/inventory/services/inventory_service.py:803
+#: domains/inventory/services/inventory_service.py:852
+#: domains/inventory/services/inventory_service.py:900
+#: domains/inventory/services/inventory_service.py:951
+#: domains/inventory/services/inventory_service.py:1002
+#: domains/inventory/services/inventory_service.py:1095
+msgid "Quantity must be greater than zero."
+msgstr ""
+
+#: domains/cart/services.py:369 domains/catalog/api/views.py:971
+#: domains/catalog/api/views.py:1008
+#, fuzzy
+#| msgid "Address not found."
+msgid "Variant not found."
+msgstr "آدرس پیدا نشد."
+
+#: domains/cart/services.py:405
+msgid "This item no longer exists."
+msgstr ""
+
+#: domains/cart/services.py:525 domains/preorder/services.py:68
+msgid "This product is not available for pre-order."
+msgstr ""
+
+#: domains/cart/services.py:545
+#, fuzzy
+#| msgid "Address not found."
+msgid "Cart item not found."
+msgstr "آدرس پیدا نشد."
+
+#: domains/cart/views.py:43
+msgid "Added to cart."
+msgstr ""
+
+#: domains/cart/views.py:65
+#, fuzzy
+#| msgid "Profile updated."
+msgid "Quantity updated."
+msgstr "پروفایل به‌روزرسانی شد."
+
+#: domains/cart/views.py:74
+msgid "Removed from cart."
+msgstr ""
+
+#: domains/cart/views.py:83
+msgid "Cart cleared."
+msgstr ""
+
+#: domains/cart/views.py:96 domains/customer/admin_views.py:121
+#: domains/customer/views.py:227
+msgid "Address updated."
+msgstr "آدرس به‌روزرسانی شد."
+
+#: domains/cart/views.py:107
+msgid "Moved to wishlist."
+msgstr ""
+
+#: domains/cart/views.py:120
+msgid "Moved to pre-order list."
+msgstr ""
+
+#: domains/cart/views.py:132
+msgid "Cart synchronized."
+msgstr ""
+
+#: domains/cart/views.py:194
+msgid "Cart merged."
+msgstr ""
+
+#: domains/catalog/api/views.py:95
+#, fuzzy
+#| msgid "Address created."
+msgid "Category created."
+msgstr "آدرس ایجاد شد."
+
+#: domains/catalog/api/views.py:106 domains/catalog/api/views.py:200
+#: domains/catalog/api/views.py:265 domains/content/views.py:310
+#, fuzzy
+#| msgid "Address not found."
+msgid "Category not found."
+msgstr "آدرس پیدا نشد."
+
+#: domains/catalog/api/views.py:119
+#, fuzzy
+#| msgid "Profile updated."
+msgid "Category updated."
+msgstr "پروفایل به‌روزرسانی شد."
+
+#: domains/catalog/api/views.py:124
+#, fuzzy
+#| msgid "Address deleted."
+msgid "Category deleted."
+msgstr "آدرس حذف شد."
+
+#: domains/catalog/api/views.py:252
+msgid "Category details updated."
+msgstr ""
+
+#: domains/catalog/api/views.py:291
+msgid "Category variant attributes updated."
+msgstr ""
+
+#: domains/catalog/api/views.py:329
+#, fuzzy
+#| msgid "Address created."
+msgid "Brand created."
+msgstr "آدرس ایجاد شد."
+
+#: domains/catalog/api/views.py:340 domains/content/views.py:322
+#, fuzzy
+#| msgid "Address not found."
+msgid "Brand not found."
+msgstr "آدرس پیدا نشد."
+
+#: domains/catalog/api/views.py:350
+#, fuzzy
+#| msgid "Profile updated."
+msgid "Brand updated."
+msgstr "پروفایل به‌روزرسانی شد."
+
+#: domains/catalog/api/views.py:357
+#, fuzzy
+#| msgid "Address deleted."
+msgid "Brand deleted."
+msgstr "آدرس حذف شد."
+
+#: domains/catalog/api/views.py:408
+msgid "Variant attribute created."
+msgstr ""
+
+#: domains/catalog/api/views.py:421
+msgid "Variant attribute not found."
+msgstr ""
+
+#: domains/catalog/api/views.py:438
+msgid "Variant attribute updated."
+msgstr ""
+
+#: domains/catalog/api/views.py:445
+msgid "Variant attribute deleted."
+msgstr ""
+
+#: domains/catalog/api/views.py:466
+msgid "Variant option created."
+msgstr ""
+
+#: domains/catalog/api/views.py:479
+msgid "Variant option not found."
+msgstr ""
+
+#: domains/catalog/api/views.py:492
+#, fuzzy
+#| msgid "Profile updated."
+msgid "Variant option updated."
+msgstr "پروفایل به‌روزرسانی شد."
+
+#: domains/catalog/api/views.py:499
+msgid "Variant option deleted."
+msgstr ""
+
+#: domains/catalog/api/views.py:538
+msgid "Category detail created."
+msgstr ""
+
+#: domains/catalog/api/views.py:549
+msgid "Category detail not found."
+msgstr ""
+
+#: domains/catalog/api/views.py:562
+#, fuzzy
+#| msgid "Profile updated."
+msgid "Category detail updated."
+msgstr "پروفایل به‌روزرسانی شد."
+
+#: domains/catalog/api/views.py:567
+msgid "Category detail deleted."
+msgstr ""
+
+#: domains/catalog/api/views.py:672 domains/catalog/api/views.py:733
+#, fuzzy
+#| msgid "Address created."
+msgid "Product created."
+msgstr "آدرس ایجاد شد."
+
+#: domains/catalog/api/views.py:686 domains/catalog/api/views.py:744
+#: domains/catalog/api/views.py:774 domains/catalog/api/views.py:873
+#: domains/catalog/api/views.py:882 domains/catalog/api/views.py:905
+#: domains/catalog/api/views.py:916 domains/catalog/api/views.py:941
+#: domains/content/views.py:298 domains/preorder/services.py:60
+#: domains/wishlist/services.py:58
+#, fuzzy
+#| msgid "Address not found."
+msgid "Product not found."
+msgstr "آدرس پیدا نشد."
+
+#: domains/catalog/api/views.py:703 domains/catalog/api/views.py:757
+#, fuzzy
+#| msgid "Profile updated."
+msgid "Product updated."
+msgstr "پروفایل به‌روزرسانی شد."
+
+#: domains/catalog/api/views.py:762
+#, fuzzy
+#| msgid "Address deleted."
+msgid "Product deleted."
+msgstr "آدرس حذف شد."
+
+#: domains/catalog/api/views.py:798
+msgid "File attached to product."
+msgstr ""
+
+#: domains/catalog/api/views.py:809
+#, fuzzy
+#| msgid "Address not found."
+msgid "Product file not found."
+msgstr "آدرس پیدا نشد."
+
+#: domains/catalog/api/views.py:833
+#, fuzzy
+#| msgid "Profile updated."
+msgid "Product file updated."
+msgstr "پروفایل به‌روزرسانی شد."
+
+#: domains/catalog/api/views.py:839
+msgid "File detached from product."
+msgstr ""
+
+#: domains/catalog/api/views.py:855
+#, fuzzy
+#| msgid "Profile updated."
+msgid "Product files reordered."
+msgstr "پروفایل به‌روزرسانی شد."
+
+#: domains/catalog/api/views.py:889
+msgid "Product details added."
+msgstr ""
+
+#: domains/catalog/api/views.py:926
+msgid "Variant added."
+msgstr ""
+
+#: domains/catalog/api/views.py:989
+#, fuzzy
+#| msgid "Profile updated."
+msgid "Variant updated."
+msgstr "پروفایل به‌روزرسانی شد."
+
+#: domains/catalog/api/views.py:997
+#, fuzzy
+#| msgid "Address deleted."
+msgid "Variant deleted."
+msgstr "آدرس حذف شد."
+
+#: domains/catalog/api/views.py:1014
+msgid "This field is required."
+msgstr ""
+
+#: domains/catalog/api/views.py:1020
+#, fuzzy
+#| msgid "Address updated."
+msgid "Variant status updated."
+msgstr "آدرس به‌روزرسانی شد."
+
+#: domains/catalog/services/brand_service.py:31
+#: domains/catalog/services/brand_service.py:44
+#: domains/catalog/services/brand_service.py:58
+msgid "A brand with this name already exists."
+msgstr ""
+
+#: domains/catalog/services/brand_service.py:84
+msgid "A brand used by products cannot be deleted."
+msgstr ""
+
+#: domains/catalog/services/category_service.py:40
+#: domains/catalog/services/category_service.py:61
+#: domains/catalog/services/category_service.py:73
+msgid "A category with this name already exists."
+msgstr ""
+
+#: domains/catalog/services/category_service.py:48
+msgid "A category cannot use itself or a descendant as its parent."
+msgstr ""
+
+#: domains/catalog/services/category_service.py:243
+#, python-brace-format
+msgid "Cannot remove details used by products: {names}."
+msgstr ""
+
+#: domains/catalog/services/detail_service.py:33
+#: domains/catalog/services/detail_service.py:59
+#: domains/catalog/services/detail_service.py:71
+msgid "A category detail with this name already exists."
+msgstr ""
+
+#: domains/catalog/services/detail_service.py:42
+msgid "Select details require at least one option."
+msgstr ""
+
+#: domains/catalog/services/detail_service.py:150
 #, python-brace-format
 msgid "'{value}' is not a valid option. Choices: {choices}"
 msgstr "'{value}' یک گزینه معتبر نیست. گزینه‌ها: {choices}"
 
-#: backend/domains/customer/serializers/customer.py:22
-msgid "Phone number already registered."
-msgstr "شماره تلفن قبلاً ثبت شده است."
+#: domains/catalog/services/product_service.py:329
+msgid "Changing the category caused a generated SKU conflict."
+msgstr ""
 
-#: backend/domains/customer/serializers/customer.py:27
-msgid "Passwords do not match."
-msgstr "رمز عبور مطابقت ندارد."
-
-#: backend/domains/customer/services/auth_service.py:26
-#: backend/domains/customer/services/auth_service.py:29
-msgid "Invalid phone number or password."
-msgstr "شماره تلفن یا رمز عبور اشتباه است."
-
-#: backend/domains/customer/services/auth_service.py:32
-msgid "Account is inactive."
-msgstr "حساب کاربری غیرفعال است."
-
-msgid "Please wait before requesting another code."
-msgstr "لطفاً پیش از درخواست کد جدید کمی صبر کنید."
-
-#, python-format
-msgid "Your UzShop login confirmation code is %(code)s. It expires in %(minutes)s minutes."
-msgstr "کد تایید ورود شما به ازشاپ %(code)s است. این کد تا %(minutes)s دقیقه معتبر است."
-
-msgid "The confirmation code could not be sent."
-msgstr "ارسال کد تایید انجام نشد."
-
-msgid "The confirmation code is invalid or expired."
-msgstr "کد تایید نامعتبر است یا منقضی شده است."
-
-msgid "The confirmation request is no longer valid."
-msgstr "درخواست تایید دیگر معتبر نیست."
-
-msgid "Confirmation code sent."
-msgstr "کد تایید ارسال شد."
-
-msgid "Enter a valid mobile number."
-msgstr "شماره موبایل معتبر وارد کنید."
-
-#, python-format
-msgid "Your UzShop password reset code is %(code)s. It expires in %(minutes)s minutes."
-msgstr "کد بازیابی رمز عبور شما در ازشاپ %(code)s است. این کد تا %(minutes)s دقیقه معتبر است."
-
-msgid "If an eligible account exists, a confirmation code has been sent."
-msgstr "اگر حساب واجد شرایطی وجود داشته باشد، کد تایید ارسال شده است."
-
-msgid "Password reset successful."
-msgstr "بازیابی رمز عبور با موفقیت انجام شد."
-
-msgid "Phone number is already verified."
-msgstr "شماره موبایل قبلاً تایید شده است."
-
-#, python-format
-msgid "Your UzShop phone verification code is %(code)s. It expires in %(minutes)s minutes."
-msgstr "کد تایید شماره موبایل شما در ازشاپ %(code)s است. این کد تا %(minutes)s دقیقه معتبر است."
-
-msgid "Phone number verified."
-msgstr "شماره موبایل تایید شد."
-
-#: backend/domains/customer/views.py:28
-msgid "Registration successful."
-msgstr "ثبت نام با موفقیت انجام شد."
-
-#: backend/domains/customer/views.py:44
-msgid "Login successful."
-msgstr "ورود با موفقیت انجام شد."
-
-#: backend/domains/customer/views.py:61
-msgid "Profile updated."
-msgstr "پروفایل به‌روزرسانی شد."
-
-#: backend/domains/customer/views.py:81
-msgid "Address created."
-msgstr "آدرس ایجاد شد."
-
-#: backend/domains/customer/views.py:91
-msgid "Address not found."
-msgstr "آدرس پیدا نشد."
-
-#: backend/domains/customer/views.py:108
-msgid "Address updated."
-msgstr "آدرس به‌روزرسانی شد."
-
-#: backend/domains/customer/views.py:114
-msgid "Address deleted."
-msgstr "آدرس حذف شد."
-
-#: backend/domains/customer/views.py:135
-msgid "Preferences updated."
-msgstr "تنظیمات به‌روزرسانی شد."
-
-#: backend/domains/users/services/auth_service.py:12
-msgid "Invalid username or password."
-msgstr "نام کاربری یا رمز عبور اشتباه است."
-
-#: backend/domains/users/services/auth_service.py:15
-msgid "User account is inactive."
-msgstr "حساب کاربری غیرفعال است."
-
-#: backend/domains/users/services/auth_service.py:18
-msgid "You do not have permission to access this resource."
-msgstr "شما مجوز دسترسی به این منبع را ندارید."
-
-#: domains/catalog/services/product_service.py
+#: domains/catalog/services/product_service.py:344
+#: domains/catalog/services/product_service.py:432
 msgid "One or more details are not assigned to the selected category."
 msgstr "یک یا چند جزئیات به دسته‌بندی انتخاب‌شده اختصاص ندارند."
 
-#: domains/catalog/services/product_service.py
+#: domains/catalog/services/product_service.py:383
 #, python-brace-format
 msgid "Required product details are missing: {names}."
 msgstr "جزئیات الزامی محصول وارد نشده‌اند: {names}."
 
-#: domains/catalog/services/product_service.py
+#: domains/catalog/services/product_service.py:397
 #, python-brace-format
 msgid "'{value}' is not valid for {name}."
 msgstr "مقدار '{value}' برای {name} معتبر نیست."
 
-#: domains/catalog/services/product_service.py
+#: domains/catalog/services/product_service.py:407
 #, python-brace-format
 msgid "{name} must be a number."
 msgstr "{name} باید عدد باشد."
 
-#: domains/catalog/services/product_service.py
+#: domains/catalog/services/product_service.py:411
 #, python-brace-format
 msgid "{name} must be a finite number."
 msgstr "{name} باید یک عدد متناهی باشد."
 
-#: domains/catalog/services/product_service.py
+#: domains/catalog/services/product_service.py:421
 msgid "Each product detail can only be submitted once."
 msgstr "هر جزئیات محصول فقط یک بار قابل ارسال است."
 
+#: domains/catalog/services/product_service.py:519
+#: domains/catalog/services/product_service.py:585
+msgid "This option combination or generated SKU already exists."
+msgstr ""
+
+#: domains/catalog/services/product_service.py:601
+msgid "At least one variant selection is required."
+msgstr ""
+
+#: domains/catalog/services/product_service.py:606
+#, fuzzy
+#| msgid "Each product detail can only be submitted once."
+msgid "Each attribute can only be selected once."
+msgstr "هر جزئیات محصول فقط یک بار قابل ارسال است."
+
+#: domains/catalog/services/product_service.py:611
+msgid "Each option must belong to its submitted attribute."
+msgstr ""
+
+#: domains/catalog/services/variant_attribute_service.py:26
+msgid "SKU code must contain only letters and numbers."
+msgstr ""
+
+#: domains/catalog/services/variant_attribute_service.py:70
+msgid "An attribute used by product variants cannot be deleted."
+msgstr ""
+
+#: domains/catalog/services/variant_attribute_service.py:78
+msgid "An option used by product variants cannot be deleted."
+msgstr ""
+
+#: domains/catalog/services/variant_attribute_service.py:92
+#: domains/catalog/services/variant_attribute_service.py:105
+msgid "A variant attribute with this name already exists."
+msgstr ""
+
+#: domains/catalog/services/variant_attribute_service.py:122
+msgid "The option name or SKU code is already in use."
+msgstr ""
+
+#: domains/catalog/services/variant_attribute_service.py:131
+msgid "An option used by variants cannot change attribute."
+msgstr ""
+
+#: domains/catalog/services/variant_attribute_service.py:152
+msgid "The option name, SKU code, or generated variant SKU conflicts."
+msgstr ""
+
+#: domains/content/views.py:144 domains/content/views.py:172
+#: domains/content/views.py:286 domains/content/views.py:367
+#: domains/content/views.py:370
+#, fuzzy
+#| msgid "Address not found."
+msgid "Landing page not found."
+msgstr "آدرس پیدا نشد."
+
+#: domains/content/views.py:205 domains/content/views.py:233
+#: domains/content/views.py:354 domains/content/views.py:410
+#: domains/content/views.py:413 domains/content/views.py:432
+#: domains/content/views.py:435
+#, fuzzy
+#| msgid "Address not found."
+msgid "Page not found."
+msgstr "آدرس پیدا نشد."
+
+#: domains/content/views.py:332
+#, fuzzy
+#| msgid "Address not found."
+msgid "SEO resource not found."
+msgstr "آدرس پیدا نشد."
+
+#: domains/customer/admin_views.py:53 domains/customer/admin_views.py:83
+#, fuzzy
+#| msgid "Address not found."
+msgid "Customer not found."
+msgstr "آدرس پیدا نشد."
+
+#: domains/customer/admin_views.py:64
+#, fuzzy
+#| msgid "Profile updated."
+msgid "Customer updated."
+msgstr "پروفایل به‌روزرسانی شد."
+
+#: domains/customer/admin_views.py:96 domains/customer/views.py:200
+msgid "Address created."
+msgstr "آدرس ایجاد شد."
+
+#: domains/customer/admin_views.py:108 domains/customer/views.py:210
+msgid "Address not found."
+msgstr "آدرس پیدا نشد."
+
+#: domains/customer/admin_views.py:125 domains/customer/views.py:233
+msgid "Address deleted."
+msgstr "آدرس حذف شد."
+
+#: domains/customer/serializers/customer.py:27
+#: domains/customer/serializers/customer.py:46
+#: domains/customer/serializers/customer.py:66
+#: domains/vendor/serializers/vendor.py:28
+#: domains/vendor/serializers/vendor.py:57
+#: domains/vendor/serializers/vendor.py:77
+msgid "Enter a valid mobile number."
+msgstr "شماره موبایل معتبر وارد کنید."
+
+#: domains/customer/serializers/customer.py:29
+#: domains/vendor/serializers/vendor.py:30
+msgid "Phone number already registered."
+msgstr "شماره تلفن قبلاً ثبت شده است."
+
+#: domains/customer/serializers/customer.py:34
+#: domains/customer/serializers/customer.py:80
+#: domains/vendor/serializers/vendor.py:40
+#: domains/vendor/serializers/vendor.py:91
+msgid "Passwords do not match."
+msgstr "رمز عبور مطابقت ندارد."
+
+#: domains/customer/serializers/customer.py:127
+#: domains/users/serializers/profile.py:92
+#: domains/vendor/serializers/vendor.py:138
+#, fuzzy
+#| msgid "Passwords do not match."
+msgid "Password confirmation does not match."
+msgstr "رمز عبور مطابقت ندارد."
+
+#: domains/customer/services/auth_service.py:33
+#: domains/vendor/services/auth_service.py:32
+msgid "Please wait before requesting another code."
+msgstr "لطفاً پیش از درخواست کد جدید کمی صبر کنید."
+
+#: domains/customer/services/auth_service.py:73
+#: domains/vendor/services/auth_service.py:145
+#, python-format
+msgid ""
+"Your UzShop login confirmation code is %(code)s. It expires in %(minutes)s "
+"minutes."
+msgstr ""
+"کد تایید ورود شما به ازشاپ %(code)s است. این کد تا %(minutes)s دقیقه معتبر "
+"است."
+
+#: domains/customer/services/auth_service.py:85
+#: domains/customer/services/auth_service.py:90
+#: domains/customer/services/auth_service.py:99
+#: domains/customer/services/auth_service.py:172
+#: domains/customer/services/auth_service.py:177 domains/customer/views.py:81
+#: domains/vendor/services/auth_service.py:160 domains/vendor/views.py:94
+#: domains/vendor/views/__init__.py:94
+msgid "The confirmation code could not be sent."
+msgstr "ارسال کد تایید انجام نشد."
+
+#: domains/customer/services/auth_service.py:117
+#: domains/customer/services/auth_service.py:126
+#: domains/customer/services/auth_service.py:198
+#: domains/customer/services/auth_service.py:202
+#: domains/customer/services/auth_service.py:211
+#: domains/customer/services/auth_service.py:221
+#: domains/customer/services/auth_service.py:307
+#: domains/customer/services/auth_service.py:317
+#: domains/customer/services/auth_service.py:326
+#: domains/customer/services/auth_service.py:330
+#: domains/customer/services/auth_service.py:334
+#: domains/customer/services/auth_service.py:348
+#: domains/vendor/services/auth_service.py:93
+#: domains/vendor/services/auth_service.py:102
+#: domains/vendor/services/auth_service.py:178
+#: domains/vendor/services/auth_service.py:187
+#: domains/vendor/services/auth_service.py:245
+#: domains/vendor/services/auth_service.py:249
+#: domains/vendor/services/auth_service.py:258
+#: domains/vendor/services/auth_service.py:268
+#: domains/vendor/services/auth_service.py:335
+#: domains/vendor/services/auth_service.py:345
+#: domains/vendor/services/auth_service.py:354
+#: domains/vendor/services/auth_service.py:358
+#: domains/vendor/services/auth_service.py:362
+#: domains/vendor/services/auth_service.py:376
+msgid "The confirmation code is invalid or expired."
+msgstr "کد تایید نامعتبر است یا منقضی شده است."
+
+#: domains/customer/services/auth_service.py:131
+#: domains/vendor/services/auth_service.py:107
+#: domains/vendor/services/auth_service.py:192
+msgid "The confirmation request is no longer valid."
+msgstr "درخواست تایید دیگر معتبر نیست."
+
+#: domains/customer/services/auth_service.py:134
+#: domains/customer/services/auth_service.py:365
+#: domains/vendor/services/auth_service.py:195
+#: domains/vendor/services/auth_service.py:393
+msgid "Account is inactive."
+msgstr "حساب کاربری غیرفعال است."
+
+#: domains/customer/services/auth_service.py:143
+#: domains/vendor/services/auth_service.py:204
+msgid "Phone number is already verified."
+msgstr "شماره موبایل قبلاً تایید شده است."
+
+#: domains/customer/services/auth_service.py:160
+#: domains/vendor/services/auth_service.py:218
+#, python-format
+msgid ""
+"Your UzShop phone verification code is %(code)s. It expires in %(minutes)s "
+"minutes."
+msgstr ""
+"کد تایید شماره موبایل شما در ازشاپ %(code)s است. این کد تا %(minutes)s دقیقه "
+"معتبر است."
+
+#: domains/customer/services/auth_service.py:283
+#: domains/vendor/services/auth_service.py:297
+#, python-format
+msgid ""
+"Your UzShop password reset code is %(code)s. It expires in %(minutes)s "
+"minutes."
+msgstr ""
+"کد بازیابی رمز عبور شما در ازشاپ %(code)s است. این کد تا %(minutes)s دقیقه "
+"معتبر است."
+
+#: domains/customer/services/auth_service.py:359
+#: domains/customer/services/auth_service.py:362
+#: domains/vendor/services/auth_service.py:387
+#: domains/vendor/services/auth_service.py:390
+msgid "Invalid phone number or password."
+msgstr "شماره تلفن یا رمز عبور اشتباه است."
+
+#: domains/customer/services/auth_service.py:388
+#: domains/users/services/management_service.py:99
+#: domains/users/services/profile_service.py:57
+#: domains/vendor/services/auth_service.py:431
+msgid "The current password is incorrect."
+msgstr ""
+
+#: domains/customer/views.py:48
+msgid "Registration successful."
+msgstr "ثبت نام با موفقیت انجام شد."
+
+#: domains/customer/views.py:73 domains/customer/views.py:146
+#: domains/vendor/views.py:46 domains/vendor/views.py:86
+#: domains/vendor/views.py:159 domains/vendor/views/__init__.py:46
+#: domains/vendor/views/__init__.py:86 domains/vendor/views/__init__.py:159
+msgid "Confirmation code sent."
+msgstr "کد تایید ارسال شد."
+
+#: domains/customer/views.py:95 domains/vendor/views.py:108
+#: domains/vendor/views/__init__.py:108
+msgid "Login successful."
+msgstr "ورود با موفقیت انجام شد."
+
+#: domains/customer/views.py:112 domains/vendor/views.py:125
+#: domains/vendor/views/__init__.py:125
+msgid "If an eligible account exists, a confirmation code has been sent."
+msgstr "اگر حساب واجد شرایطی وجود داشته باشد، کد تایید ارسال شده است."
+
+#: domains/customer/views.py:130 domains/vendor/views.py:143
+#: domains/vendor/views/__init__.py:143
+msgid "Password reset successful."
+msgstr "بازیابی رمز عبور با موفقیت انجام شد."
+
+#: domains/customer/views.py:163 domains/vendor/views.py:176
+#: domains/vendor/views/__init__.py:176
+msgid "Phone number verified."
+msgstr "شماره موبایل تایید شد."
+
+#: domains/customer/views.py:180 domains/users/views.py:135
+#: domains/vendor/views.py:194 domains/vendor/views/__init__.py:194
+msgid "Profile updated."
+msgstr "پروفایل به‌روزرسانی شد."
+
+#: domains/customer/views.py:249 domains/vendor/views.py:229
+#: domains/vendor/views/__init__.py:229
+msgid "Preferences updated."
+msgstr "تنظیمات به‌روزرسانی شد."
+
+#: domains/customer/views.py:266 domains/users/views.py:153
+#: domains/users/views.py:266 domains/vendor/views.py:212
+#: domains/vendor/views/__init__.py:212
+#, fuzzy
+#| msgid "Passwords do not match."
+msgid "Password changed."
+msgstr "رمز عبور مطابقت ندارد."
+
+#: domains/inventory/services/inventory_pricing_service.py:48
+#: domains/inventory/services/inventory_pricing_service.py:312
+#: domains/inventory/services/inventory_reporting_service.py:173
+msgid "Unsupported pricing cost strategy."
+msgstr ""
+
+#: domains/inventory/services/inventory_pricing_service.py:55
+msgid "Expected profit percentage must be greater than or equal to zero."
+msgstr ""
+
+#: domains/inventory/services/inventory_pricing_service.py:66
+msgid ""
+"No active business offer exists for this variant. Create a BusinessOffer "
+"before updating pricing configuration."
+msgstr ""
+
+#: domains/inventory/services/inventory_pricing_service.py:92
+msgid ""
+"No active business offer exists for this variant. Create a BusinessOffer "
+"before applying a price."
+msgstr ""
+
+#: domains/inventory/services/inventory_pricing_service.py:105
+msgid ""
+"A configured pricing strategy and available received supply are required "
+"before applying a price."
+msgstr ""
+
+#: domains/inventory/services/inventory_pricing_service.py:117
+msgid "Price must be greater than or equal to zero."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:166
+msgid "Could not generate a unique warehouse code."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:178
+msgid "Switch another warehouse to default instead."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:187
+msgid "The default warehouse cannot be changed while it contains stock."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:201
+msgid ""
+"The default warehouse cannot be deleted. Switch another warehouse to default "
+"first."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:207
+msgid "This warehouse cannot be deleted while it contains stock."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:279
+msgid "Inventory setup requires exactly one default warehouse."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:303
+msgid "This field is required for normal inventory."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:313
+msgid "Inventory must satisfy 0 <= reserved <= sellable <= quantity."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:337
+msgid "This field is required for serialized inventory."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:355
+#: domains/inventory/services/inventory_service.py:657
+msgid "Inventory setup is missing the serial_number attribute definition."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:370
+msgid "Each serialized row can only appear once."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:373
+msgid "One or more serialized row IDs do not belong to this variant."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:380
+msgid "Sold, reserved, or historical serialized rows cannot be deleted."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:385
+#: domains/inventory/services/inventory_service.py:662
+msgid "Serial number cannot be blank."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:389
+#: domains/inventory/services/inventory_service.py:407
+#: domains/inventory/services/inventory_service.py:469
+#: domains/inventory/services/inventory_service.py:667
+#: domains/inventory/services/inventory_service.py:700
+msgid "Serial numbers must be globally unique, ignoring case."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:428
+msgid "Sold, reserved, or historical serialized rows cannot be edited."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:632
+msgid "A variant with stock cannot be deleted."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:709
+#, python-format
+msgid "Cannot transition from \"%(current)s\" to \"%(target)s\"."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:745
+#: domains/inventory/services/inventory_service.py:778
+#: domains/inventory/services/inventory_service.py:796
+#: domains/inventory/services/inventory_service.py:821
+#: domains/inventory/services/inventory_service.py:869
+#: domains/inventory/services/inventory_service.py:917
+#: domains/inventory/services/inventory_service.py:971
+#: domains/inventory/services/inventory_service.py:1013
+#: domains/inventory/services/inventory_service.py:1043
+#, fuzzy
+#| msgid "Address not found."
+msgid "Inventory not found."
+msgstr "آدرس پیدا نشد."
+
+#: domains/inventory/services/inventory_service.py:750
+msgid "Unit count is required for serialized inventory."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:754
+msgid "Unit count must be greater than zero."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:781
+msgid "Use receive_stock for serialized inventory."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:799
+msgid "Use unit-level operations for serialized inventory."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:808
+#, python-format
+msgid "Cannot decrease more than sellable. Available: %(available)s."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:826
+#: domains/inventory/services/inventory_service.py:874
+#: domains/inventory/services/inventory_service.py:922
+#: domains/inventory/services/inventory_service.py:976
+#: domains/inventory/services/inventory_service.py:1123
+msgid "Unit IDs are required for serialized inventory."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:835
+#: domains/inventory/services/inventory_service.py:883
+#: domains/inventory/services/inventory_service.py:931
+#: domains/inventory/services/inventory_service.py:985
+#: domains/inventory/services/inventory_service.py:1029
+#: domains/inventory/services/inventory_service.py:1059
+#: domains/inventory/services/inventory_service.py:1132
+msgid "One or more unit IDs are invalid."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:841
+#, python-format
+msgid "Unit %(id)s is in state \"%(state)s\" and cannot be reserved."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:857
+#, python-format
+msgid "Cannot reserve more than available. Available: %(available)s."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:889
+#, python-format
+msgid "Unit %(id)s is in state \"%(state)s\" and is not reserved."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:905
+#, python-format
+msgid "Cannot release more than reserved. Reserved: %(reserved)s."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:940
+#, python-format
+msgid "Unit %(id)s is in state \"%(state)s\" and cannot be sold."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:956
+#, python-format
+msgid "Cannot sell more than sellable. Sellable: %(sellable)s."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:991
+#, python-format
+msgid "Unit %(id)s is in state \"%(state)s\" and cannot be returned."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:1016
+msgid "Mark damaged is only available for serialized inventory."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:1020
+#: domains/inventory/services/inventory_service.py:1050
+msgid "Unit IDs are required."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:1046
+msgid "Mark lost is only available for serialized inventory."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:1074
+msgid "Source inventory not found."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:1076
+msgid "Destination inventory not found."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:1078
+msgid "Source and destination cannot be the same."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:1081
+msgid "Source and destination must hold the same variant."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:1100
+#, python-format
+msgid "Cannot transfer more than sellable. Available: %(available)s."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:1141
+#, python-format
+msgid "Unit %(id)s is in state \"%(state)s\" and cannot be transferred."
+msgstr ""
+
+#: domains/inventory/services/inventory_supply_service.py:162
+msgid "Received supplies cannot change variant, warehouse, or quantity."
+msgstr ""
+
+#: domains/inventory/services/inventory_supply_service.py:177
+msgid "Quantity cannot change because this supply has already been consumed."
+msgstr ""
+
+#: domains/inventory/services/inventory_supply_service.py:199
+msgid "Received supplies cannot be deleted."
+msgstr ""
+
+#: domains/inventory/services/inventory_supply_service.py:203
+msgid "Supply has already been consumed and cannot be deleted."
+msgstr ""
+
+#: domains/inventory/services/inventory_supply_service.py:219
+msgid "This supply has already been received."
+msgstr ""
+
+#: domains/inventory/services/inventory_supply_service.py:229
+msgid "Serial items are only accepted for serialized inventory."
+msgstr ""
+
+#: domains/inventory/services/inventory_supply_service.py:293
+msgid "This order item has already consumed its supply layers."
+msgstr ""
+
+#: domains/inventory/services/inventory_supply_service.py:362
+#: domains/inventory/services/inventory_supply_service.py:431
+#, python-format
+msgid "Supply %(reference)s does not cover %(needed)s consumed units."
+msgstr ""
+
+#: domains/inventory/services/inventory_supply_service.py:395
+#, python-format
+msgid "Supplies do not cover %(needed)s units for this sale."
+msgstr ""
+
+#: domains/inventory/services/inventory_supply_service.py:473
+msgid "Reversal quantity must be greater than zero."
+msgstr ""
+
+#: domains/inventory/services/inventory_supply_service.py:478
+#, python-format
+msgid "Only %(available)s consumed units are reversible."
+msgstr ""
+
+#: domains/inventory/services/inventory_supply_service.py:506
+msgid "Unsupported supply cost type."
+msgstr ""
+
+#: domains/inventory/services/inventory_supply_service.py:510
+msgid "A valid amount is required."
+msgstr ""
+
+#: domains/inventory/services/inventory_supply_service.py:513
+msgid "Amount must be greater than or equal to zero."
+msgstr ""
+
+#: domains/order/admin_views.py:34
+#, fuzzy
+#| msgid "You do not have permission to access this resource."
+msgid "You do not have permission to view return requests."
+msgstr "شما مجوز دسترسی به این منبع را ندارید."
+
+#: domains/order/admin_views.py:65 domains/order/admin_views.py:96
+#: domains/order/admin_views.py:110
+#, fuzzy
+#| msgid "Address not found."
+msgid "Order not found."
+msgstr "آدرس پیدا نشد."
+
+#: domains/order/admin_views.py:132
+#, fuzzy
+#| msgid "Address not found."
+msgid "Return request not found."
+msgstr "آدرس پیدا نشد."
+
+#: domains/order/services.py:179
+msgid "Item is no longer available."
+msgstr ""
+
+#: domains/order/services.py:182
+#, python-format
+msgid "Item %(sku)s is not available for purchase."
+msgstr ""
+
+#: domains/order/services.py:188 domains/order/services.py:334
+#: domains/order/services.py:361 domains/order/services.py:384
+#: domains/order/services.py:406
+#, python-format
+msgid "Item %(sku)s does not have enough stock."
+msgstr ""
+
+#: domains/order/services.py:200
+msgid "Set a delivery address before checkout."
+msgstr ""
+
+#: domains/order/services.py:204
 msgid "No active payment channel is available."
 msgstr "در حال حاضر کانال پرداخت فعالی وجود ندارد."
+
+#: domains/order/services.py:217
+msgid "The cart is empty."
+msgstr ""
+
+#: domains/order/services.py:328 domains/order/services.py:348
+msgid "No inventory is configured for this item."
+msgstr ""
+
+#: domains/order/services.py:379
+msgid "No warehouse is configured for this item."
+msgstr ""
+
+#: domains/order/services.py:989
+msgid "This action is not available for the current order status."
+msgstr ""
+
+#: domains/order/services.py:994
+msgid "Create a return request through the returns endpoint."
+msgstr ""
+
+#: domains/order/services.py:998
+msgid "This actor is not allowed to execute the action."
+msgstr ""
+
+#: domains/order/services.py:1322
+msgid "Unknown return action."
+msgstr ""
+
+#: domains/order/services.py:1333
+msgid "This action is not available for the current return status."
+msgstr ""
+
+#: domains/order/services.py:1408
+msgid "This order is not currently eligible for return."
+msgstr ""
+
+#: domains/order/services.py:1419
+msgid "Every order item must belong to the selected order."
+msgstr ""
+
+#: domains/order/services.py:1438
+#, python-format
+msgid "Order item %(item_id)s has only %(available)s available to return."
+msgstr ""
+
+#: domains/order/views.py:36
+#, fuzzy
+#| msgid "Address created."
+msgid "Order created."
+msgstr "آدرس ایجاد شد."
+
+#: domains/order/views.py:81
+msgid "Payment submitted for review."
+msgstr ""
+
+#: domains/order/views.py:130
+msgid "Order cancelled."
+msgstr ""
+
+#: domains/order/views.py:164
+#, fuzzy
+#| msgid "Address created."
+msgid "Return request created."
+msgstr "آدرس ایجاد شد."
+
+#: domains/preorder/admin_views.py:42 domains/preorder/services.py:83
+#, fuzzy
+#| msgid "Address not found."
+msgid "Pre-order item not found."
+msgstr "آدرس پیدا نشد."
+
+#: domains/preorder/services.py:74
+msgid "This product is already in your pre-order list."
+msgstr ""
+
+#: domains/preorder/views.py:48
+msgid "Added to pre-order list."
+msgstr ""
+
+#: domains/preorder/views.py:79
+msgid "Removed from pre-order list."
+msgstr ""
+
+#: domains/users/serializers/profile.py:14
+msgid "This field is not allowed."
+msgstr ""
+
+#: domains/users/serializers/profile.py:74
+msgid "This field may not be blank."
+msgstr ""
+
+#: domains/users/services/auth_service.py:15
+msgid "Invalid username or password."
+msgstr "نام کاربری یا رمز عبور اشتباه است."
+
+#: domains/users/services/auth_service.py:18
+msgid "User account is inactive."
+msgstr "حساب کاربری غیرفعال است."
+
+#: domains/users/services/auth_service.py:21
+msgid "You do not have permission to access this resource."
+msgstr "شما مجوز دسترسی به این منبع را ندارید."
+
+#: domains/users/services/management_service.py:73
+msgid "Use the administrator password reset endpoint."
+msgstr ""
+
+#: domains/users/services/management_service.py:93
+msgid "Only a superuser can reset administrator passwords."
+msgstr ""
+
+#: domains/users/services/management_service.py:95
+msgid "Use your profile to change your own password."
+msgstr ""
+
+#: domains/users/services/management_service.py:97
+#, fuzzy
+#| msgid "Address not found."
+msgid "Administrator not found."
+msgstr "آدرس پیدا نشد."
+
+#: domains/users/services/profile_service.py:37
+msgid "The current password is required and must be correct."
+msgstr ""
+
+#: domains/users/services/profile_service.py:47
+msgid "A user with that username already exists."
+msgstr ""
+
+#: domains/users/views.py:64
+msgid "Role assignment access is required."
+msgstr ""
+
+#: domains/users/views.py:68 domains/users/views.py:78
+#, fuzzy
+#| msgid "You do not have permission to access this resource."
+msgid "Permission assignment access is required."
+msgstr "شما مجوز دسترسی به این منبع را ندارید."
+
+#: domains/users/views.py:82
+msgid "Admin assignment access is required."
+msgstr ""
+
+#: domains/users/views.py:92
+#, fuzzy
+#| msgid "Address not found."
+msgid "Admin not found."
+msgstr "آدرس پیدا نشد."
+
+#: domains/users/views.py:99
+#, fuzzy
+#| msgid "Address not found."
+msgid "Role not found."
+msgstr "آدرس پیدا نشد."
+
+#: domains/users/views.py:221
+#, fuzzy
+#| msgid "Address created."
+msgid "Admin created."
+msgstr "آدرس ایجاد شد."
+
+#: domains/users/views.py:247
+#, fuzzy
+#| msgid "Address updated."
+msgid "Admin updated."
+msgstr "آدرس به‌روزرسانی شد."
+
+#: domains/users/views.py:369
+#, fuzzy
+#| msgid "Address created."
+msgid "Role created."
+msgstr "آدرس ایجاد شد."
+
+#: domains/users/views.py:397
+#, fuzzy
+#| msgid "Profile updated."
+msgid "Role updated."
+msgstr "پروفایل به‌روزرسانی شد."
+
+#: domains/users/views.py:542
+#, fuzzy
+#| msgid "Address not found."
+msgid "Permission not found."
+msgstr "آدرس پیدا نشد."
+
+#: domains/vendor/admin_views.py:50
+#, fuzzy
+#| msgid "Address not found."
+msgid "Vendor not found."
+msgstr "آدرس پیدا نشد."
+
+#: domains/vendor/admin_views.py:61
+#, fuzzy
+#| msgid "Address updated."
+msgid "Vendor updated."
+msgstr "آدرس به‌روزرسانی شد."
+
+#: domains/vendor/serializers/vendor.py:35
+#, fuzzy
+#| msgid "Phone number already registered."
+msgid "National ID already registered."
+msgstr "شماره تلفن قبلاً ثبت شده است."
+
+#: domains/vendor/services/auth_service.py:65
+#, fuzzy, python-format
+#| msgid ""
+#| "Your UzShop login confirmation code is %(code)s. It expires in "
+#| "%(minutes)s minutes."
+msgid ""
+"Your UzShop registration confirmation code is %(code)s. It expires in "
+"%(minutes)s minutes."
+msgstr ""
+"کد تایید ورود شما به ازشاپ %(code)s است. این کد تا %(minutes)s دقیقه معتبر "
+"است."
+
+#: domains/vendor/services/auth_service.py:111
+#: domains/vendor/services/auth_service.py:120
+#, fuzzy
+#| msgid "Account is inactive."
+msgid "Account is not pending confirmation."
+msgstr "حساب کاربری غیرفعال است."
+
+#: domains/vendor/services/auth_service.py:396
+#, fuzzy
+#| msgid "Account is inactive."
+msgid "Account is not active."
+msgstr "حساب کاربری غیرفعال است."
+
+#: domains/vendor/views.py:61 domains/vendor/views/__init__.py:61
+#, fuzzy
+#| msgid "Registration successful."
+msgid "Registration confirmed."
+msgstr "ثبت نام با موفقیت انجام شد."
+
+#: domains/wishlist/admin_views.py:42 domains/wishlist/services.py:77
+#, fuzzy
+#| msgid "Address not found."
+msgid "Wishlist item not found."
+msgstr "آدرس پیدا نشد."
+
+#: domains/wishlist/services.py:68
+msgid "This product is already in your wishlist."
+msgstr ""
+
+#: domains/wishlist/views.py:48
+msgid "Added to wishlist."
+msgstr ""
+
+#: domains/wishlist/views.py:79
+msgid "Removed from wishlist."
+msgstr ""
