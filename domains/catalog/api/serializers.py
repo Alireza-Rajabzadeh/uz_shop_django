@@ -1,3 +1,4 @@
+from django.utils.translation import gettext as _
 from rest_framework import serializers
 from domains.catalog.models import (
     Brand, Category, CategoryStatus, CategoryDetail,
@@ -516,7 +517,9 @@ class NormalInventoryWriteSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         if attrs["sellable"] > attrs["quantity"]:
-            raise serializers.ValidationError("Sellable quantity cannot exceed physical quantity.")
+            raise serializers.ValidationError(
+                _("Sellable quantity cannot exceed physical quantity.")
+            )
         return attrs
 
 

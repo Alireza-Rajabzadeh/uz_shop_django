@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .views import (
+    VendorBusinessPaymentBankList,
     VendorBusinessPaymentChannelDetail,
     VendorBusinessPaymentChannelList,
     VendorBusinessPaymentChannelMethods,
@@ -12,6 +13,7 @@ from .views import (
 )
 
 urlpatterns = [
+    path("banks", VendorBusinessPaymentBankList.as_view()),
     path("methods", VendorBusinessPaymentMethodList.as_view()),
     path("methods/<int:method_id>", VendorBusinessPaymentMethodDetail.as_view()),
     path("channels", VendorBusinessPaymentChannelList.as_view()),

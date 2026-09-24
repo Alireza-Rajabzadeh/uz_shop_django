@@ -6,6 +6,7 @@ from rest_framework.views import APIView
 
 from core.responses import api_response
 from domains.catalog.models import Product, ProductVariants
+from domains.catalog.services.variant_service import VariantService
 from domains.inventory.api.serializers import (
     InventoryVariantDetailSerializer,
     PricingStrategyOptionSerializer,
@@ -66,12 +67,19 @@ class VendorInventoryAPIView(APIView):
             raise NotFound("Variant not found.")
         return variant
 
+    def _get_supply(self, supply_id, business):
+        supply = supply_service.get_supply(supply_id, business=business)
+        if supply is None:
+            from rest_framework.exceptions import NotFound
+            raise NotFound("Supply not found.")
+        return supply
+
 
 class VendorVariantInventoryDetailView(VendorInventoryAPIView):
     def get(self, request, variant_id):
         business = self._get_business(request)
         variant = self._get_vendor_variant(variant_id, business)
-        details = inventory_service.get_variant_details(variant)
+        details = inventory_service.get_variant_details(variant, business=business)
         return api_response(data=InventoryVariantDetailSerializer(details).data)
 
 
@@ -134,7 +142,10 @@ class VendorVariantSupplyListView(VendorInventoryAPIView):
     def get(self, request, variant_id):
         business = self._get_business(request)
         variant = self._get_vendor_variant(variant_id, business)
-        supplies = supply_service.search_supplies(variant_id=variant.id)
+        supplies = supply_service.search_supplies(
+            business=business,
+            variant_id=variant.id,
+        )
         rows = [supply_service.serialize_supply_row(item) for item in supplies]
         return api_response(data=SupplyListSerializer(rows, many=True).data)
 
@@ -143,32 +154,23 @@ class VendorVariantSupplyListView(VendorInventoryAPIView):
         variant = self._get_vendor_variant(variant_id, business)
         data = request.data.copy()
         data["variant_id"] = variant.id
-        from rest_framework.parsers import JSONParser
         serializer = SupplyWriteSerializer(data=data)
         serializer.is_valid(raise_exception=True)
         try:
-            supply = supply_service.create_supply(**serializer.validated_data)
-            supply.business = business
-            supply.save(update_fields=["business"])
+            supply = supply_service.create_supply(
+                business=business,
+                **serializer.validated_data,
+            )
         except InventorySupplyService.ValidationError as exc:
             from rest_framework.exceptions import ValidationError
             raise ValidationError(exc.errors) from exc
         return api_response(
             data=SupplyDetailSerializer(supply_service.serialize_supply_detail(supply)).data,
+            status_code=201,
         )
 
 
 class VendorSupplyDetailView(VendorInventoryAPIView):
-    def _get_supply(self, supply_id, business):
-        supply = supply_service.get_supply(supply_id)
-        if supply is None:
-            from rest_framework.exceptions import NotFound
-            raise NotFound("Supply not found.")
-        if supply.business_id and supply.business_id != business.id:
-            from rest_framework.exceptions import NotFound
-            raise NotFound("Supply not found.")
-        return supply
-
     def get(self, request, supply_id):
         business = self._get_business(request)
         supply = self._get_supply(supply_id, business)
@@ -204,13 +206,7 @@ class VendorSupplyDetailView(VendorInventoryAPIView):
 class VendorSupplyReceiveView(VendorInventoryAPIView):
     def post(self, request, supply_id):
         business = self._get_business(request)
-        supply = supply_service.get_supply(supply_id)
-        if supply is None:
-            from rest_framework.exceptions import NotFound
-            raise NotFound("Supply not found.")
-        if supply.business_id and supply.business_id != business.id:
-            from rest_framework.exceptions import NotFound
-            raise NotFound("Supply not found.")
+        supply = self._get_supply(supply_id, business)
         serializer = SupplyReceiveSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serial_items = serializer.validated_data.get("serial_items")
@@ -311,21 +307,18 @@ class VendorInventoryOverviewView(VendorInventoryAPIView):
         strategy = request.query_params.get("strategy", "").strip()
 
         inventory_service = InventoryService()
-        pricing_service = InventoryPricingService()
+        variant_service = VariantService()
 
         variants = ProductVariants.objects.filter(
-            product__category__in=business.categories.values_list("category_id", flat=True)
-        ).select_related("product", "inventory").prefetch_related("files")
+            product__categories__id__in=business.categories.values_list("category_id", flat=True)
+        ).select_related("product").prefetch_related("product__product_files__file")
 
         if search:
             variants = variants.filter(
                 models.Q(sku__icontains=search)
-                | models.Q(product__title__icontains=search)
-                | models.Q(title__icontains=search)
+                | models.Q(domain__icontains=search)
+                | models.Q(product__name__icontains=search)
             )
-
-        if strategy:
-            variants = variants.filter(inventory__current_strategy=strategy)
 
         variant_ids = list(variants.values_list("id", flat=True))
         offers = {
@@ -337,20 +330,23 @@ class VendorInventoryOverviewView(VendorInventoryAPIView):
 
         result = []
         for v in variants:
-            stock = inventory_service.get_stock_summary(v)
+            stock = inventory_service.get_stock_summary(v, business=business)
+            if strategy and stock["strategy"] != strategy:
+                continue
             offer = offers.get(v.id)
-            discounted = pricing_service.calculate_discounted_price(v, offer)
+            discounted = variant_service.calculate_discounted_price(v, offer)
+            product_file = v.product.product_files.first()
             result.append({
                 "id": v.id,
                 "sku": v.sku,
-                "title": v.title,
-                "product_title": v.product.title,
+                "title": v.domain,
+                "product_title": v.product.name,
                 "product_id": v.product.id,
-                "image": v.files.first().file.url if v.files.exists() else None,
+                "image": product_file.file.url if product_file else None,
                 "total_stock": stock["total"],
                 "sellable_stock": stock["sellable"],
                 "available_stock": stock["available"],
-                "strategy": v.inventory.current_strategy if v.inventory else None,
+                "strategy": stock["strategy"],
                 "price": str(offer.price) if offer else None,
                 "discounted_price": str(discounted) if discounted else None,
             })
@@ -361,15 +357,7 @@ class VendorInventoryOverviewView(VendorInventoryAPIView):
 class VendorSupplyOverviewView(VendorInventoryAPIView):
     def get(self, request):
         business = self._get_business(request)
-        if not business:
-            return api_response(data=[])
-
-        from domains.inventory.models import InventorySupply
-
-        supplies = InventorySupply.objects.filter(
-            variant__product__category__in=business.categories.values_list("category_id", flat=True)
-        ).select_related("variant", "variant__product", "warehouse").order_by("-supplied_at")[:50]
-
+        supplies = supply_service.search_supplies(business=business)[:50]
         rows = [supply_service.serialize_supply_row(s) for s in supplies]
         return api_response(data=SupplyListSerializer(rows, many=True).data)
 

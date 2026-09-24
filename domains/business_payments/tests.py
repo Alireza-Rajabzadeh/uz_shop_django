@@ -1,4 +1,5 @@
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
@@ -8,6 +9,7 @@ from rest_framework.test import APITestCase
 
 from core.management.seeders.order import OrderSeeder
 from core.management.seeders.payments import PaymentsSeeder
+from domains.banks.models import Bank
 from domains.business.models import BusinessProfile
 from domains.customer.models import Customer, CustomerStatus
 from domains.files.models import File, FileStatus
@@ -336,6 +338,53 @@ class BusinessPaymentVendorAPITests(APITestCase):
             HTTP_AUTHORIZATION=f"Bearer {token.access_token}"
         )
 
+    @patch("domains.business_payments.views.BankService")
+    def test_vendor_can_list_banks(self, bank_service):
+        bank_service.return_value.list_banks.return_value = [
+            {
+                "id": 100,
+                "name": "National Bank of Iran",
+                "fa_name": "بانک ملی ایران",
+                "card_number_regex": r"^603799\d{10}$",
+                "account_number_regex": r"^\d{10,24}$",
+                "sheba_regex": r"^IR\d{24}$",
+            }
+        ]
+        self._auth(self.vendor_a)
+
+        response = self.client.get("/api/vendor/business-payments/banks")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data["data"]["banks"],
+            bank_service.return_value.list_banks.return_value,
+        )
+        bank_service.return_value.list_banks.assert_called_once_with(
+            force_clear_cache=False
+        )
+
+    @patch("domains.business_payments.views.BankService")
+    def test_vendor_can_force_clear_bank_cache(self, bank_service):
+        bank_service.return_value.list_banks.return_value = []
+        self._auth(self.vendor_a)
+
+        response = self.client.get(
+            "/api/vendor/business-payments/banks?force_clear_cache=true"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["banks"], [])
+        bank_service.return_value.list_banks.assert_called_once_with(
+            force_clear_cache=True
+        )
+
+    @patch("domains.business_payments.views.BankService")
+    def test_bank_list_requires_vendor_authentication(self, bank_service):
+        response = self.client.get("/api/vendor/business-payments/banks")
+
+        self.assertEqual(response.status_code, 401)
+        bank_service.assert_not_called()
+
     def test_vendor_a_sees_all_methods(self):
         self._auth(self.vendor_a)
         response = self.client.get("/api/vendor/business-payments/methods")
@@ -422,6 +471,88 @@ class BusinessPaymentVendorAPITests(APITestCase):
         channel = BusinessPaymentChannel.objects.get(id=channel_id)
         self.assertEqual(channel.code, "new_channel")
         self.assertEqual(channel.business, self.business_a)
+
+    def test_vendor_can_assign_bank_when_creating_channel(self):
+        bank = Bank.objects.create(
+            name="Mellat Bank",
+            fa_name="بانک ملت",
+            card_number_regex=r"^610433\d{10}$",
+            account_number_regex=r"^\d{10,24}$",
+            sheba_regex=r"^IR\d{24}$",
+        )
+        self._auth(self.vendor_a)
+
+        response = self.client.post(
+            "/api/vendor/business-payments/channels",
+            {
+                "code": "mellat_channel",
+                "name": "Mellat",
+                "bank_id": bank.id,
+                "payment_method_ids": [self.method_a.id],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(
+            response.data["data"]["bank"],
+            {"id": bank.id, "name": bank.name, "fa_name": bank.fa_name},
+        )
+        channel = BusinessPaymentChannel.objects.get(id=response.data["data"]["id"])
+        self.assertEqual(channel.bank, bank)
+
+    def test_vendor_can_update_channel_bank(self):
+        bank = Bank.objects.create(
+            name="Saman Bank",
+            fa_name="بانک سامان",
+            card_number_regex=r"^621986\d{10}$",
+            account_number_regex=r"^\d{10,24}$",
+            sheba_regex=r"^IR\d{24}$",
+        )
+        self._auth(self.vendor_a)
+
+        response = self.client.patch(
+            f"/api/vendor/business-payments/channels/{self.channel_a.id}",
+            {"bank_id": bank.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.channel_a.refresh_from_db()
+        self.assertEqual(self.channel_a.bank, bank)
+        self.assertEqual(response.data["data"]["bank"]["id"], bank.id)
+
+    def test_channel_create_rejects_inactive_bank(self):
+        bank = Bank.objects.create(
+            name="Inactive Bank",
+            fa_name="بانک غیرفعال",
+            card_number_regex=r"^123456\d{10}$",
+            account_number_regex=r"^\d{10,24}$",
+            sheba_regex=r"^IR\d{24}$",
+            is_active=False,
+        )
+        self._auth(self.vendor_a)
+
+        response = self.client.post(
+            "/api/vendor/business-payments/channels",
+            {"bank_id": bank.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("bank_id", response.data["errors"])
+
+    def test_channel_create_rejects_unknown_bank(self):
+        self._auth(self.vendor_a)
+
+        response = self.client.post(
+            "/api/vendor/business-payments/channels",
+            {"bank_id": 999999},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("bank_id", response.data["errors"])
 
     def test_vendor_a_can_create_channel_without_code_and_name(self):
         self._auth(self.vendor_a)

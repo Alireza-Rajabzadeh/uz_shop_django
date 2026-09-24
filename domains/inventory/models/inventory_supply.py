@@ -33,6 +33,10 @@ class InventorySupply(models.Model):
                 fields=["variant", "warehouse", "supplied_at"],
                 name="inv_supply_variant_wh_supplied",
             ),
+            models.Index(
+                fields=["business", "variant", "supplied_at"],
+                name="inv_supply_business_variant_at",
+            ),
         ]
 
     business = models.ForeignKey(

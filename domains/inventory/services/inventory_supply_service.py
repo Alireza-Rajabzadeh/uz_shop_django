@@ -14,6 +14,8 @@ from domains.inventory.models import (
     InventorySupplyConsumption,
     InventorySupplyCost,
     InventoryUnit,
+    SerializedStock,
+    WarehouseStock,
 )
 from domains.inventory.services.inventory_cost_service import InventoryCostService
 from domains.inventory.services.inventory_service import InventoryService
@@ -33,6 +35,15 @@ class InventorySupplyService:
     def __init__(self):
         self.cost_service = InventoryCostService()
         self.inventory_service = InventoryService()
+
+    @staticmethod
+    def _validate_business_warehouse(business, warehouse):
+        if business is not None and warehouse.business_id != business.pk:
+            raise InventorySupplyService.ValidationError({
+                "warehouse": [
+                    _("Warehouse must belong to the selected business.")
+                ]
+            })
 
     def _base_queryset(self, *, lock=False):
         # Single SUM annotation avoids per-row cost queries; remaining totals
@@ -54,6 +65,7 @@ class InventorySupplyService:
     def search_supplies(
         self,
         *,
+        business=None,
         search=None,
         variant_id=None,
         warehouse_id=None,
@@ -65,6 +77,8 @@ class InventorySupplyService:
     ):
         queryset = self._base_queryset()
 
+        if business is not None:
+            queryset = queryset.filter(business_id=business.pk)
         if search:
             queryset = queryset.filter(
                 Q(variant__sku__icontains=search)
@@ -105,8 +119,10 @@ class InventorySupplyService:
             return queryset.order_by("-supplied_at", "-id")
         return queryset.order_by(f"-{field}" if descending else field, "-id")
 
-    def get_supply(self, supply_id, *, lock=False):
+    def get_supply(self, supply_id, *, business=None, lock=False):
         queryset = self._base_queryset(lock=lock).prefetch_related("costs")
+        if business is not None:
+            queryset = queryset.filter(business_id=business.pk)
         return queryset.filter(pk=supply_id).first()
 
     @transaction.atomic
@@ -122,9 +138,15 @@ class InventorySupplyService:
         invoice_number="",
         notes="",
         costs=None,
+        business=None,
     ):
+        resolved_business = business
+        if resolved_business is None and warehouse.business_id is not None:
+            resolved_business = warehouse.business
+        self._validate_business_warehouse(resolved_business, warehouse)
         validated_costs = self._validate_cost_rows(costs or [])
         supply = InventorySupply.objects.create(
+            business=resolved_business,
             variant=variant,
             warehouse=warehouse,
             quantity=quantity,
@@ -148,6 +170,21 @@ class InventorySupplyService:
             .get(pk=supply.pk)
         )
         cost_rows = values.pop("costs", None)
+        if "business" in values:
+            requested_business = values.pop("business")
+            if (
+                requested_business is None
+                or requested_business.pk != supply.business_id
+            ):
+                raise self.ValidationError({
+                    "business": [_("Supply business ownership cannot be changed.")]
+                })
+        if (
+            supply.business_id is not None
+            and "warehouse" in values
+            and values["warehouse"].business_id != supply.business_id
+        ):
+            self._validate_business_warehouse(supply.business, values["warehouse"])
         if supply.received_at is not None:
             blocked = []
             if "variant" in values and values["variant"].pk != supply.variant_id:

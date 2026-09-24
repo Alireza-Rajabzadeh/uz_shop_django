@@ -6,6 +6,7 @@ from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
 from django.test import TestCase
 from django.utils import timezone
+from django.utils.translation import gettext as _
 from rest_framework.test import APITestCase
 
 from domains.catalog.models import (
@@ -1054,7 +1055,10 @@ class InventorySupplyAPITests(APITestCase):
         InventorySupply.objects.filter(id=consumed_id).update(remaining_quantity=4)
         rejected = self.client.delete(f"/api/inventory/supplies/{consumed_id}")
         self.assertEqual(rejected.status_code, 400)
-        self.assertIn("consumed", str(rejected.data))
+        self.assertIn(
+            str(_("Supply has already been consumed and cannot be deleted.")),
+            str(rejected.data["message"]),
+        )
         self.assertTrue(InventorySupply.objects.filter(id=consumed_id).exists())
 
     def test_supply_lifecycle_never_touches_physical_inventory(self):
@@ -1178,7 +1182,10 @@ class InventorySupplyAPITests(APITestCase):
         self.client.post(f"/api/inventory/supplies/{supply_id}/receive")
         deleted = self.client.delete(f"/api/inventory/supplies/{supply_id}")
         self.assertEqual(deleted.status_code, 400)
-        self.assertIn("Received supplies cannot be deleted", str(deleted.data))
+        self.assertIn(
+            str(_("Received supplies cannot be deleted.")),
+            str(deleted.data["message"]),
+        )
         self.assertTrue(InventorySupply.objects.filter(id=supply_id).exists())
 
     def test_receive_serialized_succeeds_without_serial_items(self):

@@ -140,12 +140,12 @@ msgstr "آدرس پیدا نشد."
 
 #: domains/cart/services.py:181 domains/cart/services.py:264
 msgid "Requested quantity exceeds available stock."
-msgstr ""
+msgstr "تعداد درخواستی بیشتر از موجودی قابل دسترس است."
 
 #: domains/cart/services.py:257
 #, python-brace-format
 msgid "Requested quantity exceeds available stock; reduced to {count}."
-msgstr ""
+msgstr "تعداد درخواستی بیشتر از موجودی قابل دسترس بود؛ به {count} کاهش یافت."
 
 #: domains/cart/services.py:267 domains/cart/services.py:416
 msgid "This product is now only available for pre-order."
@@ -784,11 +784,11 @@ msgstr "رمز عبور مطابقت ندارد."
 #: domains/inventory/services/inventory_pricing_service.py:312
 #: domains/inventory/services/inventory_reporting_service.py:173
 msgid "Unsupported pricing cost strategy."
-msgstr ""
+msgstr "راهبرد هزینه قیمت‌گذاری پشتیبانی نمی‌شود."
 
 #: domains/inventory/services/inventory_pricing_service.py:55
 msgid "Expected profit percentage must be greater than or equal to zero."
-msgstr ""
+msgstr "درصد سود مورد انتظار باید بزرگ‌تر یا مساوی صفر باشد."
 
 #: domains/inventory/services/inventory_pricing_service.py:66
 msgid ""
@@ -810,19 +810,19 @@ msgstr ""
 
 #: domains/inventory/services/inventory_pricing_service.py:117
 msgid "Price must be greater than or equal to zero."
-msgstr ""
+msgstr "قیمت باید بزرگ‌تر یا مساوی صفر باشد."
 
 #: domains/inventory/services/inventory_service.py:166
 msgid "Could not generate a unique warehouse code."
-msgstr ""
+msgstr "تولید کد یکتا برای انبار ممکن نشد."
 
 #: domains/inventory/services/inventory_service.py:178
 msgid "Switch another warehouse to default instead."
-msgstr ""
+msgstr "به جای آن، انبار دیگری را به عنوان پیش‌فرض انتخاب کنید."
 
 #: domains/inventory/services/inventory_service.py:187
 msgid "The default warehouse cannot be changed while it contains stock."
-msgstr ""
+msgstr "تا زمانی که انبار پیش‌فرض موجودی دارد، قابل تغییر نیست."
 
 #: domains/inventory/services/inventory_service.py:201
 msgid ""
@@ -832,45 +832,45 @@ msgstr ""
 
 #: domains/inventory/services/inventory_service.py:207
 msgid "This warehouse cannot be deleted while it contains stock."
-msgstr ""
+msgstr "این انبار تا زمانی که موجودی دارد قابل حذف نیست."
 
 #: domains/inventory/services/inventory_service.py:279
 msgid "Inventory setup requires exactly one default warehouse."
-msgstr ""
+msgstr "راه‌اندازی موجودی به دقیقاً یک انبار پیش‌فرض نیاز دارد."
 
 #: domains/inventory/services/inventory_service.py:303
 msgid "This field is required for normal inventory."
-msgstr ""
+msgstr "این فیلد برای موجودی عادی الزامی است."
 
 #: domains/inventory/services/inventory_service.py:313
 msgid "Inventory must satisfy 0 <= reserved <= sellable <= quantity."
-msgstr ""
+msgstr "موجودی باید شرط ۰ <= رزروشده <= قابل فروش <= تعداد را داشته باشد."
 
 #: domains/inventory/services/inventory_service.py:337
 msgid "This field is required for serialized inventory."
-msgstr ""
+msgstr "این فیلد برای موجودی سریال‌دار الزامی است."
 
 #: domains/inventory/services/inventory_service.py:355
 #: domains/inventory/services/inventory_service.py:657
 msgid "Inventory setup is missing the serial_number attribute definition."
-msgstr ""
+msgstr "تعریف صفت serial_number برای راه‌اندازی موجودی سریال‌دار موجود نیست."
 
 #: domains/inventory/services/inventory_service.py:370
 msgid "Each serialized row can only appear once."
-msgstr ""
+msgstr "هر ردیف سریال‌دار تنها یک‌بار قابل درج است."
 
 #: domains/inventory/services/inventory_service.py:373
 msgid "One or more serialized row IDs do not belong to this variant."
-msgstr ""
+msgstr "یک یا چند شناسه ردیف سریال‌دار متعلق به این تنوع نیستند."
 
 #: domains/inventory/services/inventory_service.py:380
 msgid "Sold, reserved, or historical serialized rows cannot be deleted."
-msgstr ""
+msgstr "ردیف‌های سریال‌دار فروخته‌شده، رزروشده یا تاریخی قابل حذف نیستند."
 
 #: domains/inventory/services/inventory_service.py:385
 #: domains/inventory/services/inventory_service.py:662
 msgid "Serial number cannot be blank."
-msgstr ""
+msgstr "شماره سریال نمی‌تواند خالی باشد."
 
 #: domains/inventory/services/inventory_service.py:389
 #: domains/inventory/services/inventory_service.py:407
@@ -878,15 +878,15 @@ msgstr ""
 #: domains/inventory/services/inventory_service.py:667
 #: domains/inventory/services/inventory_service.py:700
 msgid "Serial numbers must be globally unique, ignoring case."
-msgstr ""
+msgstr "شماره‌های سریال باید در کل سیستم یکتا باشند (بدون حساسیت به بزرگی و کوچکی حروف)."
 
 #: domains/inventory/services/inventory_service.py:428
 msgid "Sold, reserved, or historical serialized rows cannot be edited."
-msgstr ""
+msgstr "ردیف‌های سریال‌دار فروخته‌شده، رزروشده یا تاریخی قابل ویرایش نیستند."
 
 #: domains/inventory/services/inventory_service.py:632
 msgid "A variant with stock cannot be deleted."
-msgstr ""
+msgstr "تنوعی که موجودی دارد قابل حذف نیست."
 
 #: domains/inventory/services/inventory_service.py:709
 #, python-format
@@ -1022,63 +1022,63 @@ msgstr ""
 
 #: domains/inventory/services/inventory_supply_service.py:162
 msgid "Received supplies cannot change variant, warehouse, or quantity."
-msgstr ""
+msgstr "تامین‌های دریافت‌شده امکان تغییر تنوع، انبار یا تعداد را ندارند."
 
 #: domains/inventory/services/inventory_supply_service.py:177
 msgid "Quantity cannot change because this supply has already been consumed."
-msgstr ""
+msgstr "تعداد قابل تغییر نیست زیرا بخشی از این تامین مصرف شده است."
 
 #: domains/inventory/services/inventory_supply_service.py:199
 msgid "Received supplies cannot be deleted."
-msgstr ""
+msgstr "تامین‌های دریافت‌شده قابل حذف نیستند."
 
 #: domains/inventory/services/inventory_supply_service.py:203
 msgid "Supply has already been consumed and cannot be deleted."
-msgstr ""
+msgstr "این تامین مصرف شده و قابل حذف نیست."
 
 #: domains/inventory/services/inventory_supply_service.py:219
 msgid "This supply has already been received."
-msgstr ""
+msgstr "این تامین قبلاً دریافت شده است."
 
 #: domains/inventory/services/inventory_supply_service.py:229
 msgid "Serial items are only accepted for serialized inventory."
-msgstr ""
+msgstr "اقلام سریالی فقط برای موجودی سریال‌دار پذیرفته می‌شوند."
 
 #: domains/inventory/services/inventory_supply_service.py:293
 msgid "This order item has already consumed its supply layers."
-msgstr ""
+msgstr "این قلم سفارش قبلاً لایه‌های تامین خود را مصرف کرده است."
 
 #: domains/inventory/services/inventory_supply_service.py:362
 #: domains/inventory/services/inventory_supply_service.py:431
 #, python-format
 msgid "Supply %(reference)s does not cover %(needed)s consumed units."
-msgstr ""
+msgstr "تامین %(reference)s واحدهای مصرف‌شده %(needed)s را پوشش نمی‌دهد."
 
 #: domains/inventory/services/inventory_supply_service.py:395
 #, python-format
 msgid "Supplies do not cover %(needed)s units for this sale."
-msgstr ""
+msgstr "تامین‌ها واحدهای %(needed)s این فروش را پوشش نمی‌دهند."
 
 #: domains/inventory/services/inventory_supply_service.py:473
 msgid "Reversal quantity must be greater than zero."
-msgstr ""
+msgstr "تعداد برگشت باید بیشتر از صفر باشد."
 
 #: domains/inventory/services/inventory_supply_service.py:478
 #, python-format
 msgid "Only %(available)s consumed units are reversible."
-msgstr ""
+msgstr "تنها %(available)s واحد مصرف‌شده قابل برگشت است."
 
 #: domains/inventory/services/inventory_supply_service.py:506
 msgid "Unsupported supply cost type."
-msgstr ""
+msgstr "نوع هزینه تامین پشتیبانی نمی‌شود."
 
 #: domains/inventory/services/inventory_supply_service.py:510
 msgid "A valid amount is required."
-msgstr ""
+msgstr "مبلغ معتبر الزامی است."
 
 #: domains/inventory/services/inventory_supply_service.py:513
 msgid "Amount must be greater than or equal to zero."
-msgstr ""
+msgstr "مبلغ باید بزرگ‌تر یا مساوی صفر باشد."
 
 #: domains/order/admin_views.py:34
 #, fuzzy
@@ -1113,7 +1113,7 @@ msgstr ""
 #: domains/order/services.py:406
 #, python-format
 msgid "Item %(sku)s does not have enough stock."
-msgstr ""
+msgstr "کالای %(sku)s موجودی کافی ندارد."
 
 #: domains/order/services.py:200
 msgid "Set a delivery address before checkout."
@@ -1133,7 +1133,7 @@ msgstr ""
 
 #: domains/order/services.py:379
 msgid "No warehouse is configured for this item."
-msgstr ""
+msgstr "برای این کالا انباری پیکربندی نشده است."
 
 #: domains/order/services.py:989
 msgid "This action is not available for the current order status."
@@ -1374,3 +1374,7 @@ msgstr ""
 #: domains/wishlist/views.py:79
 msgid "Removed from wishlist."
 msgstr ""
+
+#: domains/catalog/api/serializers.py:519
+msgid "Sellable quantity cannot exceed physical quantity."
+msgstr "تعداد قابل فروش نمی‌تواند بیشتر از موجودی فیزیکی باشد."

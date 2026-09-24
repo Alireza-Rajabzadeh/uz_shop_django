@@ -483,9 +483,69 @@ class InventoryService:
             return "serialized"
         return "normal"
 
-    def get_summary(self, variant):
+    def _unit_queryset(self, variant, business=None):
+        units = InventoryUnit.objects.filter(inventory__variant=variant)
+        if business is not None:
+            units = units.filter(inventory__business=business)
+        return units
+
+    def _normal_totals(self, variant, business=None):
+        """Sum a variant's normal stock rows, optionally limited to one business."""
+        from django.db.models import Sum
+
+        rows = Inventory.objects.filter(variant=variant)
+        if business is not None:
+            rows = rows.filter(business=business)
+        totals = rows.aggregate(
+            total=Sum("quantity"),
+            sellable=Sum("sellable"),
+            reserved=Sum("reserved"),
+        )
+        sellable = totals["sellable"] or 0
+        reserved = totals["reserved"] or 0
+        return {
+            "total": totals["total"] or 0,
+            "sellable": sellable,
+            "available": sellable - reserved,
+        }
+
+    def _resolve_inventory_warehouse(self, variant, business):
+        """Pick the warehouse a business-scoped read should report against."""
+        if business is None:
+            return self.get_default_warehouse()
+        warehouse = Warehouse.objects.filter(
+            business=business, is_default=True
+        ).first()
+        if warehouse is not None:
+            return warehouse
+        row = (
+            Inventory.objects.filter(variant=variant, business=business)
+            .select_related("warehouse")
+            .first()
+        )
+        if row is not None:
+            return row.warehouse
+        return self.get_default_warehouse()
+
+    def get_stock_summary(self, variant, business=None):
+        """Return total/sellable/available/strategy, optionally scoped to one business."""
+        if self._detect_inventory_type(variant) == "normal":
+            return {**self._normal_totals(variant, business=business), "strategy": "normal"}
+        units = self._unit_queryset(variant, business=business)
+        total = units.count()
+        sellable = units.filter(state=InventoryUnitStateEnum.IN_STOCK.value).count()
+        return {"total": total, "sellable": sellable, "available": sellable, "strategy": "serialized"}
+
+    def get_summary(self, variant, business=None):
         inv_type = self._detect_inventory_type(variant)
         if inv_type == "normal":
+            if business is not None:
+                totals = self._normal_totals(variant, business=business)
+                return {
+                    "total_item_count": totals["total"],
+                    "sellable_item_count": totals["sellable"],
+                    "available_item_count": totals["available"],
+                }
             inv = Inventory.objects.filter(variant=variant).first()
             if inv is None:
                 return {"total_item_count": 0, "sellable_item_count": 0, "available_item_count": 0}
@@ -494,7 +554,7 @@ class InventoryService:
                 "sellable_item_count": inv.sellable,
                 "available_item_count": inv.available,
             }
-        units = InventoryUnit.objects.filter(inventory__variant=variant)
+        units = self._unit_queryset(variant, business=business)
         total = units.count()
         sellable = units.filter(state=InventoryUnitStateEnum.IN_STOCK.value).count()
         return {
@@ -503,18 +563,18 @@ class InventoryService:
             "available_item_count": sellable,
         }
 
-    def get_variant_details(self, variant):
+    def get_variant_details(self, variant, business=None):
         from django.db.models import Sum
         from domains.inventory.models import InventorySupply
 
         inv_type = self._detect_inventory_type(variant)
-        summary = self.get_summary(variant)
+        summary = self.get_summary(variant, business=business)
         primary_category = variant.product.categories.order_by("id").first()
+        supply_rows = InventorySupply.objects.filter(variant=variant)
+        if business is not None:
+            supply_rows = supply_rows.filter(business=business)
         total_supply_quantity = (
-            InventorySupply.objects.filter(
-                variant=variant
-            ).aggregate(total=Sum("quantity"))["total"]
-            or 0
+            supply_rows.aggregate(total=Sum("quantity"))["total"] or 0
         )
         context = {
             "sku": variant.sku,
@@ -534,8 +594,13 @@ class InventoryService:
             ],
         }
         if inv_type == "normal":
-            warehouse = self.get_default_warehouse()
-            inv = Inventory.objects.filter(variant=variant, warehouse=warehouse).first()
+            warehouse = self._resolve_inventory_warehouse(variant, business)
+            inv_rows = Inventory.objects.filter(
+                variant=variant, warehouse=warehouse
+            )
+            if business is not None:
+                inv_rows = inv_rows.filter(business=business)
+            inv = inv_rows.first()
             return {
                 "variant_id": variant.id,
                 **context,
@@ -553,9 +618,9 @@ class InventoryService:
                 "serial_items": None,
             }
         serial_attr_def = InventoryAttributeDefinition.objects.filter(code="serial_number").first()
-        units = InventoryUnit.objects.filter(
-            inventory__variant=variant
-        ).select_related("inventory__warehouse").order_by("id")
+        units = self._unit_queryset(variant, business=business).select_related(
+            "inventory__warehouse"
+        ).order_by("id")
         if serial_attr_def:
             unit_ids = list(units.values_list("id", flat=True))
             attr_map = {

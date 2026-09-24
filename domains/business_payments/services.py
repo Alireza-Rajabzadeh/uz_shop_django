@@ -345,7 +345,7 @@ class BusinessPaymentService:
         queryset = BusinessPaymentChannel.objects.filter(
             business=business
         ).select_related(
-            "logo_file__status"
+            "bank", "logo_file__status"
         ).prefetch_related(
             "supported_methods__payment_method"
         ).annotate(
@@ -410,6 +410,15 @@ class BusinessPaymentService:
             "masked_account_number": self._mask(channel.account_number),
             "masked_card_number": self._mask(channel.card_number),
             "owner_name": channel.owner_name,
+            "bank": (
+                {
+                    "id": channel.bank_id,
+                    "name": channel.bank.name,
+                    "fa_name": channel.bank.fa_name,
+                }
+                if channel.bank_id
+                else None
+            ),
             "extra_data": channel.extra_data,
             "is_active": channel.is_active,
             "logo": self.logo_payload(channel.logo_file),

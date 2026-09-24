@@ -5,10 +5,12 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
 from core.responses import api_response
+from domains.banks.services import BankService
 from domains.vendor.auth import VendorJWTAuthentication
 
 from .models import BusinessPaymentChannel, BusinessPaymentMethod
 from .serializers import (
+    BankListQuerySerializer,
     BusinessPaymentChannelWriteSerializer,
     BusinessPaymentMethodReadSerializer,
     ChannelListQuerySerializer,
@@ -47,6 +49,16 @@ class BusinessPaymentAPIView(APIView):
         page = paginator.paginate_queryset(queryset, request, view=view)
         data = payload(page) if payload else serializer(page, many=True).data
         return paginator.get_paginated_response(data).data
+
+
+class VendorBusinessPaymentBankList(BusinessPaymentAPIView):
+    def get(self, request):
+        query = BankListQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        banks = BankService().list_banks(
+            force_clear_cache=query.validated_data["force_clear_cache"]
+        )
+        return api_response(data={"banks": banks})
 
 
 class VendorBusinessPaymentMethodList(BusinessPaymentAPIView):

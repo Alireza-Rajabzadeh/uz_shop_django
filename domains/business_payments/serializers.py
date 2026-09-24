@@ -4,6 +4,7 @@ from rest_framework import serializers
 
 from core.utils import CardNumberValidationError, normalize_card_number
 from core.utils.transliteration import to_english_letters
+from domains.banks.models import Bank
 
 from .models import (
     BusinessPayment,
@@ -70,6 +71,10 @@ class PaymentListQuerySerializer(serializers.Serializer):
         return value
 
 
+class BankListQuerySerializer(serializers.Serializer):
+    force_clear_cache = serializers.BooleanField(required=False, default=False)
+
+
 class BusinessPaymentMethodReadSerializer(serializers.ModelSerializer):
     icon = serializers.SerializerMethodField()
     supported_channel_count = serializers.IntegerField(read_only=True, default=0)
@@ -126,6 +131,13 @@ class BusinessPaymentMethodReadSerializer(serializers.ModelSerializer):
 class BusinessPaymentChannelWriteSerializer(serializers.ModelSerializer):
     code = serializers.CharField(required=False, allow_blank=True, max_length=100)
     name = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    bank_id = serializers.PrimaryKeyRelatedField(
+        source="bank",
+        queryset=Bank.objects.filter(is_active=True),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
     payment_method_ids = serializers.ListField(
         child=serializers.IntegerField(min_value=1),
         required=False,
@@ -142,6 +154,7 @@ class BusinessPaymentChannelWriteSerializer(serializers.ModelSerializer):
             "account_number",
             "card_number",
             "owner_name",
+            "bank_id",
             "extra_data",
             "is_active",
             "logo_file",

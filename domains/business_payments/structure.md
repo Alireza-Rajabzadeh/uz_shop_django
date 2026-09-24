@@ -37,6 +37,7 @@ BusinessPaymentChannel  ← ImmutableCodeModel
     code            CharField(100)              # immutable after creation
     name / fa_name
     account_number / card_number / owner_name   # nullable, sensitive
+    bank            FK → Bank                   (SET_NULL, nullable)
     extra_data      JSONField(nullable)
     is_active       BooleanField
     logo_file       FK → File                   (SET_NULL, nullable)
@@ -76,6 +77,9 @@ BusinessProfile
   ├── business_payment_methods    (BusinessPaymentMethod)
   ├── business_payment_channels   (BusinessPaymentChannel)
   └── business_payments           (BusinessPayment)
+
+Bank
+  └── payment_channels            (BusinessPaymentChannel)
 
 BusinessPaymentMethod
   ├── supported_channels          (BusinessPaymentChannelSupportedMethod → BusinessPaymentChannel)
@@ -160,6 +164,14 @@ the resolved business object.
 - `BusinessPaymentService.ValidationError(errors)` — caught in views, raised as DRF `ValidationError`
 - `BusinessPaymentService.NotFoundError` — caught in views, raised as DRF `NotFound`
 
+### Bank lookup service
+
+`domains.banks.services.BankService.list_banks(force_clear_cache=False)` returns
+active banks ordered by ID. It caches the public projection at `banks:active`.
+A normal call returns a cache hit when available; a miss reads the database and
+replaces the cache. A forced refresh deletes the key, skips the cache read, and
+repopulates it from the database.
+
 ### Payment flow
 
 ```
@@ -189,8 +201,9 @@ review_payment
 | `ListQuerySerializer` | Method list query params: extends base + has_point_to_channel |
 | `ChannelListQuerySerializer` | Channel list query params: extends base + supported_method |
 | `PaymentListQuerySerializer` | Payment list query params: search, status (validated against DB), ordering |
+| `BankListQuerySerializer` | Bank list query params: force_clear_cache |
 | `BusinessPaymentMethodReadSerializer` | Read: icon (file_payload), supported_channel_count, provider_available/reason |
-| `BusinessPaymentChannelWriteSerializer` | Write: code, name, fa_name, account/card/owner, extra_data, is_active, logo_file, payment_method_ids. `code`/`name` optional on create. `code` and `name` are English-only: Persian input is converted through `core.utils.transliteration.to_english_letters` (PersianG2p). Code immutable on update. |
+| `BusinessPaymentChannelWriteSerializer` | Write: code, name, fa_name, account/card/owner, bank_id, extra_data, is_active, logo_file, payment_method_ids. `code`/`name` optional on create. `code` and `name` are English-only: Persian input is converted through `core.utils.transliteration.to_english_letters` (PersianG2p). Code immutable on update. |
 | `ConfirmPaymentSerializer` | Customer payment: payment_method, channel_id, ref_number, documents (image only, ≤10MB) |
 
 ---
@@ -205,6 +218,7 @@ All views extend `BusinessPaymentAPIView`:
 
 | View | Method | URL | Purpose |
 |---|---|---|---|
+| `VendorBusinessPaymentBankList` | GET | `banks` | List active cached bank metadata; supports `force_clear_cache` |
 | `VendorBusinessPaymentMethodList` | GET | `methods` | List business payment methods |
 | `VendorBusinessPaymentMethodDetail` | GET | `methods/<id>` | Retrieve method (read-only) |
 | `VendorBusinessPaymentChannelList` | GET/POST | `channels` | List/create channels (business-scoped) |
@@ -271,6 +285,7 @@ class BusinessPaymentStatusEnum(Enum):
 | `0005_remove_method_business_created_updated` | Removed method `business` FK and timestamps |
 | `0006_businesspaymentmethod_description` | Adds method `description` |
 | `0007_restore_channel_business` | Re-adds channel `business` FK, restores `UNIQUE(business, code)`, backfills existing rows |
+| `0008_businesspaymentchannel_bank` | Adds the optional bank FK to payment channels |
 
 ---
 
@@ -278,7 +293,7 @@ class BusinessPaymentStatusEnum(Enum):
 
 `tests.py` contains two test classes:
 
-**`BusinessPaymentModelTests`** (9 tests):
+**`BusinessPaymentModelTests`** (10 tests):
 - Code immutability (method + channel)
 - Unique constraint per business (method + channel)
 - Code can differ across businesses
@@ -287,11 +302,14 @@ class BusinessPaymentStatusEnum(Enum):
 - Online support requires provider
 - Document unique per payment
 
-**`BusinessPaymentVendorAPITests`** (25 tests):
+**`BusinessPaymentVendorAPITests`** (46 tests):
 - Business isolation: each vendor sees only own methods, channels, payments, documents
 - Cross-business channel access returns 404
 - Channel list masks card numbers, detail shows full
 - Channel create/update with method replacement
+- Cached bank listing with optional forced cache refresh
+- Channel create/update accepts an active `bank_id` and returns its summary
+- Unknown and inactive bank IDs are rejected
 - Method update rejects code change
 - Channel delete: owner + zero payments succeeds (cascades support rows); cross-business 404; with payments 400
 - Method delete returns 405
@@ -300,3 +318,6 @@ class BusinessPaymentStatusEnum(Enum):
 
 `test_migrations.py` (1 test):
 - Verifies all expected tables exist after migration
+
+`domains/banks/tests.py` (5 tests):
+- Cache hit, cache miss, cached empty list, forced refresh, and fail-open write behavior
