@@ -534,7 +534,6 @@ class ProductService(BaseService):
             "product"
         ).prefetch_related(
             "selections__attribute", "selections__option",
-            "warehouse_stocks", "serialized_stocks__status",
         )
         return self.inventory_service.annotate_variant_summaries(queryset).order_by("id")
 
@@ -549,7 +548,6 @@ class ProductService(BaseService):
         return get_object_or_404(
             ProductVariants.objects.select_related("product").prefetch_related(
                 "selections__attribute", "selections__option",
-                "warehouse_stocks", "serialized_stocks__status",
             ),
             id=id,
         )
@@ -563,6 +561,7 @@ class ProductService(BaseService):
         inventory=None,
         serial_items=None,
         inventory_submitted=False,
+        business=None,
         **data,
     ):
         instance = ProductVariants.objects.select_for_update().select_related("product").get(
@@ -590,6 +589,7 @@ class ProductService(BaseService):
                 inventory=inventory,
                 serial_items=serial_items,
                 inventory_submitted=inventory_submitted,
+                business=business,
             )
         except InventoryService.ValidationError as exc:
             raise self.ValidationError(exc.errors) from exc

@@ -6,6 +6,7 @@ from core.responses import api_response
 from domains.users.auth import AdminJWTAuthentication
 
 from ..models import BusinessOffer
+from ..services import MarketplacePricingService
 from .serializers import BusinessOfferSerializer
 
 
@@ -22,7 +23,7 @@ class BusinessOfferListCreate(APIView):
     def post(self, request):
         serializer = BusinessOfferSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        offer = BusinessOffer.objects.create(**serializer.validated_data)
+        offer = MarketplacePricingService.create_offer(**serializer.validated_data)
         return api_response(
             True,
             "Created.",
@@ -42,9 +43,7 @@ class BusinessOfferDetail(APIView):
         offer = self._get(pk)
         serializer = BusinessOfferSerializer(offer, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        for attr, value in serializer.validated_data.items():
-            setattr(offer, attr, value)
-        offer.save()
+        offer = MarketplacePricingService.update_offer(offer, **serializer.validated_data)
         return api_response(True, "Updated.", BusinessOfferSerializer(offer).data)
 
     def delete(self, request, pk):

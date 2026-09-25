@@ -5,7 +5,7 @@ class InventorySupply(models.Model):
     # Historical purchase/replenishment batch used as the foundation for
     # inventory costing. remaining_quantity is a costing concept only; it is
     # independent from inventory availability, sellable stock, reservations,
-    # and SerializedStock state.
+    # and serialized unit state.
 
     class Meta:
         db_table = "inventory_supply"

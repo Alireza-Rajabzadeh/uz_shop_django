@@ -11,12 +11,14 @@ from domains.inventory.enums.InventoryUnitStateEnum import InventoryUnitStateEnu
 from domains.inventory.models import (
     Inventory,
     InventoryAttributeDefinition,
+    InventoryType,
     InventoryTransfer,
     InventoryUnit,
     InventoryUnitAttribute,
     Warehouse,
     WarehouseStatus,
 )
+from domains.marketplace.models import BusinessOffer
 
 _VALID_TRANSITIONS = {
     InventoryUnitStateEnum.IN_STOCK.value: {
@@ -102,7 +104,18 @@ class InventoryService:
         inv = Inventory.objects.filter(variant=variant, warehouse=default_warehouse).first()
         min_stock = inv.min_stock if inv else 0
         inv_type = self._detect_inventory_type(variant)
-        strategy = {"id": 1, "code": "normal", "name": "Normal"} if inv_type == "normal" else {"id": 2, "code": "serialized", "name": "Serialized"}
+        inventory_type = self._get_inventory_type(variant)
+        type_data = {
+            "id": inventory_type.id,
+            "code": inventory_type.code,
+            "name": inventory_type.name,
+            "fa_name": inventory_type.fa_name,
+        }
+        strategy = {
+            "id": inventory_type.id,
+            "code": inventory_type.code,
+            "name": inventory_type.name,
+        }
         return {
             "variant": variant.id,
             "sku": variant.sku,
@@ -110,6 +123,7 @@ class InventoryService:
             "product_name": variant.product.name,
             "category_id": primary_category.id if primary_category else None,
             "category_name": primary_category.name if primary_category else None,
+            "inventory_type": type_data,
             "strategy": strategy,
             "total": variant.total_item_count,
             "sellable": variant.sellable_item_count,
@@ -269,8 +283,10 @@ class InventoryService:
             ),
         )
 
-    def get_default_warehouse(self, *, lock=False):
+    def get_default_warehouse(self, *, business=None, lock=False):
         queryset = Warehouse.objects.select_related("status")
+        if business is not None:
+            queryset = queryset.filter(business=business)
         if lock:
             queryset = queryset.select_for_update()
         warehouses = list(queryset.filter(is_default=True)[:2])
@@ -288,22 +304,41 @@ class InventoryService:
         inventory=None,
         serial_items=None,
         inventory_submitted=False,
+        business=None,
     ):
         if not inventory_submitted:
             return
-        has_serialized = InventoryUnit.objects.filter(inventory__variant=variant).exists()
-        if has_serialized or serial_items is not None:
-            self._apply_serialized_snapshot(variant, serial_items)
+        requested_type = "serialized" if serial_items is not None else "normal"
+        current_type = self._detect_inventory_type(variant, business=business)
+        if current_type != requested_type:
+            self._ensure_inventory_type_change_allowed(variant, business)
+            if requested_type == "serialized":
+                inventories = Inventory.objects.filter(variant=variant)
+                if business is not None:
+                    inventories = inventories.filter(business=business)
+                if inventories.filter(quantity__gt=0).exists() and not serial_items:
+                    raise self.ValidationError({
+                        "serial_items": [_('Define serialized units before converting stocked inventory.')]
+                    })
+                self._apply_serialized_snapshot(variant, serial_items, business=business)
+            else:
+                self._convert_serialized_to_normal(variant, business=business)
+            return
+        if requested_type == "serialized":
+            self._apply_serialized_snapshot(variant, serial_items, business=business)
         else:
-            warehouse = self.get_default_warehouse(lock=True)
-            self._apply_normal(variant, warehouse, inventory)
+            warehouse = self.get_default_warehouse(business=business, lock=True)
+            self._apply_normal(variant, warehouse, inventory, business=business)
 
-    def _apply_normal(self, variant, warehouse, inventory):
+    def _apply_normal(self, variant, warehouse, inventory, business=None):
         if inventory is None:
             raise self.ValidationError({"inventory": [_('This field is required for normal inventory.')]})
-        inv = Inventory.objects.select_for_update().filter(
+        inventories = Inventory.objects.select_for_update().filter(
             variant=variant, warehouse=warehouse
-        ).first()
+        )
+        if business is not None:
+            inventories = inventories.filter(business=business)
+        inv = inventories.first()
         reserved = inv.reserved if inv else 0
         quantity = inventory["quantity"]
         sellable = inventory["sellable"]
@@ -314,37 +349,43 @@ class InventoryService:
             })
         if inv is None:
             from domains.business.models import BusinessProfile
-            business = BusinessProfile.objects.get(id=1)
+            business = business or BusinessProfile.objects.get(id=1)
             inv = Inventory.objects.create(
                 business=business,
                 warehouse=warehouse,
                 variant=variant,
+                inventory_type_id=1,
                 quantity=quantity,
                 sellable=sellable,
                 reserved=reserved,
                 min_stock=min_stock,
             )
         else:
+            inv.inventory_type_id = 1
             inv.quantity = quantity
             inv.sellable = sellable
             inv.reserved = reserved
             inv.min_stock = min_stock
             inv.save(update_fields=["quantity", "sellable", "reserved", "min_stock"])
 
-    def _apply_serialized_snapshot(self, variant, serial_items):
+    def _apply_serialized_snapshot(self, variant, serial_items, business=None):
         if serial_items is None:
             raise self.ValidationError({
                 "serial_items": [_('This field is required for serialized inventory.')]
             })
-        inventory = Inventory.objects.filter(variant=variant).first()
+        inventories = Inventory.objects.filter(variant=variant)
+        if business is not None:
+            inventories = inventories.filter(business=business)
+        inventory = inventories.first()
         if inventory is None:
             from domains.business.models import BusinessProfile
-            business = BusinessProfile.objects.get(id=1)
-            warehouse = self.get_default_warehouse()
+            business = business or BusinessProfile.objects.get(id=1)
+            warehouse = self.get_default_warehouse(business=business)
             inventory = Inventory.objects.create(
                 business=business,
                 warehouse=warehouse,
                 variant=variant,
+                inventory_type_id=2,
                 quantity=0,
                 sellable=0,
                 reserved=0,
@@ -354,6 +395,7 @@ class InventoryService:
             raise self.ValidationError({
                 "serial_items": [_('Inventory setup is missing the serial_number attribute definition.')]
             })
+        inventory.inventory_type_id = 2
         existing = {
             unit.id: unit
             for unit in InventoryUnit.objects.select_for_update().filter(inventory=inventory)
@@ -478,15 +520,73 @@ class InventoryService:
     def _is_editable(unit):
         return unit.state == InventoryUnitStateEnum.IN_STOCK.value
 
-    def _detect_inventory_type(self, variant):
-        if InventoryUnit.objects.filter(inventory__variant=variant).exists():
-            return "serialized"
-        return "normal"
+    def _ensure_inventory_type_change_allowed(self, variant, business):
+        if business is not None and BusinessOffer.objects.filter(
+            variant=variant,
+            business=business,
+            is_active=True,
+        ).exists():
+            raise self.ValidationError({
+                "inventory_type": [_('Deactivate the marketplace offer before changing inventory type.')]
+            })
 
-    def get_summary(self, variant):
-        inv_type = self._detect_inventory_type(variant)
+    def _convert_serialized_to_normal(self, variant, *, business=None):
+        inventories = Inventory.objects.select_for_update().filter(variant=variant)
+        if business is not None:
+            inventories = inventories.filter(business=business)
+        for inventory in inventories:
+            units = list(
+                InventoryUnit.objects.select_for_update().filter(inventory=inventory)
+            )
+            in_stock = sum(
+                unit.state == InventoryUnitStateEnum.IN_STOCK.value for unit in units
+            )
+            reserved = sum(
+                unit.state == InventoryUnitStateEnum.RESERVED.value for unit in units
+            )
+            inventory.inventory_type_id = 1
+            inventory.quantity = in_stock + reserved
+            inventory.sellable = in_stock
+            inventory.reserved = reserved
+            inventory.save(update_fields=[
+                "inventory_type", "quantity", "sellable", "reserved"
+            ])
+            for unit in units:
+                if unit.state != InventoryUnitStateEnum.FROZEN.value:
+                    unit.state = InventoryUnitStateEnum.FROZEN.value
+                    unit.save(update_fields=["state"])
+
+    def _get_inventory_type(self, variant, business=None):
+        inventory_queryset = Inventory.objects
+        unit_queryset = InventoryUnit.objects
+        if business is not None:
+            inventory_queryset = inventory_queryset.filter(business=business)
+            unit_queryset = unit_queryset.filter(inventory__business=business)
+        inventory = Inventory.objects.select_related("inventory_type").filter(
+            variant=variant
+        ).order_by("id").first()
+        if business is not None:
+            inventory = inventory_queryset.select_related("inventory_type").filter(
+                variant=variant
+            ).order_by("id").first()
+        if unit_queryset.filter(inventory__variant=variant).exclude(
+            state=InventoryUnitStateEnum.FROZEN.value
+        ).exists():
+            return InventoryType.objects.get(id=2)
+        if inventory is None:
+            return InventoryType.objects.get(id=1)
+        return inventory.inventory_type
+
+    def _detect_inventory_type(self, variant, business=None):
+        return self._get_inventory_type(variant, business=business).code
+
+    def get_summary(self, variant, business=None):
+        inv_type = self._detect_inventory_type(variant, business=business)
         if inv_type == "normal":
-            inv = Inventory.objects.filter(variant=variant).first()
+            inventories = Inventory.objects.filter(variant=variant)
+            if business is not None:
+                inventories = inventories.filter(business=business)
+            inv = inventories.order_by("id").first()
             if inv is None:
                 return {"total_item_count": 0, "sellable_item_count": 0, "available_item_count": 0}
             return {
@@ -495,6 +595,8 @@ class InventoryService:
                 "available_item_count": inv.available,
             }
         units = InventoryUnit.objects.filter(inventory__variant=variant)
+        if business is not None:
+            units = units.filter(inventory__business=business)
         total = units.count()
         sellable = units.filter(state=InventoryUnitStateEnum.IN_STOCK.value).count()
         return {
@@ -503,12 +605,13 @@ class InventoryService:
             "available_item_count": sellable,
         }
 
-    def get_variant_details(self, variant):
+    def get_variant_details(self, variant, business=None):
         from django.db.models import Sum
         from domains.inventory.models import InventorySupply
 
-        inv_type = self._detect_inventory_type(variant)
-        summary = self.get_summary(variant)
+        inv_type = self._detect_inventory_type(variant, business=business)
+        summary = self.get_summary(variant, business=business)
+        inventory_type = self._get_inventory_type(variant, business=business)
         primary_category = variant.product.categories.order_by("id").first()
         total_supply_quantity = (
             InventorySupply.objects.filter(
@@ -532,10 +635,21 @@ class InventoryService:
                 }
                 for selection in variant.selections.all()
             ],
+            "inventory_type": {
+                "id": inventory_type.id,
+                "code": inventory_type.code,
+                "name": inventory_type.name,
+                "fa_name": inventory_type.fa_name,
+            },
         }
         if inv_type == "normal":
-            warehouse = self.get_default_warehouse()
-            inv = Inventory.objects.filter(variant=variant, warehouse=warehouse).first()
+            inventories = Inventory.objects.select_related("warehouse__status").filter(
+                variant=variant
+            )
+            if business is not None:
+                inventories = inventories.filter(business=business)
+            inv = inventories.order_by("-warehouse__is_default", "id").first()
+            warehouse = inv.warehouse if inv else self.get_default_warehouse(business=business)
             return {
                 "variant_id": variant.id,
                 **context,
@@ -556,6 +670,8 @@ class InventoryService:
         units = InventoryUnit.objects.filter(
             inventory__variant=variant
         ).select_related("inventory__warehouse").order_by("id")
+        if business is not None:
+            units = units.filter(inventory__business=business)
         if serial_attr_def:
             unit_ids = list(units.values_list("id", flat=True))
             attr_map = {
@@ -674,7 +790,12 @@ class InventoryService:
             business=business,
             warehouse=warehouse,
             variant=variant,
-            defaults={"quantity": 0, "sellable": 0, "reserved": 0},
+            defaults={
+                "inventory_type_id": 2,
+                "quantity": 0,
+                "sellable": 0,
+                "reserved": 0,
+            },
         )
         try:
             with transaction.atomic():
@@ -732,7 +853,70 @@ class InventoryService:
         inventory.reserved = units.filter(
             state=InventoryUnitStateEnum.RESERVED.value
         ).count()
-        inventory.save(update_fields=["quantity", "sellable", "reserved"])
+        inventory.save(update_fields=[
+            "inventory_type", "quantity", "sellable", "reserved"
+        ])
+
+    @transaction.atomic
+    def refresh_normal_inventory_from_supplies(self, *, variant, business):
+        if self._detect_inventory_type(variant) == "serialized":
+            raise self.ValidationError({
+                "inventory": [_('Serialized inventory is calculated from registered units.')]
+            })
+
+        from domains.inventory.models import InventorySupply
+
+        received_totals = {
+            row["warehouse_id"]: row["total"]
+            for row in InventorySupply.objects.filter(
+                business=business,
+                variant=variant,
+                received_at__isnull=False,
+            ).values("warehouse_id").annotate(total=Sum("quantity"))
+        }
+        inventories = list(
+            Inventory.objects.select_for_update().filter(
+                business=business,
+                variant=variant,
+            )
+        )
+        inventory_by_warehouse = {inventory.warehouse_id: inventory for inventory in inventories}
+
+        for warehouse_id, quantity in received_totals.items():
+            inventory = inventory_by_warehouse.get(warehouse_id)
+            if inventory is None:
+                warehouse = self.get_warehouse(warehouse_id)
+                if warehouse is None:
+                    continue
+                inventory = Inventory.objects.create(
+                    business=business,
+                    warehouse=warehouse,
+                    variant=variant,
+                    inventory_type_id=1,
+                )
+                inventory_by_warehouse[warehouse_id] = inventory
+            if inventory.reserved > quantity or inventory.sellable > quantity:
+                raise self.ValidationError({
+                    "inventory": [
+                        _('Received supply quantity cannot be lower than reserved or sellable stock.')
+                    ]
+                })
+            inventory.quantity = quantity
+            inventory.save(update_fields=["quantity"])
+
+        for inventory in inventories:
+            if inventory.warehouse_id in received_totals:
+                continue
+            if inventory.reserved > 0 or inventory.sellable > 0:
+                raise self.ValidationError({
+                    "inventory": [
+                        _('Inventory without received supplies still has reserved or sellable stock.')
+                    ]
+                })
+            inventory.quantity = 0
+            inventory.save(update_fields=["quantity"])
+
+        return inventory_by_warehouse
 
     def _ensure_business(self):
         from domains.business.models import BusinessProfile

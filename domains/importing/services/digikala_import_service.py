@@ -638,7 +638,6 @@ class DigikalaImportService:
                 self.product_service.add_variant_to_product(
                     product,
                     selections=selections,
-                    inventory_strategy_code="normal",
                     inventory_submitted=False,
                 )
                 variant_created += 1

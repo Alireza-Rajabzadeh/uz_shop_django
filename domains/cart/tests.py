@@ -17,7 +17,7 @@ from domains.customer.models import Customer, CustomerAddress, CustomerStatus
 from domains.inventory.models import (
     Warehouse,
     WarehouseStatus,
-    WarehouseStock,
+    Inventory,
 )
 from domains.location.models import City, Country, State
 from domains.marketplace.models import BusinessOffer
@@ -151,7 +151,8 @@ class CartAPITests(APITestCase):
             variant=variant,
             defaults={"price": Decimal(price)},
         )
-        WarehouseStock.objects.create(
+        Inventory.objects.create(
+            business=self.business,
             variant=variant,
             warehouse=self.warehouse,
             quantity=quantity,
@@ -281,7 +282,7 @@ class CartAPITests(APITestCase):
         product = self.make_product(self.active_status)
         variant = self.make_variant(product)
         self.add_item(variant, quantity=5)
-        stock = WarehouseStock.objects.get(variant=variant)
+        stock = Inventory.objects.get(variant=variant)
         stock.sellable = 1
         stock.save(update_fields=["sellable"])
 

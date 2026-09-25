@@ -3,6 +3,7 @@ import random
 from django.core.management.base import BaseCommand
 
 from domains.catalog.models import ProductVariants
+from domains.inventory.models import Inventory
 from domains.inventory.services import InventoryService
 
 
@@ -18,7 +19,7 @@ class Command(BaseCommand):
         variants = ProductVariants.objects.order_by("id")
         count = 0
         for variant in variants:
-            has_stock = variant.warehouse_stocks.exists() or variant.serialized_stocks.exists()
+            has_stock = Inventory.objects.filter(variant=variant).exists()
             if has_stock:
                 continue
             rng = random.Random(variant.id)

@@ -5,29 +5,18 @@ from domains.inventory.services import InventoryCostService
 
 from .models import (
     Inventory,
-    InventoryAttribute,
     InventoryAttributeDefinition,
-    InventoryStrategy,
     InventorySupply,
     InventorySupplyCost,
     InventoryTransfer,
     InventoryUnit,
     InventoryUnitAttribute,
-    SerializedStock,
-    SerializedStockStatus,
     VariantPriceHistory,
     Warehouse,
     WarehouseStatus,
-    WarehouseStock,
 )
 
 inventory_cost_service = InventoryCostService()
-
-
-@admin.register(InventoryStrategy)
-class InventoryStrategyAdmin(ModelAdmin):
-    list_display = ["code", "name"]
-    search_fields = ["code", "name"]
 
 
 @admin.register(Inventory)
@@ -55,13 +44,6 @@ class InventoryAttributeDefinitionAdmin(ModelAdmin):
     search_fields = ["name", "code"]
     autocomplete_fields = ["business"]
     readonly_fields = ["created_at", "updated_at"]
-
-
-@admin.register(InventoryAttribute)
-class InventoryAttributeAdmin(ModelAdmin):
-    list_display = ["inventory", "attribute_definition", "value"]
-    search_fields = ["inventory__variant__sku", "attribute_definition__name", "value"]
-    autocomplete_fields = ["inventory", "attribute_definition"]
 
 
 @admin.register(InventoryUnitAttribute)
@@ -103,28 +85,6 @@ class WarehouseAdmin(ModelAdmin):
     search_fields = ["code", "name"]
     raw_id_fields = ["city"]
     autocomplete_fields = ["status"]
-
-
-@admin.register(WarehouseStock)
-class WarehouseStockAdmin(ModelAdmin):
-    list_display = ["variant", "warehouse", "quantity", "sellable", "reserved", "available"]
-    list_filter = ["warehouse"]
-    search_fields = ["variant__sku"]
-    autocomplete_fields = ["variant", "warehouse"]
-
-
-@admin.register(SerializedStockStatus)
-class SerializedStockStatusAdmin(ModelAdmin):
-    list_display = ["code", "name"]
-    search_fields = ["code", "name"]
-
-
-@admin.register(SerializedStock)
-class SerializedStockAdmin(ModelAdmin):
-    list_display = ["serial_number", "variant", "warehouse", "status", "sellable", "reserved", "supply"]
-    list_filter = ["status", "warehouse", "sellable", "reserved"]
-    search_fields = ["serial_number", "variant__sku"]
-    autocomplete_fields = ["variant", "warehouse", "status", "supply"]
 
 
 class InventorySupplyCostInline(TabularInline):

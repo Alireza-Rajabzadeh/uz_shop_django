@@ -13,7 +13,7 @@ from domains.catalog.models import (
     ProductVariants,
     ProductVariantSelection,
 )
-from domains.inventory.models import SerializedStock, WarehouseStock
+from domains.inventory.models import Inventory, InventoryUnit, InventoryUnitAttribute
 
 
 class Command(BaseCommand):
@@ -56,10 +56,10 @@ class Command(BaseCommand):
             "product files": ProductFile.objects.filter(
                 product_id__in=product_ids
             ).count(),
-            "serialized stock": SerializedStock.objects.filter(
-                variant__product_id__in=product_ids
+            "inventory units": InventoryUnit.objects.filter(
+                inventory__variant__product_id__in=product_ids
             ).count(),
-            "warehouse stock": WarehouseStock.objects.filter(
+            "inventory": Inventory.objects.filter(
                 variant__product_id__in=product_ids
             ).count(),
             "product variants": ProductVariants.objects.filter(
@@ -100,10 +100,13 @@ class Command(BaseCommand):
         with transaction.atomic():
             ProductDetails.objects.filter(product_id__in=product_ids).delete()
             ProductFile.objects.filter(product_id__in=product_ids).delete()
-            SerializedStock.objects.filter(
-                variant__product_id__in=product_ids
+            InventoryUnitAttribute.objects.filter(
+                inventory_unit__inventory__variant__product_id__in=product_ids
             ).delete()
-            WarehouseStock.objects.filter(
+            InventoryUnit.objects.filter(
+                inventory__variant__product_id__in=product_ids
+            ).delete()
+            Inventory.objects.filter(
                 variant__product_id__in=product_ids
             ).delete()
             ProductVariantSelection.objects.filter(

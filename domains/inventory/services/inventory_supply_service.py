@@ -54,6 +54,7 @@ class InventorySupplyService:
     def search_supplies(
         self,
         *,
+        business_id=None,
         search=None,
         variant_id=None,
         warehouse_id=None,
@@ -65,6 +66,8 @@ class InventorySupplyService:
     ):
         queryset = self._base_queryset()
 
+        if business_id is not None:
+            queryset = queryset.filter(business_id=business_id)
         if search:
             queryset = queryset.filter(
                 Q(variant__sku__icontains=search)
@@ -298,33 +301,11 @@ class InventorySupplyService:
         reservations = list(order_item.reservations.all())
         new_unit_reservations = [r for r in reservations if r.linked_unit_id is not None]
         new_inventory_reservations = [r for r in reservations if r.linked_inventory_id is not None and r.linked_unit_id is None]
-        normal_ids = [r.inventory_id for r in reservations if r.inventory_type == "warehouse_stock"]
-        serialized_ids = [r.inventory_id for r in reservations if r.inventory_type == "serialized_stock"]
         if new_unit_reservations:
             return self._consume_new_serialized_layers(order_item, new_unit_reservations)
         if new_inventory_reservations:
             return self._consume_new_normal_layers(order_item, new_inventory_reservations)
-        if order_item.inventory_strategy.code == "normal":
-            return self._consume_normal_layers(order_item, normal_ids)
-        return self._consume_serialized_layers(order_item, serialized_ids)
-
-    def _consume_normal_layers(self, order_item, reservation_ids):
-        stock_rows = WarehouseStock.objects.filter(id__in=reservation_ids)
-        needs = {}
-        quantities = {r.inventory_id: r.quantity for r in order_item.reservations.all()}
-        for stock in stock_rows:
-            needs[stock.warehouse_id] = (
-                needs.get(stock.warehouse_id, 0) + quantities.get(stock.id, 0)
-            )
-        consumptions = []
-        for warehouse_id, need in needs.items():
-            consumptions.extend(
-                self._consume_fifo(
-                    order_item, variant_id=order_item.variant_id,
-                    warehouse_id=warehouse_id, quantity=need,
-                )
-            )
-        return consumptions
+        return []
 
     def _consume_new_normal_layers(self, order_item, reservations):
         needs = {}
@@ -405,36 +386,6 @@ class InventorySupplyService:
             supply.remaining_quantity -= take
             supply.save(update_fields=["remaining_quantity"])
             quantity -= take
-        return consumptions
-
-    def _consume_serialized_layers(self, order_item, serialized_stock_ids):
-        # NOTE: no select_related here -- FOR UPDATE cannot be applied to the
-        # nullable side of an outer join on PostgreSQL; supplies are locked
-        # explicitly below instead.
-        rows = list(
-            SerializedStock.objects.select_for_update()
-            .filter(id__in=serialized_stock_ids)
-        )
-        counts_by_supply = {}
-        for row in rows:
-            # Serialized units received before supply linkage existed cannot
-            # be attributed to a cost layer and are skipped.
-            if row.supply_id is None:
-                continue
-            counts_by_supply[row.supply_id] = counts_by_supply.get(row.supply_id, 0) + 1
-        consumptions = []
-        for supply_id, count in sorted(counts_by_supply.items()):
-            supply = InventorySupply.objects.select_for_update().get(pk=supply_id)
-            if supply.remaining_quantity < count:
-                raise self.ValidationError({
-                    "supply": [
-                        _('Supply %(reference)s does not cover %(needed)s consumed units.')
-                        % {"reference": supply.reference_number or supply.id, "needed": count}
-                    ]
-                })
-            consumptions.append(self._create_consumption(order_item, supply, count))
-            supply.remaining_quantity -= count
-            supply.save(update_fields=["remaining_quantity"])
         return consumptions
 
     def _create_consumption(self, order_item, supply, quantity):

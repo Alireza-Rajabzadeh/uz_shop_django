@@ -5,6 +5,9 @@ from django.db import models
 class Inventory(models.Model):
     class Meta:
         db_table = "inventory_inventory"
+        permissions = [
+            ("adjust_stock", "Can adjust stock"),
+        ]
         constraints = [
             models.UniqueConstraint(
                 fields=["warehouse", "variant"],
@@ -47,6 +50,12 @@ class Inventory(models.Model):
         "catalog.ProductVariants",
         on_delete=models.PROTECT,
         related_name="inventories",
+    )
+    inventory_type = models.ForeignKey(
+        "InventoryType",
+        on_delete=models.PROTECT,
+        related_name="inventories",
+        default=1,
     )
     quantity = models.PositiveIntegerField(default=0)
     sellable = models.PositiveIntegerField(default=0)

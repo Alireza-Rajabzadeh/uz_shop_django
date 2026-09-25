@@ -156,7 +156,7 @@ class DigikalaImportServiceTests(TestCase):
             "20 وات",
         )
         variant = ProductVariants.objects.get(product=product)
-        self.assertFalse(variant.warehouse_stocks.exists())
+        self.assertFalse(variant.inventories.exists())
         option = VariantOption.objects.get(variant_selections__variant=variant)
         self.assertEqual(option.name, "Black")
         self.assertEqual(option.fa_name, "مشکی")

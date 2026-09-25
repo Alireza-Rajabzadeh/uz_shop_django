@@ -6,11 +6,7 @@ from rest_framework.views import APIView
 from core.responses import api_response
 from domains.catalog.models import ProductVariants
 from domains.inventory.enums.InventorySupplyCostTypeEnum import InventorySupplyCostTypeEnum
-from domains.inventory.models import (
-    SerializedStockStatus,
-    Warehouse,
-    WarehouseStatus,
-)
+from domains.inventory.models import Warehouse, WarehouseStatus
 from domains.inventory.services import (
     InventoryPricingService,
     InventoryReportingService,
@@ -21,7 +17,6 @@ from domains.inventory.services.price_history_mongo import get_price_history as 
 from domains.users.auth import AdminJWTAuthentication
 
 from .serializers import (
-    CodeOptionSerializer,
     InventoryReportSummarySerializer,
     InventoryVariantQuerySerializer,
     InventoryVariantDetailSerializer,
@@ -204,16 +199,6 @@ class LookupAPIView(APIView):
 class WarehouseStatusOptions(WarehouseAPIView):
     def get(self, request):
         return api_response(True, "", OptionSerializer(WarehouseStatus.objects.order_by("id"), many=True).data)
-
-
-class InventoryStrategyOptions(LookupAPIView):
-    def get(self, request):
-        return api_response(True, "", CodeOptionSerializer([], many=True).data)
-
-
-class SerializedStatusOptions(LookupAPIView):
-    def get(self, request):
-        return api_response(True, "", CodeOptionSerializer(SerializedStockStatus.objects.order_by("id"), many=True).data)
 
 
 class SupplyActionPermission(BasePermission):

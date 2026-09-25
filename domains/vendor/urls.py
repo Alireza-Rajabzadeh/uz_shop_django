@@ -49,6 +49,7 @@ from .views.products import (
 )
 from .views.inventory import (
     VendorVariantInventoryDetailView,
+    VendorVariantInventoryRefreshView,
     VendorVariantPricingView,
     VendorVariantPricingHistoryView,
     VendorPricingStrategiesView,
@@ -122,6 +123,7 @@ urlpatterns = [
     path("variants/<int:variant_id>", VendorProductVariantDetailView.as_view()),
     path("variants/<int:variant_id>/status", VendorVariantStatusView.as_view()),
     path("variants/<int:variant_id>/inventory", VendorVariantInventoryDetailView.as_view()),
+    path("variants/<int:variant_id>/inventory/refresh", VendorVariantInventoryRefreshView.as_view()),
     path("variants/<int:variant_id>/pricing", VendorVariantPricingView.as_view()),
     path("variants/<int:variant_id>/pricing/history", VendorVariantPricingHistoryView.as_view()),
     path("variants/<int:variant_id>/supplies", VendorVariantSupplyListView.as_view()),

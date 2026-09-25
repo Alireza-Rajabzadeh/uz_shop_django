@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.shortcuts import get_object_or_404
 from rest_framework.exceptions import ValidationError, NotFound, PermissionDenied
 from rest_framework.parsers import FormParser, MultiPartParser
@@ -31,6 +33,8 @@ from domains.files.api.serializers import FileUploadSerializer
 from domains.files.services import FileService
 from domains.inventory.services import InventoryService
 from domains.inventory.services.inventory_pricing_service import InventoryPricingService
+from domains.marketplace.models import BusinessOffer
+from domains.marketplace.services import MarketplacePricingService
 from domains.vendor.auth import VendorJWTAuthentication
 from domains.vendor.services.vendor_product_service import VendorProductService
 from domains.vendor.serializers.products import (
@@ -578,6 +582,59 @@ class VendorProductVariantDetailView(APIView):
             raise NotFound("Variant not found.")
         return variant
 
+    def _sanitize_offer_payload(self, request_data):
+        offer_fields = {"price", "discount_type", "discount_value"}
+        offer_payload = {}
+        for key in sorted(offer_fields):
+            if key in request_data:
+                value = request_data.get(key)
+                if value == "":
+                    value = None
+                offer_payload[key] = value
+        return offer_payload
+
+    def _sync_business_offer(self, business, variant, payload):
+        if not payload:
+            return None
+        cleaned = {}
+        for key, value in payload.items():
+            if value in ("", None):
+                cleaned[key] = None
+            else:
+                cleaned[key] = value
+
+        price = cleaned.get("price")
+        discount_type = cleaned.get("discount_type")
+        discount_value = cleaned.get("discount_value")
+        offer = BusinessOffer.objects.filter(business=business, variant=variant).first()
+
+        if price is None and discount_type is None and discount_value is None:
+            return offer
+
+        normalized = {
+            "business": business,
+            "variant": variant,
+            "price": Decimal(str(price)) if price is not None else (offer.price if offer else Decimal("0")),
+            "discount_type": discount_type if discount_type is not None else (offer.discount_type if offer else None),
+            "discount_value": (
+                Decimal(str(discount_value)) if discount_value is not None else (offer.discount_value if offer else None)
+            ),
+            "expected_profit_percentage": (
+                offer.expected_profit_percentage if offer else Decimal("0")
+            ),
+            "cost_strategy": offer.cost_strategy if offer else "latest",
+        }
+
+        if offer is None:
+            return MarketplacePricingService.create_offer(**normalized)
+
+        return MarketplacePricingService.update_offer(offer, **{
+            key: value
+            for key, value in normalized.items()
+            if key in {"price", "discount_type", "discount_value", "expected_profit_percentage", "cost_strategy"}
+            if value is not None or key in {"expected_profit_percentage", "cost_strategy"}
+        })
+
     def get(self, request, variant_id):
         _, category_ids = _get_business_category_ids(request.user)
         if not category_ids:
@@ -588,8 +645,11 @@ class VendorProductVariantDetailView(APIView):
         business = BusinessProfile.objects.filter(vendor=request.user).first()
         offer = None
         if business:
-            from domains.marketplace.models import BusinessOffer
-            offer = BusinessOffer.objects.filter(business=business, variant=variant).first()
+            offer = BusinessOffer.objects.filter(
+                business=business,
+                variant=variant,
+                is_active=True,
+            ).first()
 
         return api_response(data={
             **variant_data,
@@ -611,13 +671,31 @@ class VendorProductVariantDetailView(APIView):
         if not category_ids:
             return api_response(False, "Business profile not found.", status_code=404)
         variant = self._get_vendor_variant(variant_id, category_ids)
-        serializer = ProductVariantWriteSerializer(variant, data=request.data, partial=True)
+        business = BusinessProfile.objects.filter(vendor=request.user).first()
+        if not business:
+            return api_response(False, "Business profile not found.", status_code=404)
+
+        offer_payload = self._sanitize_offer_payload(request.data)
+        if offer_payload:
+            data = request.data.copy()
+            for key in ["price", "discount_type", "discount_value"]:
+                data.pop(key, None)
+        else:
+            data = request.data.copy()
+
+        serializer = ProductVariantWriteSerializer(variant, data=data, partial=True)
         serializer.is_valid(raise_exception=True)
         try:
-            variant = product_service.update_variant(variant, **serializer.validated_data)
+            variant = product_service.update_variant(
+                variant,
+                business=business,
+                **serializer.validated_data,
+            )
         except ProductService.ValidationError as exc:
             from rest_framework.exceptions import ValidationError
             raise ValidationError(exc.errors) from exc
+
+        self._sync_business_offer(business, variant, offer_payload)
         result = ProductVariantSerializer(variant).data
         return api_response(data=result)
 

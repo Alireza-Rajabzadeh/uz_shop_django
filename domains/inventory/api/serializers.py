@@ -22,12 +22,6 @@ class WarehouseContextSerializer(serializers.Serializer):
     status = serializers.CharField()
 
 
-class InventoryStrategySerializer(serializers.Serializer):
-    id = serializers.IntegerField()
-    code = serializers.CharField()
-    name = serializers.CharField()
-
-
 class SelectionSerializer(serializers.Serializer):
     attribute_id = serializers.IntegerField()
     attribute_name = serializers.CharField()
@@ -93,12 +87,20 @@ class StrategySerializer(serializers.Serializer):
     name = serializers.CharField()
 
 
+class InventoryTypeSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    code = serializers.CharField()
+    name = serializers.CharField()
+    fa_name = serializers.CharField()
+
+
 class InventoryVariantDetailSerializer(serializers.Serializer):
     variant_id = serializers.IntegerField()
     sku = serializers.CharField()
     product = NamedObjectSerializer()
     category = NamedObjectSerializer()
     selections = SelectionSerializer(many=True)
+    inventory_type = InventoryTypeSerializer()
     strategy = StrategySerializer()
     total_item_count = serializers.IntegerField()
     sellable_item_count = serializers.IntegerField()
@@ -127,6 +129,7 @@ class InventoryVariantRowSerializer(serializers.Serializer):
     product_name = serializers.CharField()
     category_id = serializers.IntegerField()
     category_name = serializers.CharField()
+    inventory_type = InventoryTypeSerializer()
     strategy = StrategySerializer()
     total = serializers.IntegerField()
     sellable = serializers.IntegerField()

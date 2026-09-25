@@ -34,11 +34,6 @@ class OrderItem(models.Model):
     discount_value = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     discount_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     final_price = models.DecimalField(max_digits=15, decimal_places=2)
-    inventory_strategy = models.ForeignKey(
-        "inventory.InventoryStrategy",
-        on_delete=models.PROTECT,
-        related_name="order_items",
-    )
     variant_info = models.JSONField(default=dict)
     created_at = models.DateTimeField(auto_now_add=True)
 

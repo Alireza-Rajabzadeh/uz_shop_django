@@ -8,6 +8,7 @@ class InventoryUnitStateEnum(Enum):
     RETURNED = "returned"
     DAMAGED = "damaged"
     LOST = "lost"
+    FROZEN = "frozen"
 
     @classmethod
     def choices(cls):

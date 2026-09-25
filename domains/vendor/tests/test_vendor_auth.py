@@ -1,14 +1,13 @@
 import uuid
 from unittest.mock import patch
 
-from django.test import TestCase, override_settings
+from django.test import override_settings
 from django.utils import timezone
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from core.services import ConfirmedRequestService
-from domains.vendor.models import Vendor, VendorStatus
 from domains.vendor.enums.VendorStatusEnum import VendorStatusEnum
+from domains.vendor.models import Vendor, VendorStatus
 
 
 @override_settings(
@@ -153,7 +152,14 @@ class VendorRegistrationConfirmationAPITests(APITestCase):
         response = self.client.post("/api/vendor/register", {}, format="json")
 
         self.assertEqual(response.status_code, 400)
-        for field in ("first_name", "last_name", "phone", "national_id", "password", "password_confirmation"):
+        for field in (
+            "first_name",
+            "last_name",
+            "phone",
+            "national_id",
+            "password",
+            "password_confirmation",
+        ):
             self.assertIn(field, response.data["errors"])
 
     def test_confirmation_activates_vendor_only_once(self):
@@ -171,6 +177,7 @@ class VendorRegistrationConfirmationAPITests(APITestCase):
 
         vendor.refresh_from_db()
         self.assertEqual(vendor.status_id, VendorStatusEnum.ACTIVE.value)
+        self.assertIsNotNone(original_updated_at)
 
     def test_persian_phone_digits_are_normalized(self):
         translation = str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
@@ -339,9 +346,7 @@ class VendorPhoneConfirmationAPITests(APITestCase):
         self.addCleanup(self.delivery_patcher.stop)
 
     def request_confirmation(self):
-        return self.client.post(
-            "/api/vendor/me/phone/confirmation", {}, format="json"
-        )
+        return self.client.post("/api/vendor/me/phone/confirmation", {}, format="json")
 
     def test_request_and_confirm_marks_phone_verified(self):
         requested = self.request_confirmation()

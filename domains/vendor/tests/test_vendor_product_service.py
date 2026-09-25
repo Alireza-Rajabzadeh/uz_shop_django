@@ -1,7 +1,10 @@
 from django.test import TestCase
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.test import APIRequestFactory, force_authenticate
 
-from domains.catalog.models import Category, CategoryStatus, Product, ProductStatus
+from domains.business.models import BusinessCategory, BusinessProfile
+from domains.catalog.models import Category, CategoryStatus, Product, ProductStatus, ProductVariants
+from domains.marketplace.models import BusinessOffer
 from domains.vendor.enums.VendorStatusEnum import VendorStatusEnum
 from domains.vendor.models import Vendor, VendorStatus
 from domains.vendor.services.vendor_product_service import VendorProductService
@@ -256,6 +259,40 @@ class VendorProductServiceTests(TestCase):
         Product.objects.create(name="Apple iPhone", status=self.active_status)
         results = VendorProductService.find_similar_products("Completely Different XYZ")
         self.assertEqual(len(results), 0)
+
+    def test_vendor_variant_patch_creates_business_offer_for_price_and_discount(self):
+        business = BusinessProfile.objects.create(
+            id=9999,
+            vendor=self.vendor,
+            business_name="Test Business",
+            display_name="Test Business",
+        )
+        BusinessCategory.objects.create(business=business, category=self.category)
+        product = Product.objects.create(name="Offer Product", status=self.active_status)
+        product.categories.add(self.category)
+        variant = ProductVariants.objects.create(
+            product=product,
+            sku="SKU-OFFER-1",
+            combination_key="1:1",
+        )
+
+        from domains.vendor.views.products import VendorProductVariantDetailView
+
+        factory = APIRequestFactory()
+        request = factory.patch(
+            f"/vendor/variants/{variant.id}",
+            {"price": "150.00", "discount_type": "percentage", "discount_value": "10.00"},
+            format="json",
+        )
+        force_authenticate(request, user=self.vendor)
+
+        response = VendorProductVariantDetailView.as_view()(request, variant_id=variant.id)
+
+        self.assertEqual(response.status_code, 200)
+        offer = BusinessOffer.objects.get(business=business, variant=variant)
+        self.assertEqual(str(offer.price), "150.00")
+        self.assertEqual(offer.discount_type, "percentage")
+        self.assertEqual(str(offer.discount_value), "10.00")
 
     def test_find_similar_products_empty_name(self):
         Product.objects.create(name="Samsung Galaxy", status=self.active_status)

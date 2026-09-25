@@ -1,55 +1,41 @@
 from core.management.seeders.base import BaseSeeder
-from domains.inventory.models import (
-    InventoryStrategy,
-    Warehouse,
-    WarehouseStatus,
-    SerializedStockStatus,
-)
-from domains.inventory.enums.InventoryStrategyEnum import InventoryStrategyEnum
+from domains.inventory.models import InventoryType, Warehouse, WarehouseStatus
+from domains.inventory.enums.InventoryTypeEnum import InventoryTypeEnum
 from domains.inventory.enums.WarehouseStatusEnum import WarehouseStatusEnum
-from domains.inventory.enums.SerializedStockStatusEnum import SerializedStockStatusEnum
 from domains.location.models import City
 
 
 class InventorySeeder(BaseSeeder):
     def run(self):
-        self._seed_strategies()
+        self._seed_inventory_types()
         self._seed_warehouse_statuses()
-        self._seed_serialized_stock_statuses()
         self._seed_default_warehouse()
 
-    def _seed_strategies(self):
-        strategies = {
-            InventoryStrategyEnum.NORMAL: {
+    def _seed_inventory_types(self):
+        values = {
+            InventoryTypeEnum.NORMAL.value: {
+                "code": "normal",
                 "name": "Normal",
-                "description": "Stock tracked by variant quantity (aggregate count). Used for products like T-shirts where variants (color/size) define stock levels.",
+                "fa_name": "عادی",
+                "description": "Quantity-based inventory without per-unit serial tracking.",
             },
-            InventoryStrategyEnum.SERIALIZED: {
+            InventoryTypeEnum.SERIALIZED.value: {
+                "code": "serialized",
                 "name": "Serialized",
-                "description": "Each unit tracked by unique serial number. Used for products like mobile phones where each item has a unique identifier.",
+                "fa_name": "سریالی",
+                "description": "Inventory tracked as individually registered units.",
             },
         }
-
-        for code, data in strategies.items():
-            InventoryStrategy.objects.update_or_create(
-                code=code.value,
-                defaults={
-                    "name": data["name"],
-                    "description": data["description"],
-                },
+        for inventory_type_id, defaults in values.items():
+            InventoryType.objects.update_or_create(
+                id=inventory_type_id,
+                defaults=defaults,
             )
 
     def _seed_warehouse_statuses(self):
         for status in WarehouseStatusEnum:
             WarehouseStatus.objects.update_or_create(
                 id=status.value,
-                defaults={"name": status.name.lower()},
-            )
-
-    def _seed_serialized_stock_statuses(self):
-        for status in SerializedStockStatusEnum:
-            SerializedStockStatus.objects.update_or_create(
-                code=status.name.lower(),
                 defaults={"name": status.name.lower()},
             )
 

@@ -465,7 +465,7 @@ class CartService:
         except ProductVariants.DoesNotExist:
             return self._unavailable_payload(variant_id, quantity)
         queryset = ProductVariants.objects.filter(pk=variant.id).select_related(
-            "product", "product__status", "inventory_strategy"
+            "product", "product__status"
         ).prefetch_related("selections__attribute", "selections__option")
         variant = self.inventory_service.annotate_variant_summaries(queryset)[0]
         self._attach_single_offer(variant)

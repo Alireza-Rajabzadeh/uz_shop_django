@@ -5,7 +5,6 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from ..enums.InventoryAttributeTypeEnum import InventoryAttributeTypeEnum
-from ..models.inventory_attribute import InventoryAttribute
 from ..models.inventory_attribute_definition import InventoryAttributeDefinition
 from ..models.inventory_unit_attribute import InventoryUnitAttribute
 
@@ -65,27 +64,6 @@ class InventoryAttributeService:
 
     @classmethod
     @transaction.atomic
-    def set_inventory_attribute(cls, inventory, name, value, attr_type=None):
-        definition = cls.get_or_create_definition(
-            business=inventory.business,
-            name=name,
-            attr_type=attr_type,
-        )
-        if value == "" or value is None:
-            InventoryAttribute.objects.filter(
-                inventory=inventory,
-                attribute_definition=definition,
-            ).delete()
-            return None
-        attr, _ = InventoryAttribute.objects.update_or_create(
-            inventory=inventory,
-            attribute_definition=definition,
-            defaults={"value": str(value)},
-        )
-        return attr
-
-    @classmethod
-    @transaction.atomic
     def set_unit_attribute(cls, inventory_unit, name, value, attr_type=None):
         definition = cls.get_or_create_definition(
             business=inventory_unit.inventory.business,
@@ -106,17 +84,6 @@ class InventoryAttributeService:
         return attr
 
     @classmethod
-    def get_inventory_attribute(cls, inventory, code):
-        try:
-            attr = InventoryAttribute.objects.select_related("attribute_definition").get(
-                inventory=inventory,
-                attribute_definition__code=code,
-            )
-            return attr.value
-        except InventoryAttribute.DoesNotExist:
-            return None
-
-    @classmethod
     def get_unit_attribute(cls, inventory_unit, code):
         try:
             attr = InventoryUnitAttribute.objects.select_related("attribute_definition").get(
@@ -126,13 +93,6 @@ class InventoryAttributeService:
             return attr.value
         except InventoryUnitAttribute.DoesNotExist:
             return None
-
-    @classmethod
-    def get_all_inventory_attributes(cls, inventory):
-        attrs = InventoryAttribute.objects.select_related("attribute_definition").filter(
-            inventory=inventory,
-        )
-        return {attr.attribute_definition.code: attr.value for attr in attrs}
 
     @classmethod
     def get_all_unit_attributes(cls, inventory_unit):
