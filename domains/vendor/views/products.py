@@ -17,7 +17,6 @@ from domains.catalog.api.serializers import (
     ProductListSerializer,
     ProductVariantSerializer,
     ProductVariantWriteSerializer,
-    ProductVariantStatusSerializer,
 )
 from domains.catalog.models import (
     Brand,
@@ -25,7 +24,6 @@ from domains.catalog.models import (
     Product,
     ProductFile,
     ProductStatus,
-    ProductVariantStatus,
     ProductVariants,
 )
 from domains.catalog.services import ProductService, ProductFileService
@@ -65,6 +63,19 @@ def _get_business_category_ids(vendor):
 
 def _get_vendor_product(product_id, category_ids):
     return get_object_or_404(Product, id=product_id, categories__id__in=category_ids)
+
+
+def _get_vendor_variant(variant_id, category_ids):
+    """Resolve a variant the requesting vendor is allowed to manage."""
+    from rest_framework.exceptions import NotFound
+
+    variant = get_object_or_404(ProductVariants, id=variant_id)
+    product_ids = set(
+        Product.objects.filter(categories__id__in=category_ids).values_list("id", flat=True)
+    )
+    if variant.product_id not in product_ids:
+        raise NotFound("Variant not found.")
+    return variant
 
 
 # ─────────────────────── Filter Options ───────────────────────
@@ -573,15 +584,12 @@ class VendorProductVariantDetailView(APIView):
     authentication_classes = [VendorJWTAuthentication]
     permission_classes = [IsAuthenticated]
 
+    # Vendor-writable variant fields. Status and vendor ownership are not
+    # vendor-writable; pricing fields are handled separately via _sync_business_offer.
+    VARIANT_WRITABLE_FIELDS = ("selections", "inventory", "serial_items", "inventory_submitted")
+
     def _get_vendor_variant(self, variant_id, category_ids):
-        variant = get_object_or_404(ProductVariants, id=variant_id)
-        if variant.product_id not in [
-            pid for pid in
-            Product.objects.filter(categories__id__in=category_ids).values_list("id", flat=True)
-        ]:
-            from rest_framework.exceptions import NotFound
-            raise NotFound("Variant not found.")
-        return variant
+        return _get_vendor_variant(variant_id, category_ids)
 
     def _sanitize_offer_payload(self, request_data):
         offer_fields = {"price", "discount_type", "discount_value"}
@@ -633,11 +641,24 @@ class VendorProductVariantDetailView(APIView):
         business = BusinessProfile.objects.filter(vendor=request.user).first()
         offer = None
         if business:
+            # Any offer, active or not. A deactivated offer is a normal working
+            # state (the gate for switching inventory type), so it must stay
+            # visible and editable instead of the pricing block vanishing.
             offer = BusinessOffer.objects.filter(
                 business=business,
                 variant=variant,
-                is_active=True,
             ).first()
+
+        if offer is None:
+            offer_status = "none"
+        elif offer.is_active:
+            offer_status = "active"
+        else:
+            offer_status = "inactive"
+
+        can_change_type, type_change_reason = inventory_service.inventory_type_change_gate(
+            variant, business
+        )
 
         return api_response(data={
             **variant_data,
@@ -652,6 +673,9 @@ class VendorProductVariantDetailView(APIView):
                 "discount_type": offer.discount_type if offer else None,
                 "discount_value": str(offer.discount_value) if offer else None,
             } if offer else None,
+            "marketplace_offer_status": offer_status,
+            "can_change_inventory_type": can_change_type,
+            "change_inventory_type_reason": type_change_reason,
         })
 
     def patch(self, request, variant_id):
@@ -673,11 +697,16 @@ class VendorProductVariantDetailView(APIView):
 
         serializer = ProductVariantWriteSerializer(variant, data=data, partial=True)
         serializer.is_valid(raise_exception=True)
+        variant_payload = {
+            key: value
+            for key, value in serializer.validated_data.items()
+            if key in self.VARIANT_WRITABLE_FIELDS
+        }
         try:
             variant = product_service.update_variant(
                 variant,
                 business=business,
-                **serializer.validated_data,
+                **variant_payload,
             )
         except ProductService.ValidationError as exc:
             from rest_framework.exceptions import ValidationError
@@ -690,7 +719,14 @@ class VendorProductVariantDetailView(APIView):
         return api_response(data=result)
 
 
-class VendorVariantStatusView(APIView):
+class VendorVariantMarketplaceStatusView(APIView):
+    """Toggle BusinessOffer.is_active for one vendor variant.
+
+    Vendors cannot change the catalog variant status; the marketplace offer is
+    the state they own, and deactivating it is the gate for switching
+    inventory type.
+    """
+
     authentication_classes = [VendorJWTAuthentication]
     permission_classes = [IsAuthenticated]
 
@@ -698,34 +734,30 @@ class VendorVariantStatusView(APIView):
         _, category_ids = _get_business_category_ids(request.user)
         if not category_ids:
             return api_response(False, "Business profile not found.", status_code=404)
+        variant = _get_vendor_variant(variant_id, category_ids)
+        business = BusinessProfile.objects.filter(vendor=request.user).first()
+        if not business:
+            return api_response(False, "Business profile not found.", status_code=404)
 
-        variant = get_object_or_404(ProductVariants, id=variant_id)
-        product_ids = set(
-            Product.objects.filter(categories__id__in=category_ids).values_list("id", flat=True)
-        )
-        if variant.product_id not in product_ids:
-            from rest_framework.exceptions import NotFound
-            raise NotFound("Variant not found.")
+        is_active = request.data.get("is_active")
+        if not isinstance(is_active, bool):
+            raise ValidationError({
+                "is_active": "This field is required and must be a boolean."
+            })
 
-        status_id = request.data.get("status_id")
-        if status_id is None:
-            from rest_framework.exceptions import ValidationError
-            raise ValidationError({"status_id": "This field is required."})
-        try:
-            variant = product_service.update_variant(variant, status_id=status_id)
-        except ProductService.ValidationError as exc:
-            from rest_framework.exceptions import ValidationError
-            raise ValidationError(exc.errors) from exc
-        result = ProductVariantSerializer(variant).data
-        return api_response(data=result)
+        offer = BusinessOffer.objects.filter(
+            business=business, variant=variant
+        ).first()
+        if offer is None:
+            raise ValidationError({
+                "is_active": "Create a BusinessOffer before updating marketplace status."
+            })
 
+        if offer.is_active != is_active:
+            offer.is_active = is_active
+            offer.save(update_fields=["is_active"])
 
-class VendorVariantStatusesView(APIView):
-    authentication_classes = [VendorJWTAuthentication]
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        statuses = ProductVariantStatus.objects.all().order_by("id")
-        return api_response(
-            data=ProductVariantStatusSerializer(statuses, many=True).data
-        )
+        return api_response(data={
+            "variant_id": variant.id,
+            "marketplace_offer_status": "active" if is_active else "inactive",
+        })

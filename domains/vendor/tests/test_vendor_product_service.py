@@ -1,13 +1,26 @@
+from decimal import Decimal
+
 from django.test import TestCase
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from domains.business.models import BusinessCategory, BusinessProfile
-from domains.catalog.models import Category, CategoryStatus, Product, ProductStatus, ProductVariants
+from domains.catalog.models import (
+    Category,
+    CategoryStatus,
+    Product,
+    ProductStatus,
+    ProductVariantStatus,
+    ProductVariants,
+)
 from domains.marketplace.models import BusinessOffer
 from domains.vendor.enums.VendorStatusEnum import VendorStatusEnum
 from domains.vendor.models import Vendor, VendorStatus
 from domains.vendor.services.vendor_product_service import VendorProductService
+from domains.vendor.views.products import (
+    VendorProductVariantDetailView,
+    VendorVariantMarketplaceStatusView,
+)
 
 
 class VendorProductServiceTests(TestCase):
@@ -293,6 +306,117 @@ class VendorProductServiceTests(TestCase):
         self.assertEqual(str(offer.price), "150.00")
         self.assertEqual(offer.discount_type, "percentage")
         self.assertEqual(str(offer.discount_value), "10.00")
+
+    # ─────────────────────── marketplace offer status ───────────────────────
+
+    def _make_vendor_variant(self):
+        business = BusinessProfile.objects.create(
+            id=9999,
+            vendor=self.vendor,
+            business_name="Test Business",
+            display_name="Test Business",
+        )
+        BusinessCategory.objects.create(business=business, category=self.category)
+        product = Product.objects.create(name="Gate Product", status=self.active_status)
+        product.categories.add(self.category)
+        variant = ProductVariants.objects.create(
+            product=product,
+            sku="SKU-GATE-1",
+            combination_key="1:1",
+        )
+        return business, variant
+
+    def _variant_detail(self, variant):
+        factory = APIRequestFactory()
+        request = factory.get(f"/vendor/variants/{variant.id}")
+        force_authenticate(request, user=self.vendor)
+        response = VendorProductVariantDetailView.as_view()(
+            request, variant_id=variant.id
+        )
+        self.assertEqual(response.status_code, 200)
+        return response.data["data"]
+
+    def _toggle_marketplace_status(self, variant, is_active):
+        factory = APIRequestFactory()
+        request = factory.patch(
+            f"/vendor/variants/{variant.id}/marketplace-status",
+            {"is_active": is_active},
+            format="json",
+        )
+        force_authenticate(request, user=self.vendor)
+        return VendorVariantMarketplaceStatusView.as_view()(
+            request, variant_id=variant.id
+        )
+
+    def test_vendor_patch_cannot_change_variant_status(self):
+        _, variant = self._make_vendor_variant()
+        original_status_id = variant.status_id
+        other_status = ProductVariantStatus.objects.create(name="hidden")
+
+        factory = APIRequestFactory()
+        request = factory.patch(
+            f"/vendor/variants/{variant.id}",
+            {"status_id": other_status.id},
+            format="json",
+        )
+        force_authenticate(request, user=self.vendor)
+        response = VendorProductVariantDetailView.as_view()(
+            request, variant_id=variant.id
+        )
+
+        self.assertEqual(response.status_code, 200)
+        variant.refresh_from_db()
+        self.assertEqual(variant.status_id, original_status_id)
+
+    def test_marketplace_status_requires_offer(self):
+        _, variant = self._make_vendor_variant()
+        response = self._toggle_marketplace_status(variant, False)
+        self.assertEqual(response.status_code, 400)
+
+    def test_marketplace_status_toggles_offer(self):
+        business, variant = self._make_vendor_variant()
+        offer = BusinessOffer.objects.create(
+            business=business, variant=variant, price=Decimal("100.00")
+        )
+        self.assertTrue(offer.is_active)
+
+        response = self._toggle_marketplace_status(variant, False)
+        self.assertEqual(response.status_code, 200)
+        offer.refresh_from_db()
+        self.assertFalse(offer.is_active)
+
+        response = self._toggle_marketplace_status(variant, True)
+        self.assertEqual(response.status_code, 200)
+        offer.refresh_from_db()
+        self.assertTrue(offer.is_active)
+
+    def test_inventory_type_gate_follows_offer_status(self):
+        business, variant = self._make_vendor_variant()
+        offer = BusinessOffer.objects.create(
+            business=business, variant=variant, price=Decimal("100.00")
+        )
+
+        detail = self._variant_detail(variant)
+        self.assertEqual(detail["marketplace_offer_status"], "active")
+        self.assertFalse(detail["can_change_inventory_type"])
+        self.assertIsNotNone(detail["change_inventory_type_reason"])
+
+        offer.is_active = False
+        offer.save(update_fields=["is_active"])
+
+        detail = self._variant_detail(variant)
+        self.assertEqual(detail["marketplace_offer_status"], "inactive")
+        self.assertTrue(detail["can_change_inventory_type"])
+        self.assertIsNone(detail["change_inventory_type_reason"])
+        # A deactivated offer keeps its pricing block instead of vanishing.
+        self.assertIsNotNone(detail["pricing"])
+
+    def test_detail_reports_none_offer_status(self):
+        _, variant = self._make_vendor_variant()
+        detail = self._variant_detail(variant)
+        self.assertEqual(detail["marketplace_offer_status"], "none")
+        self.assertTrue(detail["can_change_inventory_type"])
+        self.assertIsNone(detail["pricing"])
 
     def test_find_similar_products_empty_name(self):
         Product.objects.create(name="Samsung Galaxy", status=self.active_status)

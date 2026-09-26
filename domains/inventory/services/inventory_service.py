@@ -520,15 +520,28 @@ class InventoryService:
     def _is_editable(unit):
         return unit.state == InventoryUnitStateEnum.IN_STOCK.value
 
-    def _ensure_inventory_type_change_allowed(self, variant, business):
+    INVENTORY_TYPE_CHANGE_REASON = _(
+        'Deactivate the marketplace offer before changing inventory type.'
+    )
+
+    def inventory_type_change_gate(self, variant, business=None):
+        """Non-raising flavour of the inventory type gate.
+
+        Returns ``(allowed, reason)`` so API consumers can render the rule
+        before the vendor attempts the change.
+        """
         if business is not None and BusinessOffer.objects.filter(
             variant=variant,
             business=business,
             is_active=True,
         ).exists():
-            raise self.ValidationError({
-                "inventory_type": [_('Deactivate the marketplace offer before changing inventory type.')]
-            })
+            return False, str(self.INVENTORY_TYPE_CHANGE_REASON)
+        return True, None
+
+    def _ensure_inventory_type_change_allowed(self, variant, business):
+        allowed, reason = self.inventory_type_change_gate(variant, business)
+        if not allowed:
+            raise self.ValidationError({"inventory_type": [reason]})
 
     def _convert_serialized_to_normal(self, variant, *, business=None):
         inventories = Inventory.objects.select_for_update().filter(variant=variant)
