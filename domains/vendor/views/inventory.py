@@ -21,7 +21,6 @@ from domains.inventory.enums.InventorySupplyCostTypeEnum import InventorySupplyC
 from domains.inventory.services.inventory_pricing_service import InventoryPricingService
 from domains.inventory.services.inventory_service import InventoryService
 from domains.inventory.services.inventory_supply_service import InventorySupplyService
-from domains.inventory.services.price_history_mongo import get_price_history as mongo_price_history
 from domains.location.api.options import (
     CountryFilterSerializer,
     CountryOptionSerializer,
@@ -30,7 +29,9 @@ from domains.location.api.options import (
     CityOptionSerializer,
 )
 from domains.location.models import City, Country, State
+from domains.marketplace.api.serializers import OfferPriceHistorySerializer
 from domains.marketplace.models import BusinessOffer
+from domains.marketplace.services import MarketplacePricingService
 from domains.vendor.auth import VendorJWTAuthentication
 from domains.vendor.views.products import _get_business_category_ids
 
@@ -115,8 +116,10 @@ class VendorVariantPricingHistoryView(VendorInventoryAPIView):
     def get(self, request, variant_id):
         business = self._get_business(request)
         variant = self._get_vendor_variant(variant_id, business)
-        history = mongo_price_history(variant_id)
-        return api_response(data=history)
+        history = MarketplacePricingService.get_price_history(variant, business=business)
+        return api_response(
+            data=OfferPriceHistorySerializer(history, many=True).data
+        )
 
 
 class VendorPricingStrategiesView(VendorInventoryAPIView):

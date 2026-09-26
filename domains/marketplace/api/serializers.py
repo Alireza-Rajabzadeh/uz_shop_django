@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from ..models import BusinessOffer
+from ..models import BusinessOffer, OfferPriceHistory
 from ..services import MarketplacePricingService
 
 
@@ -47,3 +47,24 @@ class BusinessOfferSerializer(serializers.ModelSerializer):
         except MarketplacePricingService.ValidationError as exc:
             raise serializers.ValidationError(exc.errors) from exc
         return attrs
+
+
+class OfferPriceHistorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OfferPriceHistory
+        fields = [
+            "id",
+            "offer",
+            "variant",
+            "old_price",
+            "new_price",
+            "old_discount_type",
+            "new_discount_type",
+            "old_discount_value",
+            "new_discount_value",
+            "cost_strategy",
+            "expected_profit_percentage",
+            "source",
+            "created_at",
+        ]
+        read_only_fields = fields

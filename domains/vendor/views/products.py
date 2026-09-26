@@ -34,6 +34,7 @@ from domains.files.services import FileService
 from domains.inventory.services import InventoryService
 from domains.inventory.services.inventory_pricing_service import InventoryPricingService
 from domains.marketplace.models import BusinessOffer
+from domains.marketplace.models.offer_price_history import SOURCE_VENDOR
 from domains.marketplace.services import MarketplacePricingService
 from domains.vendor.auth import VendorJWTAuthentication
 from domains.vendor.services.vendor_product_service import VendorProductService
@@ -593,47 +594,34 @@ class VendorProductVariantDetailView(APIView):
                 offer_payload[key] = value
         return offer_payload
 
-    def _sync_business_offer(self, business, variant, payload):
+    def _sync_business_offer(self, business, variant, payload, *, source):
         if not payload:
             return None
-        cleaned = {}
-        for key, value in payload.items():
-            if value in ("", None):
-                cleaned[key] = None
-            else:
-                cleaned[key] = value
-
-        price = cleaned.get("price")
-        discount_type = cleaned.get("discount_type")
-        discount_value = cleaned.get("discount_value")
-        offer = BusinessOffer.objects.filter(business=business, variant=variant).first()
-
-        if price is None and discount_type is None and discount_value is None:
-            return offer
-
-        normalized = {
-            "business": business,
-            "variant": variant,
-            "price": Decimal(str(price)) if price is not None else (offer.price if offer else Decimal("0")),
-            "discount_type": discount_type if discount_type is not None else (offer.discount_type if offer else None),
-            "discount_value": (
-                Decimal(str(discount_value)) if discount_value is not None else (offer.discount_value if offer else None)
-            ),
-            "expected_profit_percentage": (
-                offer.expected_profit_percentage if offer else Decimal("0")
-            ),
-            "cost_strategy": offer.cost_strategy if offer else "latest",
+        cleaned = {
+            key: (None if value in ("", None) else value)
+            for key, value in payload.items()
         }
+        offer = BusinessOffer.objects.filter(business=business, variant=variant).first()
+        has_write = any(value is not None for value in cleaned.values())
+        if offer is None and not has_write:
+            return None
+
+        values = {"business": business, "variant": variant}
+        price = cleaned.get("price")
+        if price is not None:
+            values["price"] = Decimal(str(price))
+        if "discount_type" in cleaned:
+            # An explicit None clears the discount instead of keeping the old one.
+            values["discount_type"] = cleaned["discount_type"]
+        if "discount_value" in cleaned:
+            raw_value = cleaned["discount_value"]
+            values["discount_value"] = (
+                Decimal(str(raw_value)) if raw_value is not None else None
+            )
 
         if offer is None:
-            return MarketplacePricingService.create_offer(**normalized)
-
-        return MarketplacePricingService.update_offer(offer, **{
-            key: value
-            for key, value in normalized.items()
-            if key in {"price", "discount_type", "discount_value", "expected_profit_percentage", "cost_strategy"}
-            if value is not None or key in {"expected_profit_percentage", "cost_strategy"}
-        })
+            return MarketplacePricingService.create_offer(_source=source, **values)
+        return MarketplacePricingService.update_offer(offer, _source=source, **values)
 
     def get(self, request, variant_id):
         _, category_ids = _get_business_category_ids(request.user)
@@ -695,7 +683,9 @@ class VendorProductVariantDetailView(APIView):
             from rest_framework.exceptions import ValidationError
             raise ValidationError(exc.errors) from exc
 
-        self._sync_business_offer(business, variant, offer_payload)
+        self._sync_business_offer(
+            business, variant, offer_payload, source=SOURCE_VENDOR
+        )
         result = ProductVariantSerializer(variant).data
         return api_response(data=result)
 

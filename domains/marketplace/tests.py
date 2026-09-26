@@ -13,8 +13,22 @@ from domains.catalog.models import (
     ProductVariants,
     ProductVariantStatus,
 )
-from domains.marketplace.models import BusinessOffer
+from domains.marketplace.models import BusinessOffer, OfferPriceHistory
 from domains.vendor.models import Vendor, VendorStatus
+
+
+def _ensure_business(vendor, name):
+    """BusinessProfile is a singleton (id=1) and is pre-created by the
+    inventory data migration, so reuse it instead of inserting a duplicate."""
+    business, _ = BusinessProfile.objects.get_or_create(
+        id=1,
+        defaults={"business_name": name, "display_name": name},
+    )
+    business.vendor = vendor
+    business.business_name = name
+    business.display_name = name
+    business.save()
+    return business
 
 
 class BusinessOfferModelTests(APITestCase):
@@ -28,12 +42,7 @@ class BusinessOfferModelTests(APITestCase):
             vendor_code="V001",
             status=vendor_status,
         )
-        self.business = BusinessProfile.objects.create(
-            id=1,
-            vendor=self.vendor,
-            business_name="Test Business",
-            display_name="Test Business",
-        )
+        self.business = _ensure_business(self.vendor, "Test Business")
         category_status = CategoryStatus.objects.create(name="active")
         self.category = Category.objects.create(name="Phones", status=category_status)
         product_status = ProductStatus.objects.create(name="active")
@@ -160,12 +169,7 @@ class BusinessOfferAPITests(APITestCase):
             vendor_code="V003",
             status=vendor_status,
         )
-        self.business = BusinessProfile.objects.create(
-            id=1,
-            vendor=self.vendor,
-            business_name="API Business",
-            display_name="API Business",
-        )
+        self.business = _ensure_business(self.vendor, "API Business")
         category_status = CategoryStatus.objects.create(name="active")
         self.category = Category.objects.create(name="Phones", status=category_status)
         product_status = ProductStatus.objects.create(name="active")
@@ -297,3 +301,52 @@ class BusinessOfferAPITests(APITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, 400)
+
+    def test_price_change_records_history(self):
+        offer = BusinessOffer.objects.create(
+            business=self.business, variant=self.variant, price=Decimal("100.00")
+        )
+        self.client.patch(
+            f"/api/marketplace/offers/{offer.id}",
+            {"price": "90.00"},
+            format="json",
+        )
+        history = OfferPriceHistory.objects.get(variant=self.variant)
+        self.assertEqual(history.old_price, Decimal("100.00"))
+        self.assertEqual(history.new_price, Decimal("90.00"))
+        self.assertEqual(history.source, "admin")
+
+    def test_unchanged_price_does_not_record_history(self):
+        offer = BusinessOffer.objects.create(
+            business=self.business, variant=self.variant, price=Decimal("100.00")
+        )
+        response = self.client.patch(
+            f"/api/marketplace/offers/{offer.id}",
+            {"price": "100.00"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(
+            OfferPriceHistory.objects.filter(variant=self.variant).exists()
+        )
+
+    def test_patch_clears_discount(self):
+        offer = BusinessOffer.objects.create(
+            business=self.business,
+            variant=self.variant,
+            price=Decimal("100.00"),
+            discount_type="percentage",
+            discount_value=Decimal("10.00"),
+        )
+        response = self.client.patch(
+            f"/api/marketplace/offers/{offer.id}",
+            {"discount_type": None, "discount_value": None},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        offer.refresh_from_db()
+        self.assertIsNone(offer.discount_type)
+        self.assertIsNone(offer.discount_value)
+        history = OfferPriceHistory.objects.get(variant=self.variant)
+        self.assertEqual(history.old_discount_type, "percentage")
+        self.assertIsNone(history.new_discount_type)
