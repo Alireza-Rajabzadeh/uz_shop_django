@@ -556,12 +556,16 @@ class VendorProductVariantFormOptionsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, product_id):
-        _, category_ids = _get_business_category_ids(request.user)
+        business, category_ids = _get_business_category_ids(request.user)
         if not category_ids:
             return api_response(False, "Business profile not found.", status_code=404)
         product = _get_vendor_product(product_id, category_ids)
         try:
-            warehouse = inventory_service.get_default_warehouse()
+            # Defaults are unique per business, so a global lookup breaks as
+            # soon as a second business owns a default warehouse. Reaching this
+            # point already proves the business exists (an absent one returns
+            # an empty category list above).
+            warehouse = inventory_service.get_default_warehouse(business=business)
         except InventoryService.ValidationError as exc:
             from rest_framework.exceptions import ValidationError
             raise ValidationError(exc.errors) from exc
