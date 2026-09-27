@@ -30,7 +30,6 @@ from domains.catalog.services import ProductService, ProductFileService
 from domains.files.api.serializers import FileUploadSerializer
 from domains.files.services import FileService
 from domains.inventory.services import InventoryService
-from domains.inventory.services.inventory_pricing_service import InventoryPricingService
 from domains.marketplace.models import BusinessOffer
 from domains.marketplace.models.offer_price_history import SOURCE_VENDOR
 from domains.marketplace.services import MarketplacePricingService
@@ -49,7 +48,6 @@ product_service = ProductService()
 product_file_service = ProductFileService()
 file_service = FileService()
 inventory_service = InventoryService()
-pricing_service = InventoryPricingService()
 vendor_product_service = VendorProductService()
 
 
@@ -576,7 +574,10 @@ class VendorProductVariantFormOptionsView(APIView):
                 "category": (lambda c: c.id if c else None)(product.categories.order_by("id").first()),
                 "category_name": (lambda c: c.name if c else None)(product.categories.order_by("id").first()),
             },
-            "inventory_strategies": pricing_service.get_strategies(),
+            # Inventory type options (normal / serialized) for the stock type
+            # selector. Cost strategies belong to pricing and are served by
+            # the pricing options endpoint, not the variant form.
+            "inventory_strategies": inventory_service.get_inventory_types(),
             "default_warehouse": inventory_service.serialize_warehouse(warehouse),
             "attributes": product_service.get_variant_form_options(
                 product, request.query_params.get("search")

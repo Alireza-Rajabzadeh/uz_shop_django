@@ -639,6 +639,22 @@ class InventoryService:
     def _detect_inventory_type(self, variant, business=None):
         return self._get_inventory_type(variant, business=business).code
 
+    def get_inventory_types(self):
+        """Options for the inventory type (normal / serialized) selector.
+
+        Cost strategies are a separate pricing concern served by
+        ``InventoryPricingService.get_strategies()``.
+        """
+        return [
+            {
+                "id": item.id,
+                "code": item.code,
+                "name": item.name,
+                "fa_name": item.fa_name,
+            }
+            for item in InventoryType.objects.all()
+        ]
+
     def get_summary(self, variant, business=None):
         inv_type = self._detect_inventory_type(variant, business=business)
         if inv_type == "normal":
