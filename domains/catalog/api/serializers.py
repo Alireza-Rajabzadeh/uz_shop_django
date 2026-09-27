@@ -513,6 +513,9 @@ class ProductVariantSelectionWriteSerializer(serializers.Serializer):
 class NormalInventoryWriteSerializer(serializers.Serializer):
     quantity = serializers.IntegerField(min_value=0)
     sellable = serializers.IntegerField(min_value=0)
+    # Optional so an omitted key keeps the stored threshold instead of resetting
+    # it to zero; InventoryService falls back to the existing row value.
+    min_stock = serializers.IntegerField(min_value=0, required=False)
 
     def validate(self, attrs):
         if attrs["sellable"] > attrs["quantity"]:

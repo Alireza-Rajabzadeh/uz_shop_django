@@ -5,6 +5,7 @@ from rest_framework.views import APIView
 
 from core.responses import api_response
 from domains.catalog.models import Product, ProductVariants
+from domains.catalog.services.variant_service import VariantService
 from domains.inventory.api.serializers import (
     InventoryVariantDetailSerializer,
     PricingStrategyOptionSerializer,
@@ -332,7 +333,7 @@ class VendorInventoryOverviewView(VendorInventoryAPIView):
         strategy = request.query_params.get("strategy", "").strip().lower()
 
         inventory_service = InventoryService()
-        pricing_service = InventoryPricingService()
+        variant_service = VariantService()
 
         variants = inventory_service.search_variants(
             search=search or None,
@@ -362,7 +363,7 @@ class VendorInventoryOverviewView(VendorInventoryAPIView):
         for v in variants:
             overview = inventory_service.serialize_variant_overview(v, default_warehouse)
             offer = offers.get(v.id)
-            discounted = pricing_service.calculate_discounted_price(v, offer)
+            discounted = variant_service.calculate_discounted_price(v, offer)
             result.append({
                 "id": v.id,
                 "sku": v.sku,
