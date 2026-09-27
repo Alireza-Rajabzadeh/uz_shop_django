@@ -305,3 +305,61 @@ class InventoryTypeConversionTests(TestCase):
         self.assertNotIn(stale.pk, remaining)
         self.assertIn(fresh.pk, remaining)
         self.assertIn(live.pk, remaining)
+
+    # ─────────────────────── refresh ───────────────────────
+
+    def test_refresh_on_serialized_counts_units_instead_of_raising(self):
+        """Refresh re-derives serialized stock rather than rejecting it.
+
+        The variant's units are the ledger for serialized inventory, so a
+        refresh recounts them; it is not a supplies operation and must not
+        fail as one.
+        """
+        inventory, _ = self._make_serialized_inventory(
+            in_stock=2, reserved=1, sold=1, changed_type=3
+        )
+        # Drift the stored summary away from its units.
+        Inventory.objects.filter(pk=inventory.pk).update(quantity=99, sellable=99)
+
+        self.service.refresh_variant_inventory(
+            variant=self.variant, business=self.business
+        )
+
+        inventory.refresh_from_db()
+        # changed_type residue is never stock; historical rows are a record of
+        # the past but still owned by the units ledger.
+        self.assertEqual(inventory.quantity, 4)
+        self.assertEqual(inventory.sellable, 2)
+        self.assertEqual(inventory.reserved, 1)
+
+    def test_refresh_on_normal_still_reads_received_supplies(self):
+        self._make_normal_inventory(quantity=5, sellable=5)
+        self._receive_supply(quantity=8)
+
+        self.service.refresh_variant_inventory(
+            variant=self.variant, business=self.business
+        )
+
+        inventory = Inventory.objects.get(variant=self.variant)
+        self.assertEqual(inventory.quantity, 8)
+
+    def test_summaries_do_not_double_count_serialized_stock(self):
+        """The list annotation must agree with get_summary for serialized.
+
+        Inventory.quantity already mirrors the units via
+        _sync_inventory_summary, so adding the unit rows on top counted every
+        serialized variant twice and treated changed_type residue as stock.
+        """
+        self._make_serialized_inventory(in_stock=2, changed_type=3)
+
+        summary = self.service.get_summary(self.variant, business=self.business)
+        annotated = self.service.annotate_variant_summaries(
+            ProductVariants.objects.filter(pk=self.variant.pk)
+        ).get()
+
+        self.assertEqual(summary["total_item_count"], 2)
+        self.assertEqual(annotated.total_item_count, summary["total_item_count"])
+        self.assertEqual(
+            annotated.sellable_item_count, summary["sellable_item_count"]
+        )
+        self.assertEqual(annotated.reserved_item_count, 0)

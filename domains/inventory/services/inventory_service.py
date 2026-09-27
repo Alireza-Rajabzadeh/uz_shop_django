@@ -3,7 +3,7 @@ from datetime import timedelta
 
 from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
-from django.db.models import Count, F, IntegerField, OuterRef, Q, Subquery, Sum
+from django.db.models import F, IntegerField, OuterRef, Q, Subquery, Sum
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -228,10 +228,12 @@ class InventoryService:
             }) from exc
 
     def annotate_variant_summaries(self, queryset):
+        # Inventory.quantity/sellable/reserved are the single source of truth
+        # for a variant's stock. Serialized rows are re-derived from their units
+        # by _sync_inventory_summary on every unit mutation, so the unit rows
+        # must not be added on top of them: that counted serialized stock twice
+        # (and counted `changed_type` residue as if it were still stock).
         inventory_sub = Inventory.objects.filter(variant_id=OuterRef("pk")).values("variant_id")
-        unit_sub = InventoryUnit.objects.filter(
-            inventory__variant_id=OuterRef("pk")
-        ).values("inventory__variant_id")
         return queryset.annotate(
             inv_quantity=Coalesce(
                 Subquery(inventory_sub.annotate(value=Sum("quantity")).values("value")[:1]),
@@ -248,36 +250,11 @@ class InventoryService:
                 0,
                 output_field=IntegerField(),
             ),
-            unit_total=Coalesce(
-                Subquery(unit_sub.annotate(value=Count("inventory__variant_id")).values("value")[:1]),
-                0,
-                output_field=IntegerField(),
-            ),
-            unit_sellable=Coalesce(
-                Subquery(
-                    unit_sub.filter(
-                        inventory__variant_id=OuterRef("pk"),
-                        state=InventoryUnitStateEnum.IN_STOCK.value,
-                    ).annotate(value=Count("inventory__variant_id")).values("value")[:1]
-                ),
-                0,
-                output_field=IntegerField(),
-            ),
-            unit_reserved=Coalesce(
-                Subquery(
-                    unit_sub.filter(
-                        inventory__variant_id=OuterRef("pk"),
-                        state=InventoryUnitStateEnum.RESERVED.value,
-                    ).annotate(value=Count("inventory__variant_id")).values("value")[:1]
-                ),
-                0,
-                output_field=IntegerField(),
-            ),
         ).annotate(
-            total_item_count=F("inv_quantity") + F("unit_total"),
-            sellable_item_count=F("inv_sellable") + F("unit_sellable"),
-            available_item_count=(F("inv_sellable") - F("inv_reserved")) + F("unit_sellable"),
-            reserved_item_count=F("inv_reserved") + F("unit_reserved"),
+            total_item_count=F("inv_quantity"),
+            sellable_item_count=F("inv_sellable"),
+            available_item_count=F("inv_sellable") - F("inv_reserved"),
+            reserved_item_count=F("inv_reserved"),
             min_stock=Coalesce(
                 Subquery(
                     Inventory.objects.filter(
@@ -939,6 +916,35 @@ class InventoryService:
         inventory.save(update_fields=[
             "inventory_type", "quantity", "sellable", "reserved"
         ])
+
+    @transaction.atomic
+    def refresh_serialized_inventory_from_units(self, *, variant, business=None):
+        """Recompute serialized stock from its registered units.
+
+        Serialized quantity is owned by the units rather than by received
+        supplies, so a refresh recounts them instead of reading the supply
+        ledger. Every unit mutation keeps this same summary in sync, so this
+        is a re-derivation rather than a different source of truth.
+        """
+        inventories = Inventory.objects.select_for_update().filter(variant=variant)
+        if business is not None:
+            inventories = inventories.filter(business=business)
+        synced = []
+        for inventory in inventories:
+            self._sync_inventory_summary(inventory)
+            synced.append(inventory)
+        return synced
+
+    @transaction.atomic
+    def refresh_variant_inventory(self, *, variant, business=None):
+        """Recompute a variant's stock from whichever ledger owns it."""
+        if self._detect_inventory_type(variant, business=business) == "serialized":
+            return self.refresh_serialized_inventory_from_units(
+                variant=variant, business=business
+            )
+        return self.refresh_normal_inventory_from_supplies(
+            variant=variant, business=business
+        )
 
     @transaction.atomic
     def refresh_normal_inventory_from_supplies(self, *, variant, business=None):

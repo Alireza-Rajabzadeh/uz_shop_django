@@ -118,7 +118,8 @@ Single service class owning all rules; raises `InventoryService.ValidationError(
 
 Variant summaries:
 
-- `annotate_variant_summaries(queryset)` — subquery annotations per strategy (`normal_*`, `serialized_*`) collapsed into `total_item_count`, `sellable_item_count`, `available_item_count` via `Case` on strategy code.
+- `annotate_variant_summaries(queryset)` — subqueries summing `Inventory.quantity/sellable/reserved` per variant into `total_item_count`, `sellable_item_count`, `available_item_count`, `reserved_item_count`. `Inventory` is the single source of truth: `_sync_inventory_summary` re-derives those columns from the registered units on every unit mutation, so unit rows are deliberately **not** added on top (doing so counted serialized variants twice and counted `changed_type` residue as stock). The list and `get_summary` therefore always agree.
+- `refresh_variant_inventory(...)` — recomputes a variant's stock from whichever ledger owns it: received supplies for `normal`, a recount of registered units for `serialized`.
 - `search_variants(...)` — admin inventory list query: search (SKU/product name), product/category filters, `strategy_code`, `stock_state` (`in_stock` / `out_of_stock` / `low_stock` vs `min_stock` from the default warehouse), `has_reserved`, ordering allowlist.
 - `serialize_variant_overview(variant, default_warehouse)` / `get_summary(variant)` / `get_variant_details(variant)` — read shapes for list and detail responses.
 

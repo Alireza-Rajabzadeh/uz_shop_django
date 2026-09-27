@@ -81,7 +81,7 @@ class VendorVariantInventoryRefreshView(VendorInventoryAPIView):
         business = self._get_business(request)
         variant = self._get_vendor_variant(variant_id, business)
         try:
-            inventory_service.refresh_normal_inventory_from_supplies(
+            inventory_service.refresh_variant_inventory(
                 variant=variant,
                 business=business,
             )
