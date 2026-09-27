@@ -120,7 +120,6 @@ class InventoryAPITests(APITestCase):
 
     def test_duplicate_serial_numbers_are_rejected_globally(self):
         response = self.create_variant(serialized=True)
-        print("SERIALIZED CREATE RESPONSE", response.status_code, response.data)
         self.assertEqual(response.status_code, 201)
 
         payload = self.payload(serialized=True, option=self.option_b)

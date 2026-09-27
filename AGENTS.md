@@ -30,6 +30,7 @@ Run directly from `back/`:
 | `python manage.py makemigrations` | Generate migrations |
 | `python manage.py seed` | Seed development/reference data |
 | `python manage.py seed_categories` | Idempotently load the canonical category taxonomy |
+| `python manage.py purge_changed_type_units --older-than-days 90` | Purge expired `changed_type` units left by an inventory type conversion |
 | `pip install -r scripts/requirements-digikala-discovery.txt` | Install Playwright+Chromium deps for Digikala mapping discovery |
 | `python scripts/discover_all_categories.py` | Discover/merge Digikala mappings one by one |
 | `python scripts/digikala.py validate\|listings\|details ...` | Run the Digikala import CLI |
@@ -178,6 +179,8 @@ The seed command does not provision notification provider statuses or a default 
 - Use Catalog services for aggregate product, category-detail, variant, and media writes.
 - Use Inventory services for stock mutations and strategy-specific rules.
 - Preserve database constraints, row locking, and atomic replacement workflows when changing aggregate writes.
+- Inventory type changes require an inactive marketplace offer; `InventoryService.inventory_type_change_gate(variant, business)` reports the rule without raising.
+- Converting serialized → normal moves live units to the `changed_type` state. They keep the audit trail but are never sellable and are excluded from stock totals. Purge them manually with `python manage.py purge_changed_type_units --older-than-days 90` (`--dry-run` previews); there is deliberately no beat schedule, so the 90-day retention window stays an operator decision.
 
 Current catalog endpoints are administrative and permission-controlled. They are not a public storefront contract.
 
@@ -188,6 +191,8 @@ The marketplace domain owns per-business variant pricing through `BusinessOffer`
 - `BusinessProfile` is a singleton (id=1) linked to a `Vendor`. Only one business exists.
 - `BusinessOffer` has a unique constraint on `(business, variant)`. Each variant can have at most one offer per business.
 - `BusinessOffer` owns `price`, `discount_type`, and `discount_value`. These fields were removed from `ProductVariants`.
+- `OfferPriceHistory` is an append-only audit of price/discount changes, written by `MarketplacePricingService` for both the admin offer API and the vendor variant API. An omitted field keeps its stored value; an explicit `None` clears it. It is separate from `inventory.VariantPriceHistory`, which still records the cost-basis pricing flow.
+- `BusinessOffer.is_active` is also the gate for changing a vendor variant's inventory type.
 - Reading pricing: callers attach `_business_offer` to variant objects via a batched lookup, then read from `offer.price`, `offer.discount_type`, `offer.discount_value`.
 - Writing pricing: `InventoryPricingService.apply_price()` writes to `BusinessOffer.price` and creates `VariantPriceHistory` snapshots.
 - `VariantService.calculate_discounted_price(variant, offer=None)` accepts an optional offer parameter and reads price/discount from it.

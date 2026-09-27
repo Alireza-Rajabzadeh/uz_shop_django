@@ -1,13 +1,19 @@
 import uuid
+from datetime import timedelta
 
 from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
 from django.db.models import Count, F, IntegerField, OuterRef, Q, Subquery, Sum
 from django.db.models.functions import Coalesce
+from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from domains.catalog.models import Category
-from domains.inventory.enums.InventoryUnitStateEnum import InventoryUnitStateEnum
+from domains.inventory.enums.InventoryUnitStateEnum import (
+    HISTORICAL_STATES,
+    LIVE_STATES,
+    InventoryUnitStateEnum,
+)
 from domains.inventory.models import (
     Inventory,
     InventoryAttributeDefinition,
@@ -378,11 +384,13 @@ class InventoryService:
             inventories = inventories.filter(business=business)
         inventory = inventories.first()
         if inventory is None:
+            # Resolve the warehouse with the caller's business (which may be
+            # unset), mirroring _apply_normal. Only the row itself needs the
+            # singleton fallback, because Inventory.business is NOT NULL.
+            warehouse = self.get_default_warehouse(business=business, lock=True)
             from domains.business.models import BusinessProfile
-            business = business or BusinessProfile.objects.get(id=1)
-            warehouse = self.get_default_warehouse(business=business)
             inventory = Inventory.objects.create(
-                business=business,
+                business=business or BusinessProfile.objects.get(id=1),
                 warehouse=warehouse,
                 variant=variant,
                 inventory_type_id=2,
@@ -415,11 +423,18 @@ class InventoryService:
                 "serial_items": [_('One or more serialized row IDs do not belong to this variant.')]
             })
 
-        omitted = [unit for unit_id, unit in existing.items() if unit_id not in supplied_ids]
+        # Historical rows are out of scope: never deleted, never rewritten,
+        # whether or not the client echoes them back. Only live units take part
+        # in the diff.
+        omitted = [
+            unit
+            for unit_id, unit in existing.items()
+            if unit_id not in supplied_ids and unit.state not in HISTORICAL_STATES
+        ]
         protected_omitted = [unit for unit in omitted if not self._is_editable(unit)]
         if protected_omitted:
             raise self.ValidationError({
-                "serial_items": [_('Sold, reserved, or historical serialized rows cannot be deleted.')]
+                "serial_items": [_('Reserved serialized rows cannot be deleted.')]
             })
 
         normalized_serials = [self.normalize_serial(item["serial_number"]) for item in serial_items]
@@ -460,6 +475,8 @@ class InventoryService:
                     if row_id is None:
                         continue
                     unit = existing[row_id]
+                    if unit.state in HISTORICAL_STATES:
+                        continue
                     attr = existing_attrs.get(row_id)
                     old_serial = attr.value if attr else ""
                     on_sale = item["on_sale"]
@@ -467,7 +484,7 @@ class InventoryService:
                     changed = old_serial != serial_number or unit.state != desired_state
                     if changed and not self._is_editable(unit):
                         raise self.ValidationError({
-                            "serial_items": [_('Sold, reserved, or historical serialized rows cannot be edited.')]
+                            "serial_items": [_('Reserved serialized rows cannot be edited.')]
                         })
                     if changed:
                         changed_existing.append((unit, serial_number, desired_state))
@@ -494,6 +511,8 @@ class InventoryService:
                         )
                         continue
                     unit = existing[row_id]
+                    if unit.state in HISTORICAL_STATES:
+                        continue
                     unit.state = desired_state
                     unit.save(update_fields=["state"])
                     attr = existing_attrs.get(row_id)
@@ -544,9 +563,21 @@ class InventoryService:
             raise self.ValidationError({"inventory_type": [reason]})
 
     def _convert_serialized_to_normal(self, variant, *, business=None):
+        from domains.inventory.models import InventorySupply
+
         inventories = Inventory.objects.select_for_update().filter(variant=variant)
+        supplies = InventorySupply.objects.filter(
+            variant=variant,
+            received_at__isnull=False,
+        )
         if business is not None:
             inventories = inventories.filter(business=business)
+            supplies = supplies.filter(business=business)
+        received_totals = {
+            row["warehouse_id"]: row["total"]
+            for row in supplies.values("warehouse_id").annotate(total=Sum("quantity"))
+        }
+
         for inventory in inventories:
             units = list(
                 InventoryUnit.objects.select_for_update().filter(inventory=inventory)
@@ -557,17 +588,32 @@ class InventoryService:
             reserved = sum(
                 unit.state == InventoryUnitStateEnum.RESERVED.value for unit in units
             )
-            inventory.inventory_type_id = 1
-            inventory.quantity = in_stock + reserved
-            inventory.sellable = in_stock
-            inventory.reserved = reserved
-            inventory.save(update_fields=[
-                "inventory_type", "quantity", "sellable", "reserved"
-            ])
+            if inventory.warehouse_id not in received_totals and (in_stock or reserved):
+                # refresh_normal_inventory_from_supplies would fail with a
+                # message written for routine refreshes; during a conversion the
+                # vendor's first step is receiving supplies.
+                raise self.ValidationError({
+                    "inventory_type": [
+                        _('Receive supplies before converting serialized inventory to normal.')
+                    ]
+                })
             for unit in units:
-                if unit.state != InventoryUnitStateEnum.FROZEN.value:
-                    unit.state = InventoryUnitStateEnum.FROZEN.value
+                if unit.state in LIVE_STATES:
+                    unit.state = InventoryUnitStateEnum.CHANGED_TYPE.value
                     unit.save(update_fields=["state"])
+            inventory.inventory_type_id = 1
+            # `available` is sellable - reserved, so sellable has to hold every
+            # live unit to keep availability identical across the conversion.
+            inventory.sellable = in_stock + reserved
+            inventory.reserved = reserved
+            inventory.save(update_fields=["inventory_type", "sellable", "reserved"])
+
+        # `quantity` is the only field derived from received supplies, so the
+        # counts above have to be written first: the refresh guards compare
+        # quantity against reserved and sellable.
+        self.refresh_normal_inventory_from_supplies(
+            variant=variant, business=business
+        )
 
     def _get_inventory_type(self, variant, business=None):
         inventory_queryset = Inventory.objects
@@ -575,15 +621,15 @@ class InventoryService:
         if business is not None:
             inventory_queryset = inventory_queryset.filter(business=business)
             unit_queryset = unit_queryset.filter(inventory__business=business)
-        inventory = Inventory.objects.select_related("inventory_type").filter(
+        inventory = inventory_queryset.select_related("inventory_type").filter(
             variant=variant
         ).order_by("id").first()
-        if business is not None:
-            inventory = inventory_queryset.select_related("inventory_type").filter(
-                variant=variant
-            ).order_by("id").first()
-        if unit_queryset.filter(inventory__variant=variant).exclude(
-            state=InventoryUnitStateEnum.FROZEN.value
+        # Only live units report "serialized". Historical rows (sold, returned,
+        # damaged, lost, frozen, changed_type) are a record of the past and
+        # must not keep a converted variant stuck on the serialized strategy.
+        if unit_queryset.filter(
+            inventory__variant=variant,
+            state__in=LIVE_STATES,
         ).exists():
             return InventoryType.objects.get(id=2)
         if inventory is None:
@@ -610,7 +656,11 @@ class InventoryService:
         units = InventoryUnit.objects.filter(inventory__variant=variant)
         if business is not None:
             units = units.filter(inventory__business=business)
-        total = units.count()
+        # changed_type rows are the residue of a type conversion: auditable but
+        # never stock.
+        total = units.exclude(
+            state=InventoryUnitStateEnum.CHANGED_TYPE.value
+        ).count()
         sellable = units.filter(state=InventoryUnitStateEnum.IN_STOCK.value).count()
         return {
             "total_item_count": total,
@@ -682,6 +732,8 @@ class InventoryService:
         serial_attr_def = InventoryAttributeDefinition.objects.filter(code="serial_number").first()
         units = InventoryUnit.objects.filter(
             inventory__variant=variant
+        ).exclude(
+            state=InventoryUnitStateEnum.CHANGED_TYPE.value
         ).select_related("inventory__warehouse").order_by("id")
         if business is not None:
             units = units.filter(inventory__business=business)
@@ -858,7 +910,9 @@ class InventoryService:
         return qs.filter(pk=unit_id).first()
 
     def _sync_inventory_summary(self, inventory):
-        units = InventoryUnit.objects.filter(inventory=inventory)
+        units = InventoryUnit.objects.filter(inventory=inventory).exclude(
+            state=InventoryUnitStateEnum.CHANGED_TYPE.value
+        )
         inventory.quantity = units.count()
         inventory.sellable = units.filter(
             state=InventoryUnitStateEnum.IN_STOCK.value
@@ -871,28 +925,28 @@ class InventoryService:
         ])
 
     @transaction.atomic
-    def refresh_normal_inventory_from_supplies(self, *, variant, business):
-        if self._detect_inventory_type(variant) == "serialized":
+    def refresh_normal_inventory_from_supplies(self, *, variant, business=None):
+        if self._detect_inventory_type(variant, business=business) == "serialized":
             raise self.ValidationError({
                 "inventory": [_('Serialized inventory is calculated from registered units.')]
             })
 
         from domains.inventory.models import InventorySupply
 
+        supplies = InventorySupply.objects.filter(
+            variant=variant,
+            received_at__isnull=False,
+        )
+        inventories = Inventory.objects.select_for_update().filter(variant=variant)
+        if business is not None:
+            supplies = supplies.filter(business=business)
+            inventories = inventories.filter(business=business)
+
         received_totals = {
             row["warehouse_id"]: row["total"]
-            for row in InventorySupply.objects.filter(
-                business=business,
-                variant=variant,
-                received_at__isnull=False,
-            ).values("warehouse_id").annotate(total=Sum("quantity"))
+            for row in supplies.values("warehouse_id").annotate(total=Sum("quantity"))
         }
-        inventories = list(
-            Inventory.objects.select_for_update().filter(
-                business=business,
-                variant=variant,
-            )
-        )
+        inventories = list(inventories)
         inventory_by_warehouse = {inventory.warehouse_id: inventory for inventory in inventories}
 
         for warehouse_id, quantity in received_totals.items():
@@ -936,11 +990,44 @@ class InventoryService:
         return BusinessProfile.objects.get(id=1)
 
     @transaction.atomic
+    def purge_changed_type_units(self, *, older_than_days=90, dry_run=False):
+        """Drop `changed_type` units once they age past the retention window.
+
+        A serialized -> normal conversion keeps those rows so the audit trail
+        survives, but they are never sellable. Purging is deliberately manual —
+        no beat schedule — so the retention window stays an operator decision.
+        Returns the number of units deleted (or that would be deleted).
+        """
+        cutoff = timezone.now() - timedelta(days=older_than_days)
+        units = InventoryUnit.objects.filter(
+            state=InventoryUnitStateEnum.CHANGED_TYPE.value,
+            updated_at__lt=cutoff,
+        )
+        if dry_run:
+            return units.count()
+        deleted, _ = units.delete()
+        return deleted
+
+    @staticmethod
+    def _is_serialized_inventory(inventory):
+        """An inventory is serialized when it declares so or still holds live units.
+
+        Units left behind by a type conversion (changed_type/frozen) are history
+        and do not make the inventory serialized.
+        """
+        if inventory.inventory_type_id == 2:
+            return True
+        return InventoryUnit.objects.filter(
+            inventory=inventory,
+            state__in=LIVE_STATES,
+        ).exists()
+
+    @transaction.atomic
     def receive_stock(self, inventory_id, *, quantity=None, unit_count=None):
         inventory = self._get_inventory(inventory_id, lock=True)
         if inventory is None:
             raise self.ValidationError({"inventory": [_('Inventory not found.')]})
-        is_serialized = InventoryUnit.objects.filter(inventory=inventory).exists()
+        is_serialized = self._is_serialized_inventory(inventory)
         if is_serialized or unit_count is not None:
             if unit_count is None:
                 raise self.ValidationError({
@@ -973,7 +1060,7 @@ class InventoryService:
         inventory = self._get_inventory(inventory_id, lock=True)
         if inventory is None:
             raise self.ValidationError({"inventory": [_('Inventory not found.')]})
-        if InventoryUnit.objects.filter(inventory=inventory).exists():
+        if self._is_serialized_inventory(inventory):
             raise self.ValidationError({
                 "inventory": [_('Use receive_stock for serialized inventory.')]
             })
@@ -991,7 +1078,7 @@ class InventoryService:
         inventory = self._get_inventory(inventory_id, lock=True)
         if inventory is None:
             raise self.ValidationError({"inventory": [_('Inventory not found.')]})
-        if InventoryUnit.objects.filter(inventory=inventory).exists():
+        if self._is_serialized_inventory(inventory):
             raise self.ValidationError({
                 "inventory": [_('Use unit-level operations for serialized inventory.')]
             })
@@ -1016,7 +1103,7 @@ class InventoryService:
         inventory = self._get_inventory(inventory_id, lock=True)
         if inventory is None:
             raise self.ValidationError({"inventory": [_('Inventory not found.')]})
-        has_units = InventoryUnit.objects.filter(inventory=inventory).exists()
+        has_units = self._is_serialized_inventory(inventory)
         if has_units or unit_ids is not None:
             if not unit_ids:
                 raise self.ValidationError({
@@ -1064,7 +1151,7 @@ class InventoryService:
         inventory = self._get_inventory(inventory_id, lock=True)
         if inventory is None:
             raise self.ValidationError({"inventory": [_('Inventory not found.')]})
-        has_units = InventoryUnit.objects.filter(inventory=inventory).exists()
+        has_units = self._is_serialized_inventory(inventory)
         if has_units or unit_ids is not None:
             if not unit_ids:
                 raise self.ValidationError({
@@ -1112,7 +1199,7 @@ class InventoryService:
         inventory = self._get_inventory(inventory_id, lock=True)
         if inventory is None:
             raise self.ValidationError({"inventory": [_('Inventory not found.')]})
-        has_units = InventoryUnit.objects.filter(inventory=inventory).exists()
+        has_units = self._is_serialized_inventory(inventory)
         if has_units or unit_ids is not None:
             if not unit_ids:
                 raise self.ValidationError({
@@ -1166,7 +1253,7 @@ class InventoryService:
         inventory = self._get_inventory(inventory_id, lock=True)
         if inventory is None:
             raise self.ValidationError({"inventory": [_('Inventory not found.')]})
-        has_units = InventoryUnit.objects.filter(inventory=inventory).exists()
+        has_units = self._is_serialized_inventory(inventory)
         if has_units or unit_ids is not None:
             if not unit_ids:
                 raise self.ValidationError({
@@ -1208,7 +1295,7 @@ class InventoryService:
         inventory = self._get_inventory(inventory_id, lock=True)
         if inventory is None:
             raise self.ValidationError({"inventory": [_('Inventory not found.')]})
-        if not InventoryUnit.objects.filter(inventory=inventory).exists():
+        if not self._is_serialized_inventory(inventory):
             raise self.ValidationError({
                 "inventory": [_('Mark damaged is only available for serialized inventory.')]
             })
@@ -1238,7 +1325,7 @@ class InventoryService:
         inventory = self._get_inventory(inventory_id, lock=True)
         if inventory is None:
             raise self.ValidationError({"inventory": [_('Inventory not found.')]})
-        if not InventoryUnit.objects.filter(inventory=inventory).exists():
+        if not self._is_serialized_inventory(inventory):
             raise self.ValidationError({
                 "inventory": [_('Mark lost is only available for serialized inventory.')]
             })
@@ -1278,7 +1365,7 @@ class InventoryService:
                 "destination_inventory": [_('Source and destination must hold the same variant.')]
             })
 
-        has_source_units = InventoryUnit.objects.filter(inventory=source).exists()
+        has_source_units = self._is_serialized_inventory(source)
         if has_source_units or unit_ids is not None:
             self._transfer_serialized(source, destination, unit_ids=unit_ids, notes=notes)
         else:
