@@ -671,7 +671,11 @@ class VendorProductVariantDetailView(APIView):
             "pricing": {
                 "price": str(offer.price) if offer else "0",
                 "discount_type": offer.discount_type if offer else None,
-                "discount_value": str(offer.discount_value) if offer else None,
+                "discount_value": (
+                    str(offer.discount_value)
+                    if offer and offer.discount_value is not None
+                    else None
+                ),
             } if offer else None,
             "marketplace_offer_status": offer_status,
             "can_change_inventory_type": can_change_type,

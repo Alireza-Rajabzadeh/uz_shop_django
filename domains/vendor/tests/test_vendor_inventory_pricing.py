@@ -119,6 +119,38 @@ class VendorInventoryPricingTests(TestCase):
         self.assertIsNone(row["price"])
         self.assertIsNone(row["discounted_price"])
 
+    def test_inventory_overview_ignores_unowned_default_warehouse(self):
+        """Defaults are unique per business, so an unrelated default must not
+        make the lookup ambiguous and fail the whole listing."""
+        Warehouse.objects.create(
+            code="WH-ORPHAN",
+            name="Unowned Warehouse",
+            business=None,
+            city=self.warehouse.city,
+            address="Orphan address",
+            lat="0",
+            lng="0",
+            is_default=True,
+            status=self.warehouse_status,
+        )
+
+        request = self.factory.get("/vendor/inventory/overview")
+        force_authenticate(request, user=self.vendor)
+        response = VendorInventoryOverviewView.as_view()(request)
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(len(response.data["data"]), 1)
+
+    def test_inventory_overview_reports_missing_default_as_400(self):
+        """A service-level rule must surface as a 400, not a 500 traceback."""
+        self.warehouse.delete()
+
+        request = self.factory.get("/vendor/inventory/overview")
+        force_authenticate(request, user=self.vendor)
+        response = VendorInventoryOverviewView.as_view()(request)
+
+        self.assertEqual(response.status_code, 400)
+
     def test_variant_patch_persists_min_stock(self):
         """PATCH /vendor/variants/:id stores the submitted min_stock threshold."""
         request = self.factory.patch(

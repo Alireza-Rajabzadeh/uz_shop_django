@@ -349,7 +349,13 @@ class VendorInventoryOverviewView(VendorInventoryAPIView):
         else:
             variants = list(variants)
 
-        default_warehouse = inventory_service.get_default_warehouse()
+        # Scope to this business: defaults are unique per business, and other
+        # businesses (or an unowned warehouse) must not make this ambiguous.
+        try:
+            default_warehouse = inventory_service.get_default_warehouse(business=business)
+        except InventoryService.ValidationError as exc:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError(exc.errors) from exc
 
         variant_ids = [variant.id for variant in variants]
         offers = {

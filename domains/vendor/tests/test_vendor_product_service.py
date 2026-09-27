@@ -307,6 +307,25 @@ class VendorProductServiceTests(TestCase):
         self.assertEqual(offer.discount_type, "percentage")
         self.assertEqual(str(offer.discount_value), "10.00")
 
+    def test_variant_detail_reports_cleared_discount_as_null(self):
+        """A NULL discount must serialize as null, not the string "None"."""
+        business, variant = self._make_vendor_variant()
+        BusinessOffer.objects.create(
+            business=business, variant=variant, price=Decimal("150.00")
+        )
+
+        request = APIRequestFactory().get(f"/vendor/variants/{variant.id}")
+        force_authenticate(request, user=self.vendor)
+        response = VendorProductVariantDetailView.as_view()(
+            request, variant_id=variant.id
+        )
+
+        self.assertEqual(response.status_code, 200)
+        pricing = response.data["data"]["pricing"]
+        self.assertEqual(pricing["price"], "150.00")
+        self.assertIsNone(pricing["discount_type"])
+        self.assertIsNone(pricing["discount_value"])
+
     # ─────────────────────── marketplace offer status ───────────────────────
 
     def _make_vendor_variant(self):
