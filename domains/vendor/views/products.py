@@ -632,9 +632,14 @@ class VendorProductVariantDetailView(APIView):
                 Decimal(str(raw_value)) if raw_value is not None else None
             )
 
-        if offer is None:
-            return MarketplacePricingService.create_offer(_source=source, **values)
-        return MarketplacePricingService.update_offer(offer, _source=source, **values)
+        try:
+            if offer is None:
+                return MarketplacePricingService.create_offer(_source=source, **values)
+            return MarketplacePricingService.update_offer(offer, _source=source, **values)
+        except MarketplacePricingService.ValidationError as exc:
+            # The pricing service owns these messages; map them to a 400 so the
+            # caller gets `errors.details` instead of an unhandled 500 trace.
+            raise ValidationError(exc.errors) from exc
 
     def get(self, request, variant_id):
         _, category_ids = _get_business_category_ids(request.user)

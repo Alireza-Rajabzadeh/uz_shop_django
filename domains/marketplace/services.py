@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.db import transaction
+from django.utils.translation import gettext as _
 
 from .models import BusinessOffer, OfferPriceHistory
 from .models.offer_price_history import SOURCE_ADMIN
@@ -49,23 +50,25 @@ class MarketplacePricingService:
         cost_strategy = cost_strategy or "latest"
         if bool(discount_type) != (discount_value is not None):
             raise MarketplacePricingService.ValidationError({
-                "discount_value": "Discount type and value must be provided together."
+                "discount_value": _("Discount type and value must be provided together.")
             })
         if discount_type == "percentage" and discount_value is not None and discount_value > 100:
             raise MarketplacePricingService.ValidationError({
-                "discount_value": "Percentage discount cannot exceed 100."
+                "discount_value": _("Percentage discount cannot exceed 100.")
             })
         if discount_type == "fixed" and price is not None and discount_value is not None and discount_value > price:
             raise MarketplacePricingService.ValidationError({
-                "discount_value": "Fixed discount cannot exceed the price."
+                "discount_value": _("Fixed discount cannot exceed the price.")
             })
         if expected_profit_percentage is not None and expected_profit_percentage < 0:
             raise MarketplacePricingService.ValidationError({
-                "expected_profit_percentage": "Expected profit percentage must be greater than or equal to zero."
+                "expected_profit_percentage": _(
+                    "Expected profit percentage must be greater than or equal to zero."
+                )
             })
         if cost_strategy not in {"latest", "weighted_average", "fifo_next"}:
             raise MarketplacePricingService.ValidationError({
-                "cost_strategy": "Unsupported pricing cost strategy."
+                "cost_strategy": _("Unsupported pricing cost strategy.")
             })
 
     @classmethod

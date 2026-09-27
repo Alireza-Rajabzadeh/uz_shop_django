@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: uz_shop_django\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-23 07:27+0000\n"
+"POT-Creation-Date: 2026-09-27 12:31+0000\n"
 "PO-Revision-Date: 2026-07-23 12:11+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -15,11 +15,11 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: config/settings.py:332
+#: config/settings.py:333
 msgid "English"
 msgstr "English"
 
-#: config/settings.py:332
+#: config/settings.py:333
 msgid "Persian"
 msgstr "Persian"
 
@@ -159,14 +159,14 @@ msgstr "The confirmation request is no longer valid."
 
 #: domains/cart/services.py:365 domains/cart/services.py:443
 #: domains/cart/services.py:460
-#: domains/inventory/services/inventory_service.py:768
-#: domains/inventory/services/inventory_service.py:785
-#: domains/inventory/services/inventory_service.py:803
-#: domains/inventory/services/inventory_service.py:852
-#: domains/inventory/services/inventory_service.py:900
-#: domains/inventory/services/inventory_service.py:951
-#: domains/inventory/services/inventory_service.py:1002
-#: domains/inventory/services/inventory_service.py:1095
+#: domains/inventory/services/inventory_service.py:1074
+#: domains/inventory/services/inventory_service.py:1091
+#: domains/inventory/services/inventory_service.py:1109
+#: domains/inventory/services/inventory_service.py:1158
+#: domains/inventory/services/inventory_service.py:1206
+#: domains/inventory/services/inventory_service.py:1257
+#: domains/inventory/services/inventory_service.py:1308
+#: domains/inventory/services/inventory_service.py:1401
 msgid "Quantity must be greater than zero."
 msgstr ""
 
@@ -499,7 +499,7 @@ msgid "Each product detail can only be submitted once."
 msgstr ""
 
 #: domains/catalog/services/product_service.py:519
-#: domains/catalog/services/product_service.py:585
+#: domains/catalog/services/product_service.py:584
 msgid "This option combination or generated SKU already exists."
 msgstr ""
 
@@ -778,10 +778,12 @@ msgstr "Passwords do not match."
 #: domains/inventory/services/inventory_pricing_service.py:48
 #: domains/inventory/services/inventory_pricing_service.py:312
 #: domains/inventory/services/inventory_reporting_service.py:173
+#: domains/marketplace/services.py:71
 msgid "Unsupported pricing cost strategy."
 msgstr ""
 
 #: domains/inventory/services/inventory_pricing_service.py:55
+#: domains/marketplace/services.py:66
 msgid "Expected profit percentage must be greater than or equal to zero."
 msgstr ""
 
@@ -807,272 +809,309 @@ msgstr ""
 msgid "Price must be greater than or equal to zero."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:166
+#: domains/inventory/services/inventory_service.py:186
 msgid "Could not generate a unique warehouse code."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:178
+#: domains/inventory/services/inventory_service.py:198
 msgid "Switch another warehouse to default instead."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:187
+#: domains/inventory/services/inventory_service.py:207
 msgid "The default warehouse cannot be changed while it contains stock."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:201
+#: domains/inventory/services/inventory_service.py:221
 msgid ""
 "The default warehouse cannot be deleted. Switch another warehouse to default "
 "first."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:207
+#: domains/inventory/services/inventory_service.py:227
 msgid "This warehouse cannot be deleted while it contains stock."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:279
+#: domains/inventory/services/inventory_service.py:278
 msgid "Inventory setup requires exactly one default warehouse."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:303
+#: domains/inventory/services/inventory_service.py:304
+msgid "Define serialized units before converting stocked inventory."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:318
 msgid "This field is required for normal inventory."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:313
+#: domains/inventory/services/inventory_service.py:331
 msgid "Inventory must satisfy 0 <= reserved <= sellable <= quantity."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:337
+#: domains/inventory/services/inventory_service.py:357
 msgid "This field is required for serialized inventory."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:355
-#: domains/inventory/services/inventory_service.py:657
+#: domains/inventory/services/inventory_service.py:381
+#: domains/inventory/services/inventory_service.py:831
 msgid "Inventory setup is missing the serial_number attribute definition."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:370
+#: domains/inventory/services/inventory_service.py:397
 msgid "Each serialized row can only appear once."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:373
+#: domains/inventory/services/inventory_service.py:400
 msgid "One or more serialized row IDs do not belong to this variant."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:380
-msgid "Sold, reserved, or historical serialized rows cannot be deleted."
+#: domains/inventory/services/inventory_service.py:414
+msgid "Reserved serialized rows cannot be deleted."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:385
-#: domains/inventory/services/inventory_service.py:662
+#: domains/inventory/services/inventory_service.py:419
+#: domains/inventory/services/inventory_service.py:836
 msgid "Serial number cannot be blank."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:389
-#: domains/inventory/services/inventory_service.py:407
-#: domains/inventory/services/inventory_service.py:469
-#: domains/inventory/services/inventory_service.py:667
-#: domains/inventory/services/inventory_service.py:700
+#: domains/inventory/services/inventory_service.py:423
+#: domains/inventory/services/inventory_service.py:441
+#: domains/inventory/services/inventory_service.py:507
+#: domains/inventory/services/inventory_service.py:841
+#: domains/inventory/services/inventory_service.py:879
 msgid "Serial numbers must be globally unique, ignoring case."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:428
-msgid "Sold, reserved, or historical serialized rows cannot be edited."
+#: domains/inventory/services/inventory_service.py:464
+msgid "Reserved serialized rows cannot be edited."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:632
+#: domains/inventory/services/inventory_service.py:520
+msgid "Deactivate the marketplace offer before changing inventory type."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:574
+msgid "Receive supplies before converting serialized inventory to normal."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:806
 msgid "A variant with stock cannot be deleted."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:709
+#: domains/inventory/services/inventory_service.py:888
 #, python-format
 msgid "Cannot transition from \"%(current)s\" to \"%(target)s\"."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:745
-#: domains/inventory/services/inventory_service.py:778
-#: domains/inventory/services/inventory_service.py:796
-#: domains/inventory/services/inventory_service.py:821
-#: domains/inventory/services/inventory_service.py:869
-#: domains/inventory/services/inventory_service.py:917
-#: domains/inventory/services/inventory_service.py:971
-#: domains/inventory/services/inventory_service.py:1013
-#: domains/inventory/services/inventory_service.py:1043
+#: domains/inventory/services/inventory_service.py:953
+msgid "Serialized inventory is calculated from registered units."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:990
+msgid ""
+"Received supply quantity cannot be lower than reserved or sellable stock."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:1002
+msgid ""
+"Inventory without received supplies still has reserved or sellable stock."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:1051
+#: domains/inventory/services/inventory_service.py:1084
+#: domains/inventory/services/inventory_service.py:1102
+#: domains/inventory/services/inventory_service.py:1127
+#: domains/inventory/services/inventory_service.py:1175
+#: domains/inventory/services/inventory_service.py:1223
+#: domains/inventory/services/inventory_service.py:1277
+#: domains/inventory/services/inventory_service.py:1319
+#: domains/inventory/services/inventory_service.py:1349
 #, fuzzy
 #| msgid "Address not found."
 msgid "Inventory not found."
 msgstr "Address not found."
 
-#: domains/inventory/services/inventory_service.py:750
+#: domains/inventory/services/inventory_service.py:1056
 msgid "Unit count is required for serialized inventory."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:754
+#: domains/inventory/services/inventory_service.py:1060
 msgid "Unit count must be greater than zero."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:781
+#: domains/inventory/services/inventory_service.py:1087
 msgid "Use receive_stock for serialized inventory."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:799
+#: domains/inventory/services/inventory_service.py:1105
 msgid "Use unit-level operations for serialized inventory."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:808
+#: domains/inventory/services/inventory_service.py:1114
 #, python-format
 msgid "Cannot decrease more than sellable. Available: %(available)s."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:826
-#: domains/inventory/services/inventory_service.py:874
-#: domains/inventory/services/inventory_service.py:922
-#: domains/inventory/services/inventory_service.py:976
-#: domains/inventory/services/inventory_service.py:1123
+#: domains/inventory/services/inventory_service.py:1132
+#: domains/inventory/services/inventory_service.py:1180
+#: domains/inventory/services/inventory_service.py:1228
+#: domains/inventory/services/inventory_service.py:1282
+#: domains/inventory/services/inventory_service.py:1429
 msgid "Unit IDs are required for serialized inventory."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:835
-#: domains/inventory/services/inventory_service.py:883
-#: domains/inventory/services/inventory_service.py:931
-#: domains/inventory/services/inventory_service.py:985
-#: domains/inventory/services/inventory_service.py:1029
-#: domains/inventory/services/inventory_service.py:1059
-#: domains/inventory/services/inventory_service.py:1132
+#: domains/inventory/services/inventory_service.py:1141
+#: domains/inventory/services/inventory_service.py:1189
+#: domains/inventory/services/inventory_service.py:1237
+#: domains/inventory/services/inventory_service.py:1291
+#: domains/inventory/services/inventory_service.py:1335
+#: domains/inventory/services/inventory_service.py:1365
+#: domains/inventory/services/inventory_service.py:1438
 msgid "One or more unit IDs are invalid."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:841
+#: domains/inventory/services/inventory_service.py:1147
 #, python-format
 msgid "Unit %(id)s is in state \"%(state)s\" and cannot be reserved."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:857
+#: domains/inventory/services/inventory_service.py:1163
 #, python-format
 msgid "Cannot reserve more than available. Available: %(available)s."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:889
+#: domains/inventory/services/inventory_service.py:1195
 #, python-format
 msgid "Unit %(id)s is in state \"%(state)s\" and is not reserved."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:905
+#: domains/inventory/services/inventory_service.py:1211
 #, python-format
 msgid "Cannot release more than reserved. Reserved: %(reserved)s."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:940
+#: domains/inventory/services/inventory_service.py:1246
 #, python-format
 msgid "Unit %(id)s is in state \"%(state)s\" and cannot be sold."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:956
+#: domains/inventory/services/inventory_service.py:1262
 #, python-format
 msgid "Cannot sell more than sellable. Sellable: %(sellable)s."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:991
+#: domains/inventory/services/inventory_service.py:1297
 #, python-format
 msgid "Unit %(id)s is in state \"%(state)s\" and cannot be returned."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1016
+#: domains/inventory/services/inventory_service.py:1322
 msgid "Mark damaged is only available for serialized inventory."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1020
-#: domains/inventory/services/inventory_service.py:1050
+#: domains/inventory/services/inventory_service.py:1326
+#: domains/inventory/services/inventory_service.py:1356
 msgid "Unit IDs are required."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1046
+#: domains/inventory/services/inventory_service.py:1352
 msgid "Mark lost is only available for serialized inventory."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1074
+#: domains/inventory/services/inventory_service.py:1380
 msgid "Source inventory not found."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1076
+#: domains/inventory/services/inventory_service.py:1382
 msgid "Destination inventory not found."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1078
+#: domains/inventory/services/inventory_service.py:1384
 msgid "Source and destination cannot be the same."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1081
+#: domains/inventory/services/inventory_service.py:1387
 msgid "Source and destination must hold the same variant."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1100
+#: domains/inventory/services/inventory_service.py:1406
 #, python-format
 msgid "Cannot transfer more than sellable. Available: %(available)s."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1141
+#: domains/inventory/services/inventory_service.py:1447
 #, python-format
 msgid "Unit %(id)s is in state \"%(state)s\" and cannot be transferred."
 msgstr ""
 
-#: domains/inventory/services/inventory_supply_service.py:162
+#: domains/inventory/services/inventory_supply_service.py:165
 msgid "Received supplies cannot change variant, warehouse, or quantity."
 msgstr ""
 
-#: domains/inventory/services/inventory_supply_service.py:177
+#: domains/inventory/services/inventory_supply_service.py:180
 msgid "Quantity cannot change because this supply has already been consumed."
 msgstr ""
 
-#: domains/inventory/services/inventory_supply_service.py:199
+#: domains/inventory/services/inventory_supply_service.py:202
 msgid "Received supplies cannot be deleted."
 msgstr ""
 
-#: domains/inventory/services/inventory_supply_service.py:203
+#: domains/inventory/services/inventory_supply_service.py:206
 msgid "Supply has already been consumed and cannot be deleted."
 msgstr ""
 
-#: domains/inventory/services/inventory_supply_service.py:219
+#: domains/inventory/services/inventory_supply_service.py:222
 msgid "This supply has already been received."
 msgstr ""
 
-#: domains/inventory/services/inventory_supply_service.py:229
+#: domains/inventory/services/inventory_supply_service.py:232
 msgid "Serial items are only accepted for serialized inventory."
 msgstr ""
 
-#: domains/inventory/services/inventory_supply_service.py:293
+#: domains/inventory/services/inventory_supply_service.py:296
 msgid "This order item has already consumed its supply layers."
 msgstr ""
 
-#: domains/inventory/services/inventory_supply_service.py:362
-#: domains/inventory/services/inventory_supply_service.py:431
+#: domains/inventory/services/inventory_supply_service.py:343
 #, python-format
 msgid "Supply %(reference)s does not cover %(needed)s consumed units."
 msgstr ""
 
-#: domains/inventory/services/inventory_supply_service.py:395
+#: domains/inventory/services/inventory_supply_service.py:376
 #, python-format
 msgid "Supplies do not cover %(needed)s units for this sale."
 msgstr ""
 
-#: domains/inventory/services/inventory_supply_service.py:473
+#: domains/inventory/services/inventory_supply_service.py:424
 msgid "Reversal quantity must be greater than zero."
 msgstr ""
 
-#: domains/inventory/services/inventory_supply_service.py:478
+#: domains/inventory/services/inventory_supply_service.py:429
 #, python-format
 msgid "Only %(available)s consumed units are reversible."
 msgstr ""
 
-#: domains/inventory/services/inventory_supply_service.py:506
+#: domains/inventory/services/inventory_supply_service.py:457
 msgid "Unsupported supply cost type."
 msgstr ""
 
-#: domains/inventory/services/inventory_supply_service.py:510
+#: domains/inventory/services/inventory_supply_service.py:461
 msgid "A valid amount is required."
 msgstr ""
 
-#: domains/inventory/services/inventory_supply_service.py:513
+#: domains/inventory/services/inventory_supply_service.py:464
 msgid "Amount must be greater than or equal to zero."
+msgstr ""
+
+#: domains/marketplace/services.py:53
+msgid "Discount type and value must be provided together."
+msgstr ""
+
+#: domains/marketplace/services.py:57
+msgid "Percentage discount cannot exceed 100."
+msgstr ""
+
+#: domains/marketplace/services.py:61
+msgid "Fixed discount cannot exceed the price."
 msgstr ""
 
 #: domains/order/admin_views.py:34
@@ -1094,71 +1133,66 @@ msgstr "Address not found."
 msgid "Return request not found."
 msgstr "Address not found."
 
-#: domains/order/services.py:179
+#: domains/order/services.py:169
 msgid "Item is no longer available."
 msgstr ""
 
-#: domains/order/services.py:182
+#: domains/order/services.py:172
 #, python-format
 msgid "Item %(sku)s is not available for purchase."
 msgstr ""
 
-#: domains/order/services.py:188 domains/order/services.py:334
-#: domains/order/services.py:361 domains/order/services.py:384
-#: domains/order/services.py:406
+#: domains/order/services.py:178 domains/order/services.py:311
+#: domains/order/services.py:338
 #, python-format
 msgid "Item %(sku)s does not have enough stock."
 msgstr ""
 
-#: domains/order/services.py:200
+#: domains/order/services.py:190
 msgid "Set a delivery address before checkout."
 msgstr ""
 
-#: domains/order/services.py:204
+#: domains/order/services.py:194
 msgid "No active payment channel is available."
 msgstr "No active payment channel is available."
 
-#: domains/order/services.py:217
+#: domains/order/services.py:207
 msgid "The cart is empty."
 msgstr ""
 
-#: domains/order/services.py:328 domains/order/services.py:348
+#: domains/order/services.py:306 domains/order/services.py:325
 msgid "No inventory is configured for this item."
 msgstr ""
 
-#: domains/order/services.py:379
-msgid "No warehouse is configured for this item."
-msgstr ""
-
-#: domains/order/services.py:989
+#: domains/order/services.py:898
 msgid "This action is not available for the current order status."
 msgstr ""
 
-#: domains/order/services.py:994
+#: domains/order/services.py:903
 msgid "Create a return request through the returns endpoint."
 msgstr ""
 
-#: domains/order/services.py:998
+#: domains/order/services.py:907
 msgid "This actor is not allowed to execute the action."
 msgstr ""
 
-#: domains/order/services.py:1322
+#: domains/order/services.py:1231
 msgid "Unknown return action."
 msgstr ""
 
-#: domains/order/services.py:1333
+#: domains/order/services.py:1242
 msgid "This action is not available for the current return status."
 msgstr ""
 
-#: domains/order/services.py:1408
+#: domains/order/services.py:1317
 msgid "This order is not currently eligible for return."
 msgstr ""
 
-#: domains/order/services.py:1419
+#: domains/order/services.py:1328
 msgid "Every order item must belong to the selected order."
 msgstr ""
 
-#: domains/order/services.py:1438
+#: domains/order/services.py:1347
 #, python-format
 msgid "Order item %(item_id)s has only %(available)s available to return."
 msgstr ""
