@@ -4,9 +4,10 @@ from decimal import Decimal
 from django.db import transaction
 from django.db.models import DecimalField, IntegerField, OuterRef, Q, Subquery, Sum
 from django.db.models.functions import Coalesce
-from domains.catalog.models import ProductVariants
 from django.utils.translation import gettext as _
 
+from domains.business.models import BusinessProfile
+from domains.catalog.models import ProductVariants
 from domains.inventory.enums.VariantCostStrategyEnum import VariantCostStrategyEnum
 from domains.inventory.enums.VariantPriceHistorySourceEnum import (
     VariantPriceHistorySourceEnum,
@@ -17,6 +18,14 @@ from domains.inventory.models import (
 )
 from domains.inventory.services.price_history_mongo import log_price_change
 from domains.marketplace.models import BusinessOffer
+from domains.marketplace.models.offer_price_history import SOURCE_ADMIN
+from domains.marketplace.services import MarketplacePricingService
+
+# BusinessOffer.is_active is the marketplace *listing* flag only. Pricing
+# configuration (expected_profit_percentage, cost_strategy) and the offer price
+# live on the same row, so every read/write below uses any offer for the
+# variant — active or draft. Only customer-facing readers (storefront, cart,
+# order, catalog search) and financial reporting keep the is_active=True filter.
 
 
 class InventoryPricingService:
@@ -35,14 +44,54 @@ class InventoryPricingService:
             for code, name in VariantCostStrategyEnum.choices()
         ]
 
-    def get_variant_pricing(self, variant):
-        """Return the active BusinessOffer for this variant, or None."""
-        return BusinessOffer.objects.filter(
-            variant=variant, is_active=True
-        ).first()
+    def get_variant_pricing(self, variant, business=None):
+        """Return the BusinessOffer holding this variant's pricing config.
+
+        Any offer qualifies: a draft (inactive) offer stores the same
+        strategy/profit configuration as a listed one, and the marketplace
+        listing flag must not decide whether the vendor can read their config.
+        Callers that know their business scope the lookup to it, because the
+        unique constraint is (business, variant) rather than variant alone.
+        """
+        offers = BusinessOffer.objects.filter(variant=variant)
+        if business is not None:
+            offers = offers.filter(business=business)
+        return offers.first()
+
+    def _resolve_config_business(self, business):
+        """Business that owns a newly created configuration offer.
+
+        The vendor view passes its own business. The admin pricing endpoint has
+        no business context, so it falls back to the singleton profile and
+        refuses to guess when the database holds more than one.
+        """
+        if business is not None:
+            return business
+        businesses = BusinessProfile.objects.order_by("id")
+        count = businesses.count()
+        if count == 1:
+            return businesses.first()
+        if count > 1:
+            raise self.ValidationError({
+                "pricing": [
+                    _(
+                        "Multiple business profiles exist, so the business "
+                        "that owns this pricing configuration must be identified."
+                    )
+                ]
+            })
+        return None
 
     @transaction.atomic
-    def update_variant_pricing(self, variant, *, expected_profit_percentage=None, cost_strategy=None):
+    def update_variant_pricing(
+        self,
+        variant,
+        *,
+        expected_profit_percentage=None,
+        cost_strategy=None,
+        business=None,
+        source=SOURCE_ADMIN,
+    ):
         if cost_strategy is not None and cost_strategy not in self.strategy_codes():
             raise self.ValidationError({
                 "cost_strategy": [_('Unsupported pricing cost strategy.')]
@@ -56,18 +105,38 @@ class InventoryPricingService:
                     ]
                 })
 
-        offer = BusinessOffer.objects.select_for_update().filter(
-            variant=variant, is_active=True
-        ).first()
+        offers = BusinessOffer.objects.select_for_update().filter(variant=variant)
+        if business is not None:
+            offers = offers.filter(business=business)
+        offer = offers.first()
         if offer is None:
-            raise self.ValidationError({
-                "pricing": [
-                    _(
-                        "No active business offer exists for this variant. "
-                        "Create a BusinessOffer before updating pricing configuration."
-                    )
-                ]
-            })
+            # Saving a strategy must not require a marketplace offer: the
+            # config itself is the thing being created. The draft stays
+            # inactive, so it is never visible to customers until the vendor
+            # presses Active.
+            business = self._resolve_config_business(business)
+            if business is None:
+                raise self.ValidationError({
+                    "pricing": [
+                        _(
+                            "No business profile exists, so the pricing "
+                            "configuration cannot be stored."
+                        )
+                    ]
+                })
+            values = {
+                "business": business,
+                "variant": variant,
+                "is_active": False,
+            }
+            if expected_profit_percentage is not None:
+                values["expected_profit_percentage"] = Decimal(str(expected_profit_percentage))
+            if cost_strategy is not None:
+                values["cost_strategy"] = cost_strategy
+            try:
+                return MarketplacePricingService.create_offer(_source=source, **values)
+            except MarketplacePricingService.ValidationError as exc:
+                raise self.ValidationError(exc.errors) from exc
         if expected_profit_percentage is not None:
             offer.expected_profit_percentage = Decimal(str(expected_profit_percentage))
         if cost_strategy is not None:
@@ -83,14 +152,14 @@ class InventoryPricingService:
             .get(pk=variant.pk)
         )
         offer = BusinessOffer.objects.filter(
-            variant=variant, is_active=True
+            variant=variant
         ).select_for_update().first()
         if offer is None:
             raise self.ValidationError({
                 "pricing": [
                     _(
-                        "No active business offer exists for this variant. "
-                        "Create a BusinessOffer before applying a price."
+                        "No business offer exists for this variant. "
+                        "Save a price or a pricing strategy first."
                     )
                 ]
             })
@@ -185,10 +254,12 @@ class InventoryPricingService:
         """Public cost-basis hook for sibling services (reports, etc.)."""
         return self._calculate_basis(strategy, rows)
 
-    def _pricing_context(self, variant):
-        config = self.get_variant_pricing(variant)
-        rows = list(self._received_supplies_with_remaining(variant)) if config is not None else []
-        return config, rows
+    def _pricing_context(self, variant, business=None):
+        # Supply rows are always loaded: costs are derived from received
+        # supplies, so they must render even before any pricing config exists.
+        return self.get_variant_pricing(variant, business=business), list(
+            self._received_supplies_with_remaining(variant)
+        )
 
     def _calculate_basis(self, strategy, rows):
         if strategy == VariantCostStrategyEnum.WEIGHTED_AVERAGE.value:
@@ -242,10 +313,35 @@ class InventoryPricingService:
     def _quantized(value):
         return value.quantize(Decimal("0.01")) if value is not None else None
 
-    def _overview_for_rows(self, variant, config, rows, offer_price=None):
-        """Shared overview builder; rows must be newest-first and annotated."""
+    def _overview_for_rows(
+        self,
+        variant,
+        config,
+        rows,
+        offer_price=None,
+        *,
+        cost_strategy=None,
+        expected_profit_percentage=None,
+    ):
+        """Shared overview builder; rows must be newest-first and annotated.
+
+        `cost_strategy` / `expected_profit_percentage` are unsaved overrides for
+        the calculate/preview flow: when present they win over the stored
+        config, and the response echoes the effective values so the caller can
+        label the numbers as a preview instead of saved state.
+        """
         if offer_price is None:
             offer_price = config.price if config is not None else None
+        effective_strategy = (
+            cost_strategy
+            if cost_strategy is not None
+            else (config.cost_strategy if config is not None else None)
+        )
+        effective_profit = (
+            expected_profit_percentage
+            if expected_profit_percentage is not None
+            else (config.expected_profit_percentage if config is not None else None)
+        )
         latest_cost = self._landed_unit_cost(rows[0]) if rows else None
         fifo_next_cost = self._landed_unit_cost(rows[-1]) if rows else None
         weighted_average_cost = (
@@ -254,13 +350,14 @@ class InventoryPricingService:
             else None
         )
         selected_basis = (
-            self._calculate_basis(config.cost_strategy, rows)
-            if config is not None and rows
+            self._calculate_basis(effective_strategy, rows)
+            if effective_strategy is not None and rows
             else None
         )
         suggested_price = (
-            selected_basis * (Decimal("1") + Decimal(config.expected_profit_percentage) / Decimal("100"))
-            if selected_basis is not None
+            selected_basis
+            * (Decimal("1") + Decimal(effective_profit) / Decimal("100"))
+            if selected_basis is not None and effective_profit is not None
             else None
         )
         return {
@@ -271,10 +368,8 @@ class InventoryPricingService:
             "latest_cost": self._quantized(latest_cost),
             "weighted_average_cost": self._quantized(weighted_average_cost),
             "fifo_next_cost": self._quantized(fifo_next_cost),
-            "cost_strategy": config.cost_strategy if config is not None else None,
-            "expected_profit_percentage": (
-                config.expected_profit_percentage if config is not None else None
-            ),
+            "cost_strategy": effective_strategy,
+            "expected_profit_percentage": effective_profit,
             "cost_basis": self._quantized(selected_basis),
             "suggested_price": self._quantized(suggested_price),
             "total_remaining_supply_quantity": sum(row.remaining_quantity for row in rows),
@@ -283,9 +378,22 @@ class InventoryPricingService:
             "updated_at": config.updated_at if config is not None else None,
         }
 
-    def get_variant_pricing_overview(self, variant):
-        config, rows = self._pricing_context(variant)
-        return self._overview_for_rows(variant, config, rows)
+    def get_variant_pricing_overview(
+        self,
+        variant,
+        *,
+        business=None,
+        cost_strategy=None,
+        expected_profit_percentage=None,
+    ):
+        config, rows = self._pricing_context(variant, business=business)
+        return self._overview_for_rows(
+            variant,
+            config,
+            rows,
+            cost_strategy=cost_strategy,
+            expected_profit_percentage=expected_profit_percentage,
+        )
 
     def search_pricing(
         self,
@@ -312,12 +420,14 @@ class InventoryPricingService:
                     "strategy": [_('Unsupported pricing cost strategy.')]
                 })
             queryset = queryset.filter(pk__in=BusinessOffer.objects.filter(
-                cost_strategy=strategy, is_active=True
+                cost_strategy=strategy
             ).values_list("variant_id", flat=True))
         if has_pricing is not None:
-            configured_ids = BusinessOffer.objects.filter(
-                is_active=True
-            ).values_list("variant_id", flat=True)
+            # Pricing config lives on any offer, active or draft, so "has
+            # pricing" must not silently drop variants that are not listed yet.
+            configured_ids = BusinessOffer.objects.all().values_list(
+                "variant_id", flat=True
+            )
             queryset = (
                 queryset.filter(pk__in=configured_ids)
                 if has_pricing
@@ -341,7 +451,6 @@ class InventoryPricingService:
                 Subquery(
                     BusinessOffer.objects.filter(
                         variant=OuterRef("pk"),
-                        is_active=True,
                     ).values("price")[:1],
                     output_field=DecimalField(max_digits=15, decimal_places=2),
                 ),
@@ -366,7 +475,7 @@ class InventoryPricingService:
         offers = {
             offer.variant_id: offer
             for offer in BusinessOffer.objects.filter(
-                variant_id__in=variant_ids, is_active=True,
+                variant_id__in=variant_ids,
             )
         }
         rows_by_variant = defaultdict(list)

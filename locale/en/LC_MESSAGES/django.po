@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: uz_shop_django\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-27 12:31+0000\n"
+"POT-Creation-Date: 2026-09-29 19:57+0000\n"
 "PO-Revision-Date: 2026-07-23 12:11+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -775,37 +775,42 @@ msgstr "Preferences updated."
 msgid "Password changed."
 msgstr "Passwords do not match."
 
-#: domains/inventory/services/inventory_pricing_service.py:48
-#: domains/inventory/services/inventory_pricing_service.py:312
+#: domains/inventory/services/inventory_pricing_service.py:78
+msgid ""
+"Multiple business profiles exist, so the business that owns this pricing "
+"configuration must be identified."
+msgstr ""
+
+#: domains/inventory/services/inventory_pricing_service.py:97
+#: domains/inventory/services/inventory_pricing_service.py:420
 #: domains/inventory/services/inventory_reporting_service.py:173
 #: domains/marketplace/services.py:71
 msgid "Unsupported pricing cost strategy."
 msgstr ""
 
-#: domains/inventory/services/inventory_pricing_service.py:55
+#: domains/inventory/services/inventory_pricing_service.py:104
 #: domains/marketplace/services.py:66
 msgid "Expected profit percentage must be greater than or equal to zero."
 msgstr ""
 
-#: domains/inventory/services/inventory_pricing_service.py:66
+#: domains/inventory/services/inventory_pricing_service.py:122
 msgid ""
-"No active business offer exists for this variant. Create a BusinessOffer "
-"before updating pricing configuration."
+"No business profile exists, so the pricing configuration cannot be stored."
 msgstr ""
 
-#: domains/inventory/services/inventory_pricing_service.py:92
+#: domains/inventory/services/inventory_pricing_service.py:161
 msgid ""
-"No active business offer exists for this variant. Create a BusinessOffer "
-"before applying a price."
+"No business offer exists for this variant. Save a price or a pricing "
+"strategy first."
 msgstr ""
 
-#: domains/inventory/services/inventory_pricing_service.py:105
+#: domains/inventory/services/inventory_pricing_service.py:174
 msgid ""
 "A configured pricing strategy and available received supply are required "
 "before applying a price."
 msgstr ""
 
-#: domains/inventory/services/inventory_pricing_service.py:117
+#: domains/inventory/services/inventory_pricing_service.py:186
 msgid "Price must be greater than or equal to zero."
 msgstr ""
 

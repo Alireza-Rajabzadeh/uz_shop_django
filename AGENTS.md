@@ -193,12 +193,14 @@ The marketplace domain owns per-business variant pricing through `BusinessOffer`
 - `BusinessOffer` owns `price`, `discount_type`, and `discount_value`. These fields were removed from `ProductVariants`.
 - `OfferPriceHistory` is an append-only audit of price/discount changes, written by `MarketplacePricingService` for both the admin offer API and the vendor variant API. An omitted field keeps its stored value; an explicit `None` clears it. It is separate from `inventory.VariantPriceHistory`, which still records the cost-basis pricing flow.
 - `BusinessOffer.is_active` is also the gate for changing a vendor variant's inventory type.
+- `BusinessOffer.is_active` is purely the marketplace **listing** flag. Storefront, cart, order, catalog price filters, and inventory reporting keep `is_active=True`; pricing configuration, vendor pricing views, and the admin pricing list read the offer regardless of it.
+- Pricing configuration (`expected_profit_percentage`, `cost_strategy`) lives on `BusinessOffer` and does not require one to exist first: `InventoryPricingService.update_variant_pricing()` creates a draft offer with `is_active=False` when the variant has none. Nothing in the pricing flow activates an offer — a variant becomes visible only through an explicit marketplace-status change.
 - Reading pricing: callers attach `_business_offer` to variant objects via a batched lookup, then read from `offer.price`, `offer.discount_type`, `offer.discount_value`.
-- Writing pricing: `InventoryPricingService.apply_price()` writes to `BusinessOffer.price` and creates `VariantPriceHistory` snapshots.
+- Writing pricing: `InventoryPricingService.apply_price()` writes to `BusinessOffer.price` and creates `VariantPriceHistory` snapshots. `GET .../variants/<id>/pricing` accepts optional `cost_strategy` / `expected_profit_percentage` query params to calculate a suggested price from unsaved values without writing anything.
 - `VariantService.calculate_discounted_price(variant, offer=None)` accepts an optional offer parameter and reads price/discount from it.
 - Cart, order, storefront, and search backends must attach `_business_offer` to variant objects before reading pricing.
 - The Digikala import pipeline no longer writes pricing to variants. Pricing is applied separately via inventory pricing.
-- Product search price filters (`price_operator`, `price`, `price_min`, `price_max`) filter on `BusinessOffer.price`.
+- Product search price filters (`price_operator`, `price`, `price_min`, `price_max`) filter on `BusinessOffer.price` with `is_active=True`.
 - The storefront search API (`/api/catalog/storefront/products`) serves pricing from `BusinessOffer` through `StorefrontProductService`.
 
 ### Order Geography

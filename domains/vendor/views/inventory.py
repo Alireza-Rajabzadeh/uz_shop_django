@@ -15,6 +15,7 @@ from domains.inventory.api.serializers import (
     SupplyReceiveSerializer,
     SupplyWriteSerializer,
     VariantPricingOverviewSerializer,
+    VariantPricingQuerySerializer,
     VariantPricingWriteSerializer,
     VariantPriceHistorySerializer,
 )
@@ -32,6 +33,7 @@ from domains.location.api.options import (
 from domains.location.models import City, Country, State
 from domains.marketplace.api.serializers import OfferPriceHistorySerializer
 from domains.marketplace.models import BusinessOffer
+from domains.marketplace.models.offer_price_history import SOURCE_VENDOR
 from domains.marketplace.services import MarketplacePricingService
 from domains.vendor.auth import VendorJWTAuthentication
 from domains.vendor.views.products import _get_business_category_ids
@@ -96,7 +98,13 @@ class VendorVariantPricingView(VendorInventoryAPIView):
     def get(self, request, variant_id):
         business = self._get_business(request)
         variant = self._get_vendor_variant(variant_id, business)
-        overview = pricing_service.get_variant_pricing_overview(variant)
+        # Optional query params are unsaved overrides, so the vendor can
+        # calculate a price from supplies before any configuration is stored.
+        query = VariantPricingQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        overview = pricing_service.get_variant_pricing_overview(
+            variant, business=business, **query.validated_data
+        )
         return api_response(data=VariantPricingOverviewSerializer(overview).data)
 
     def patch(self, request, variant_id):
@@ -105,11 +113,18 @@ class VendorVariantPricingView(VendorInventoryAPIView):
         serializer = VariantPricingWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
-            pricing_service.update_variant_pricing(variant, **serializer.validated_data)
+            pricing_service.update_variant_pricing(
+                variant,
+                business=business,
+                source=SOURCE_VENDOR,
+                **serializer.validated_data,
+            )
         except InventoryPricingService.ValidationError as exc:
             from rest_framework.exceptions import ValidationError
             raise ValidationError(exc.errors) from exc
-        overview = pricing_service.get_variant_pricing_overview(variant)
+        overview = pricing_service.get_variant_pricing_overview(
+            variant, business=business
+        )
         return api_response(data=VariantPricingOverviewSerializer(overview).data)
 
 

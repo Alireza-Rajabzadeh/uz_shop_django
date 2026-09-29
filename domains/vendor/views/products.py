@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from django.shortcuts import get_object_or_404
 from rest_framework.exceptions import ValidationError, NotFound, PermissionDenied
@@ -593,18 +593,32 @@ class VendorProductVariantDetailView(APIView):
     # vendor-writable; pricing fields are handled separately via _sync_business_offer.
     VARIANT_WRITABLE_FIELDS = ("selections", "inventory", "serial_items", "inventory_submitted")
 
+    # Fields that belong to BusinessOffer instead of the variant row.
+    OFFER_FIELDS = (
+        "price",
+        "discount_type",
+        "discount_value",
+        "cost_strategy",
+        "expected_profit_percentage",
+    )
+
     def _get_vendor_variant(self, variant_id, category_ids):
         return _get_vendor_variant(variant_id, category_ids)
 
     def _sanitize_offer_payload(self, request_data):
-        offer_fields = {"price", "discount_type", "discount_value"}
+        # price/discount may be explicitly cleared with a blank value; the two
+        # strategy columns are NOT NULL, so a blank means "leave unchanged"
+        # rather than "write null".
         offer_payload = {}
-        for key in sorted(offer_fields):
-            if key in request_data:
-                value = request_data.get(key)
-                if value == "":
-                    value = None
-                offer_payload[key] = value
+        for key in sorted(self.OFFER_FIELDS):
+            if key not in request_data:
+                continue
+            value = request_data.get(key)
+            if value in ("", None) and key in ("cost_strategy", "expected_profit_percentage"):
+                continue
+            if value == "":
+                value = None
+            offer_payload[key] = value
         return offer_payload
 
     def _sync_business_offer(self, business, variant, payload, *, source):
@@ -631,10 +645,30 @@ class VendorProductVariantDetailView(APIView):
             values["discount_value"] = (
                 Decimal(str(raw_value)) if raw_value is not None else None
             )
+        if "cost_strategy" in cleaned:
+            values["cost_strategy"] = cleaned["cost_strategy"]
+        if "expected_profit_percentage" in cleaned:
+            # Request bodies carry strings; the pricing service compares the
+            # value numerically, so coerce it before it reaches validation.
+            try:
+                values["expected_profit_percentage"] = Decimal(
+                    str(cleaned["expected_profit_percentage"])
+                )
+            except (InvalidOperation, ValueError) as exc:
+                raise ValidationError({
+                    "expected_profit_percentage": "A valid number is required."
+                }) from exc
 
         try:
             if offer is None:
-                return MarketplacePricingService.create_offer(_source=source, **values)
+                # A brand-new offer is always a draft. Listing the variant on
+                # the marketplace is an explicit vendor action, never a side
+                # effect of writing a price.
+                return MarketplacePricingService.create_offer(
+                    _source=source,
+                    is_active=False,
+                    **values,
+                )
             return MarketplacePricingService.update_offer(offer, _source=source, **values)
         except MarketplacePricingService.ValidationError as exc:
             # The pricing service owns these messages; map them to a 400 so the
@@ -702,12 +736,12 @@ class VendorProductVariantDetailView(APIView):
             return api_response(False, "Business profile not found.", status_code=404)
 
         offer_payload = self._sanitize_offer_payload(request.data)
-        if offer_payload:
-            data = request.data.copy()
-            for key in ["price", "discount_type", "discount_value"]:
-                data.pop(key, None)
-        else:
-            data = request.data.copy()
+        # Offer keys are stripped unconditionally: a blank strategy value that
+        # sanitized to "leave unchanged" must not fall through to the closed
+        # variant serializer and get rejected as an unknown field.
+        data = request.data.copy()
+        for key in self.OFFER_FIELDS:
+            data.pop(key, None)
 
         serializer = ProductVariantWriteSerializer(variant, data=data, partial=True)
         serializer.is_valid(raise_exception=True)

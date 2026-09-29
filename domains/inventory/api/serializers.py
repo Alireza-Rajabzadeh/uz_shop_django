@@ -319,6 +319,17 @@ class VariantPricingWriteSerializer(ClosedSerializer):
         return attrs
 
 
+class VariantPricingQuerySerializer(ClosedSerializer):
+    # Optional unsaved overrides for the calculate/preview read. Nothing here
+    # is persisted; the response echoes the effective values it used.
+    cost_strategy = serializers.ChoiceField(
+        choices=VariantCostStrategyEnum.choices(), required=False
+    )
+    expected_profit_percentage = serializers.DecimalField(
+        max_digits=5, decimal_places=2, min_value=0, required=False
+    )
+
+
 class VariantPriceApplySerializer(ClosedSerializer):
     price = serializers.DecimalField(
         max_digits=15,

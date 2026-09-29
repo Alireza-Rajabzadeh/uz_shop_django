@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: uz_shop_django\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-27 12:31+0000\n"
+"POT-Creation-Date: 2026-09-29 19:57+0000\n"
 "PO-Revision-Date: 2026-07-23 12:11+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -636,7 +636,9 @@ msgstr "لطفاً پیش از درخواست کد جدید کمی صبر کنی
 msgid ""
 "Your UzShop login confirmation code is %(code)s. It expires in %(minutes)s "
 "minutes."
-msgstr "کد تایید ورود شما به ازشاپ %(code)s است. این کد تا %(minutes)s دقیقه معتبر است."
+msgstr ""
+"کد تایید ورود شما به ازشاپ %(code)s است. این کد تا %(minutes)s دقیقه معتبر "
+"است."
 
 #: domains/customer/services/auth_service.py:85
 #: domains/customer/services/auth_service.py:90
@@ -701,7 +703,9 @@ msgstr "شماره موبایل قبلاً تایید شده است."
 msgid ""
 "Your UzShop phone verification code is %(code)s. It expires in %(minutes)s "
 "minutes."
-msgstr "کد تایید شماره موبایل شما در ازشاپ %(code)s است. این کد تا %(minutes)s دقیقه معتبر است."
+msgstr ""
+"کد تایید شماره موبایل شما در ازشاپ %(code)s است. این کد تا %(minutes)s دقیقه "
+"معتبر است."
 
 #: domains/customer/services/auth_service.py:283
 #: domains/vendor/services/auth_service.py:297
@@ -709,7 +713,9 @@ msgstr "کد تایید شماره موبایل شما در ازشاپ %(code)s 
 msgid ""
 "Your UzShop password reset code is %(code)s. It expires in %(minutes)s "
 "minutes."
-msgstr "کد بازیابی رمز عبور شما در ازشاپ %(code)s است. این کد تا %(minutes)s دقیقه معتبر است."
+msgstr ""
+"کد بازیابی رمز عبور شما در ازشاپ %(code)s است. این کد تا %(minutes)s دقیقه "
+"معتبر است."
 
 #: domains/customer/services/auth_service.py:359
 #: domains/customer/services/auth_service.py:362
@@ -774,37 +780,49 @@ msgstr "تنظیمات به‌روزرسانی شد."
 msgid "Password changed."
 msgstr "رمز عبور تغییر کرد."
 
-#: domains/inventory/services/inventory_pricing_service.py:48
-#: domains/inventory/services/inventory_pricing_service.py:312
+#: domains/inventory/services/inventory_pricing_service.py:78
+msgid ""
+"Multiple business profiles exist, so the business that owns this pricing "
+"configuration must be identified."
+msgstr ""
+"چند پروفایل تجاری وجود دارد؛ بنابراین باید پروفایل مالک این تنظیمات "
+"قیمت‌گذاری مشخص شود."
+
+#: domains/inventory/services/inventory_pricing_service.py:97
+#: domains/inventory/services/inventory_pricing_service.py:420
 #: domains/inventory/services/inventory_reporting_service.py:173
 #: domains/marketplace/services.py:71
 msgid "Unsupported pricing cost strategy."
 msgstr "استراتژی هزینهٔ قیمت‌گذاری پشتیبانی نمی‌شود."
 
-#: domains/inventory/services/inventory_pricing_service.py:55
+#: domains/inventory/services/inventory_pricing_service.py:104
 #: domains/marketplace/services.py:66
 msgid "Expected profit percentage must be greater than or equal to zero."
 msgstr "درصد سود مورد انتظار باید بزرگ‌تر یا مساوی صفر باشد."
 
-#: domains/inventory/services/inventory_pricing_service.py:66
+#: domains/inventory/services/inventory_pricing_service.py:122
 msgid ""
-"No active business offer exists for this variant. Create a BusinessOffer "
-"before updating pricing configuration."
-msgstr "برای این تنوع پیشنهاد فعالی وجود ندارد. پیش از به‌روزرسانی تنظیمات قیمت‌گذاری یک BusinessOffer ایجاد کنید."
+"No business profile exists, so the pricing configuration cannot be stored."
+msgstr ""
+"پروفایل تجاری وجود ندارد؛ به همین دلیل ذخیرهٔ تنظیمات قیمت‌گذاری ممکن نیست."
 
-#: domains/inventory/services/inventory_pricing_service.py:92
+#: domains/inventory/services/inventory_pricing_service.py:161
 msgid ""
-"No active business offer exists for this variant. Create a BusinessOffer "
-"before applying a price."
-msgstr "برای این تنوع پیشنهاد فعالی وجود ندارد. پیش از اعمال قیمت یک BusinessOffer ایجاد کنید."
+"No business offer exists for this variant. Save a price or a pricing "
+"strategy first."
+msgstr ""
+"برای این تنوع هیچ پیشنهادی وجود ندارد. پیش از ادامه، یک قیمت یا استراتژی "
+"قیمت‌گذاری ذخیره کنید."
 
-#: domains/inventory/services/inventory_pricing_service.py:105
+#: domains/inventory/services/inventory_pricing_service.py:174
 msgid ""
 "A configured pricing strategy and available received supply are required "
 "before applying a price."
-msgstr "پیش از اعمال قیمت، استراتژی قیمت‌گذاری تنظیم‌شده و تامین دریافت‌شدهٔ موجود لازم است."
+msgstr ""
+"پیش از اعمال قیمت، استراتژی قیمت‌گذاری تنظیم‌شده و تامین دریافت‌شدهٔ موجود لازم "
+"است."
 
-#: domains/inventory/services/inventory_pricing_service.py:117
+#: domains/inventory/services/inventory_pricing_service.py:186
 msgid "Price must be greater than or equal to zero."
 msgstr "قیمت باید بزرگ‌تر یا مساوی صفر باشد."
 
@@ -908,7 +926,8 @@ msgstr "موجودی سریالی از اقلام ثبت‌شده محاسبه �
 #: domains/inventory/services/inventory_service.py:990
 msgid ""
 "Received supply quantity cannot be lower than reserved or sellable stock."
-msgstr "تعداد تامین دریافت‌شده نمی‌تواند کمتر از موجودی رزروشده یا قابل فروش باشد."
+msgstr ""
+"تعداد تامین دریافت‌شده نمی‌تواند کمتر از موجودی رزروشده یا قابل فروش باشد."
 
 #: domains/inventory/services/inventory_service.py:1002
 msgid ""
@@ -1362,7 +1381,9 @@ msgstr "کد ملی قبلاً ثبت شده است."
 msgid ""
 "Your UzShop registration confirmation code is %(code)s. It expires in "
 "%(minutes)s minutes."
-msgstr "کد تایید ثبت‌نام شما در ازشاپ %(code)s است. این کد تا %(minutes)s دقیقه معتبر است."
+msgstr ""
+"کد تایید ثبت‌نام شما در ازشاپ %(code)s است. این کد تا %(minutes)s دقیقه معتبر "
+"است."
 
 #: domains/vendor/services/auth_service.py:111
 #: domains/vendor/services/auth_service.py:120
@@ -1400,3 +1421,10 @@ msgstr "به علاقه‌مندی‌ها اضافه شد."
 #: domains/wishlist/views.py:79
 msgid "Removed from wishlist."
 msgstr "از علاقه‌مندی‌ها حذف شد."
+
+#~ msgid ""
+#~ "No active business offer exists for this variant. Create a BusinessOffer "
+#~ "before applying a price."
+#~ msgstr ""
+#~ "برای این تنوع پیشنهاد فعالی وجود ندارد. پیش از اعمال قیمت یک "
+#~ "BusinessOffer ایجاد کنید."
