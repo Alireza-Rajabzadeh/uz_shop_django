@@ -55,6 +55,14 @@ class SerializedStatusSerializer(serializers.Serializer):
     name = serializers.CharField()
 
 
+class SerializedAttributeSerializer(serializers.Serializer):
+    code = serializers.CharField()
+    name = serializers.CharField()
+    fa_title = serializers.CharField()
+    type = serializers.CharField()
+    value = serializers.CharField()
+
+
 class SerializedItemDetailSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     serial_number = serializers.CharField()
@@ -63,12 +71,29 @@ class SerializedItemDetailSerializer(serializers.Serializer):
     status = SerializedStatusSerializer()
     warehouse = WarehouseContextSerializer()
     editable = serializers.BooleanField()
+    attributes = SerializedAttributeSerializer(many=True)
+
+
+class SerializedAttributeWriteSerializer(ClosedSerializer):
+    """One attribute on a serialized unit.
+
+    ``code`` is the API contract; the value is validated against the resolved
+    definition's type, and a blank value clears the attribute. Creating a
+    definition the vocabulary does not have yet belongs to
+    ``POST inventory/attribute-definitions``, not to this snapshot.
+    """
+
+    code = serializers.CharField(max_length=50)
+    value = serializers.CharField(allow_blank=True, required=False, default="")
 
 
 class SerializedItemWriteSerializer(ClosedSerializer):
     id = serializers.IntegerField(min_value=1, required=False)
     serial_number = serializers.CharField(max_length=100, trim_whitespace=False)
     on_sale = serializers.BooleanField()
+    attributes = SerializedAttributeWriteSerializer(
+        many=True, required=False, default=list
+    )
 
 
 class VariantStockWriteSerializer(ClosedSerializer):

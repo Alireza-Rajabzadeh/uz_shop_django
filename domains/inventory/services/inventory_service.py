@@ -377,8 +377,12 @@ class InventoryService:
                 sellable=0,
                 reserved=0,
             )
+        # Attribute codes resolve against the caller's business when there is
+        # one, otherwise against the inventory row's own business, so the
+        # admin path (business=None) still sees business-owned definitions.
+        owner = business or inventory.business
         serial_attr_def = InventoryAttributeService.resolve_definition(
-            "serial_number", business
+            "serial_number", owner
         )
         if serial_attr_def is None:
             raise self.ValidationError({
@@ -445,13 +449,43 @@ class InventoryService:
                     "serial_items": [_('Serial numbers must be globally unique, ignoring case.')]
                 })
 
+        # Resolve and validate every row's attributes before touching any row,
+        # so an unknown code or a type-invalid value cannot leave a partial
+        # snapshot. Rows the diff skips (historical units) are never rewritten,
+        # so their attributes are not validated either.
+        prepared_attributes = []
+        for item in serial_items:
+            row_id = item.get("id")
+            if row_id is not None and existing[row_id].state in HISTORICAL_STATES:
+                prepared_attributes.append(None)
+                continue
+            try:
+                prepared_attributes.append(
+                    InventoryAttributeService.prepare_attributes(
+                        item.get("attributes"), owner
+                    )
+                )
+            except InventoryAttributeService.ValidationError as exc:
+                # Same envelope, this service's own error type: translate it
+                # into the error the inventory views already handle.
+                raise self.ValidationError(exc.errors) from exc
+        existing_attributes = {}
+        for attribute in InventoryUnitAttribute.objects.filter(
+            inventory_unit_id__in=existing_unit_ids
+        ).exclude(attribute_definition=serial_attr_def):
+            existing_attributes.setdefault(attribute.inventory_unit_id, {})[
+                attribute.attribute_definition_id
+            ] = attribute.value
+
         try:
             with transaction.atomic():
                 for unit in omitted:
                     InventoryUnitAttribute.objects.filter(inventory_unit=unit).delete()
                     unit.delete()
                 changed_existing = []
-                for item, serial_number in zip(serial_items, normalized_serials):
+                for item, serial_number, attributes in zip(
+                    serial_items, normalized_serials, prepared_attributes
+                ):
                     row_id = item.get("id")
                     if row_id is None:
                         continue
@@ -462,12 +496,21 @@ class InventoryService:
                     old_serial = attr.value if attr else ""
                     on_sale = item["on_sale"]
                     desired_state = InventoryUnitStateEnum.IN_STOCK.value if on_sale else InventoryUnitStateEnum.RESERVED.value
-                    changed = old_serial != serial_number or unit.state != desired_state
+                    serial_changed = old_serial != serial_number
+                    state_changed = unit.state != desired_state
+                    # An attribute edit is an edit: a reserved row refuses it
+                    # like any other change, but it does not rewrite the serial
+                    # number, so it never joins the placeholder pass below.
+                    changed = (
+                        serial_changed
+                        or state_changed
+                        or attributes != existing_attributes.get(row_id, {})
+                    )
                     if changed and not self._is_editable(unit):
                         raise self.ValidationError({
                             "serial_items": [_('Reserved serialized rows cannot be edited.')]
                         })
-                    if changed:
+                    if serial_changed or state_changed:
                         changed_existing.append((unit, serial_number, desired_state))
 
                 for changed in changed_existing:
@@ -476,7 +519,9 @@ class InventoryService:
                         inventory_unit=unit, attribute_definition=serial_attr_def
                     ).update(value=f"__inventory_tmp_{unit.id}_{uuid.uuid4().hex}")
 
-                for item, serial_number in zip(serial_items, normalized_serials):
+                for item, serial_number, attributes in zip(
+                    serial_items, normalized_serials, prepared_attributes
+                ):
                     row_id = item.get("id")
                     on_sale = item["on_sale"]
                     desired_state = InventoryUnitStateEnum.IN_STOCK.value if on_sale else InventoryUnitStateEnum.RESERVED.value
@@ -489,6 +534,9 @@ class InventoryService:
                             inventory_unit=new_unit,
                             attribute_definition=serial_attr_def,
                             value=serial_number,
+                        )
+                        InventoryAttributeService.apply_unit_attributes(
+                            new_unit, attributes
                         )
                         continue
                     unit = existing[row_id]
@@ -506,6 +554,9 @@ class InventoryService:
                             attribute_definition=serial_attr_def,
                             value=serial_number,
                         )
+                    # Historical rows never reach here, so `attributes` is
+                    # always the validated map for this unit.
+                    InventoryAttributeService.apply_unit_attributes(unit, attributes)
         except IntegrityError as exc:
             raise self.ValidationError({
                 "serial_items": [_('Serial numbers must be globally unique, ignoring case.')]
@@ -736,8 +787,8 @@ class InventoryService:
         ).select_related("inventory__warehouse").order_by("id")
         if business is not None:
             units = units.filter(inventory__business=business)
+        unit_ids = list(units.values_list("id", flat=True))
         if serial_attr_def:
-            unit_ids = list(units.values_list("id", flat=True))
             attr_map = {
                 a.inventory_unit_id: a.value
                 for a in InventoryUnitAttribute.objects.filter(
@@ -747,6 +798,7 @@ class InventoryService:
             }
         else:
             attr_map = {}
+        attributes_map = InventoryAttributeService.list_unit_attributes(unit_ids)
         warehouse_cache = {}
         return {
             "variant_id": variant.id,
@@ -764,6 +816,7 @@ class InventoryService:
                     "status": {"code": unit.state, "name": unit.get_state_display()},
                     "warehouse": self._get_warehouse_for_unit(unit, warehouse_cache),
                     "editable": unit.state == InventoryUnitStateEnum.IN_STOCK.value,
+                    "attributes": attributes_map.get(unit.id, []),
                 }
                 for unit in units
             ],

@@ -26,6 +26,10 @@ class InventoryAttributeService:
             self.errors = errors
             super().__init__(str(errors))
 
+    #: The serial number lives in its own column on the snapshot contract, so
+    #: it never travels through the generic attribute list.
+    SERIAL_NUMBER_CODE = "serial_number"
+
     @staticmethod
     def validate_value(value, attr_type):
         if value == "":
@@ -200,3 +204,104 @@ class InventoryAttributeService:
             inventory_unit=inventory_unit,
         )
         return {attr.attribute_definition.code: attr.value for attr in attrs}
+
+    # ------------------------------------------------------------------
+    # Serialized-unit attribute snapshots
+    # ------------------------------------------------------------------
+    @classmethod
+    def prepare_attributes(cls, entries, business=None):
+        """Resolve and validate one serialized row's attribute entries.
+
+        Returns ``{definition_id: value}``; a blank value means the attribute
+        is cleared on that unit. An unknown code is rejected rather than
+        created, so inserting a missing attribute stays the job of
+        ``create_definition`` and the vendor endpoint behind it.
+        """
+        desired = {}
+        seen = set()
+        for entry in entries or []:
+            code = cls.normalize_code(str(entry.get("code") or ""))
+            if not code:
+                raise cls.ValidationError({
+                    "attributes": [gettext("An attribute code is required.")],
+                })
+            if code in seen:
+                raise cls.ValidationError({
+                    "attributes": [
+                        gettext("Attribute submitted twice: %(code)s.") % {"code": code}
+                    ],
+                })
+            seen.add(code)
+            if code == cls.SERIAL_NUMBER_CODE:
+                raise cls.ValidationError({
+                    "attributes": [gettext(
+                        "The serial_number attribute belongs to the serial number field."
+                    )],
+                })
+            definition = cls.resolve_definition(code, business, fallback_to_any=False)
+            if definition is None:
+                raise cls.ValidationError({
+                    "attributes": [
+                        gettext("Unknown attribute: %(code)s.") % {"code": code}
+                    ],
+                })
+            value = str(entry.get("value") or "")
+            if not value.strip():
+                continue
+            if not cls.validate_value(value, definition.type):
+                raise cls.ValidationError({
+                    "attributes": [
+                        gettext("Invalid value for %(code)s.") % {"code": code}
+                    ],
+                })
+            desired[definition.id] = value
+        return desired
+
+    @classmethod
+    @transaction.atomic
+    def apply_unit_attributes(cls, inventory_unit, desired):
+        """Write ``{definition_id: value}`` onto a unit, dropping the rest.
+
+        ``serial_number`` is never touched here; it belongs to the serialized
+        snapshot flow.
+        """
+        existing = {
+            attr.attribute_definition_id: attr
+            for attr in InventoryUnitAttribute.objects.filter(
+                inventory_unit=inventory_unit
+            ).exclude(attribute_definition__code=cls.SERIAL_NUMBER_CODE)
+        }
+        for definition_id, attr in existing.items():
+            if definition_id not in desired:
+                attr.delete()
+        for definition_id, value in desired.items():
+            attr = existing.get(definition_id)
+            if attr is None:
+                InventoryUnitAttribute.objects.create(
+                    inventory_unit=inventory_unit,
+                    attribute_definition_id=definition_id,
+                    value=value,
+                )
+            elif attr.value != value:
+                attr.value = value
+                attr.save(update_fields=["value"])
+
+    @classmethod
+    def list_unit_attributes(cls, unit_ids):
+        """Return ``{unit_id: [attribute payload]}`` for the given units."""
+        rows = InventoryUnitAttribute.objects.filter(
+            inventory_unit_id__in=list(unit_ids)
+        ).exclude(
+            attribute_definition__code=cls.SERIAL_NUMBER_CODE
+        ).select_related("attribute_definition").order_by("id")
+        payload = {}
+        for attr in rows:
+            definition = attr.attribute_definition
+            payload.setdefault(attr.inventory_unit_id, []).append({
+                "code": definition.code,
+                "name": definition.name,
+                "fa_title": definition.fa_title,
+                "type": definition.type,
+                "value": attr.value,
+            })
+        return payload
