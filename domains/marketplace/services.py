@@ -3,8 +3,16 @@ from decimal import Decimal
 from django.db import transaction
 from django.utils.translation import gettext as _
 
-from .models import BusinessOffer, OfferPriceHistory
+from domains.inventory.enums.VariantCostStrategyEnum import VariantCostStrategyEnum
+
+from .models import BusinessOffer, OfferPriceHistory, PricingStrategy
 from .models.offer_price_history import SOURCE_ADMIN
+
+# The enum is the vocabulary: it validates incoming codes, seeds the
+# PricingStrategy table, and drives the cost-basis formulas. The table only
+# carries display data (labels and the user guide), so a code must exist in
+# both places — domains.marketplace.tests_pricing_strategy asserts that.
+COST_STRATEGY_CODES = {member.value for member in VariantCostStrategyEnum}
 
 
 class MarketplacePricingService:
@@ -46,8 +54,35 @@ class MarketplacePricingService:
         return offer.price
 
     @staticmethod
-    def validate_offer_values(*, price, discount_type, discount_value, expected_profit_percentage, cost_strategy):
-        cost_strategy = cost_strategy or "latest"
+    def strategy_code(value):
+        # BusinessOffer.cost_strategy is a PricingStrategy FK, but everything
+        # above the persistence layer (serializers, validation, audit rows)
+        # speaks the plain code string. Accept either form.
+        return getattr(value, "code", value)
+
+    @staticmethod
+    def resolve_strategies(values):
+        """Turn `cost_strategy` code strings into PricingStrategy rows.
+
+        The two write funnels — admin offers and the vendor variant API — both
+        arrive here with a code, while the model needs a row. Raises the same
+        ValidationError validate_offer_values() raises so callers keep mapping
+        it to a 400.
+        """
+        strategy = values.get("cost_strategy")
+        if strategy is None or isinstance(strategy, PricingStrategy):
+            return values
+        try:
+            values["cost_strategy"] = PricingStrategy.objects.get(code=strategy)
+        except PricingStrategy.DoesNotExist as exc:
+            raise MarketplacePricingService.ValidationError({
+                "cost_strategy": _("Unsupported pricing cost strategy.")
+            }) from exc
+        return values
+
+    @classmethod
+    def validate_offer_values(cls, *, price, discount_type, discount_value, expected_profit_percentage, cost_strategy):
+        cost_strategy = cls.strategy_code(cost_strategy) or "latest"
         if bool(discount_type) != (discount_value is not None):
             raise MarketplacePricingService.ValidationError({
                 "discount_value": _("Discount type and value must be provided together.")
@@ -66,7 +101,7 @@ class MarketplacePricingService:
                     "Expected profit percentage must be greater than or equal to zero."
                 )
             })
-        if cost_strategy not in {"latest", "weighted_average", "fifo_next"}:
+        if cost_strategy not in COST_STRATEGY_CODES:
             raise MarketplacePricingService.ValidationError({
                 "cost_strategy": _("Unsupported pricing cost strategy.")
             })
@@ -110,7 +145,7 @@ class MarketplacePricingService:
             new_discount_type=offer.discount_type,
             old_discount_value=old_discount_value,
             new_discount_value=offer.discount_value,
-            cost_strategy=offer.cost_strategy,
+            cost_strategy=cls.strategy_code(offer.cost_strategy),
             expected_profit_percentage=offer.expected_profit_percentage,
             source=source,
         )
@@ -119,7 +154,7 @@ class MarketplacePricingService:
     @transaction.atomic
     def create_offer(cls, *, _source=SOURCE_ADMIN, **values):
         cls.validate_offer_values(**cls._merge_values(None, values))
-        offer = BusinessOffer.objects.create(**values)
+        offer = BusinessOffer.objects.create(**cls.resolve_strategies(values))
         cls._record_history(
             offer,
             old_price=Decimal("0"),
@@ -141,7 +176,7 @@ class MarketplacePricingService:
         # Only keys present in `values` are written: an omitted field keeps its
         # stored value, an explicit None clears it. Pass-through fields such as
         # is_active, business and variant ride along untouched.
-        for field, value in values.items():
+        for field, value in cls.resolve_strategies(values).items():
             setattr(offer, field, value)
         offer.save()
         cls._record_history(

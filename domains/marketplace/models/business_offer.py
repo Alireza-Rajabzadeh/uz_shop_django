@@ -1,7 +1,6 @@
 from django.db import models
 
 from core.constants import DISCOUNT_TYPES
-from domains.inventory.enums.VariantCostStrategyEnum import VariantCostStrategyEnum
 
 
 class BusinessOffer(models.Model):
@@ -46,10 +45,11 @@ class BusinessOffer(models.Model):
         decimal_places=2,
         default=0,
     )
-    cost_strategy = models.CharField(
-        max_length=20,
-        choices=VariantCostStrategyEnum.choices(),
-        default="latest",
+    cost_strategy = models.ForeignKey(
+        "PricingStrategy",
+        on_delete=models.PROTECT,
+        related_name="offers",
+        default=1,
     )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)

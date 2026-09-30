@@ -195,6 +195,9 @@ The marketplace domain owns per-business variant pricing through `BusinessOffer`
 - `BusinessOffer.is_active` is also the gate for changing a vendor variant's inventory type.
 - `BusinessOffer.is_active` is purely the marketplace **listing** flag. Storefront, cart, order, catalog price filters, and inventory reporting keep `is_active=True`; pricing configuration, vendor pricing views, and the admin pricing list read the offer regardless of it.
 - Pricing configuration (`expected_profit_percentage`, `cost_strategy`) lives on `BusinessOffer` and does not require one to exist first: `InventoryPricingService.update_variant_pricing()` creates a draft offer with `is_active=False` when the variant has none. Nothing in the pricing flow activates an offer — a variant becomes visible only through an explicit marketplace-status change.
+- `cost_strategy` is a `PROTECT` foreign key to `PricingStrategy` (`marketplace_pricing_strategy`, default id 1 = `latest`), seeded by `marketplace.0007` from `domains/marketplace/data/pricing_strategies.py`. The row holds `code`, `name`, `fa_name`, and a `description` content-component document (`{components: [{id, key, version, props}]}`) that the panels render as the per-strategy user guide through their existing content registry.
+- `PricingStrategy` is reference data: seed-only, with no admin or vendor write path, so adding a strategy requires a `VariantCostStrategyEnum` member, a seed row, a `InventoryPricingService._calculate_basis()` branch, and a new migration. The enum remains the validation vocabulary for request codes; the table only supplies display data. `domains.marketplace.tests_pricing_strategy` asserts the two never drift apart.
+- Code strings are the API contract in both directions. Only the persistence layer resolves them to rows (`MarketplacePricingService.resolve_strategies` used by `create_offer` / `update_offer`, and `InventoryPricingService._strategy_row`); readers emit `offer.cost_strategy.code`. `OfferPriceHistory.cost_strategy` keeps its own `CharField` code snapshot so the audit trail does not move with the reference data.
 - Reading pricing: callers attach `_business_offer` to variant objects via a batched lookup, then read from `offer.price`, `offer.discount_type`, `offer.discount_value`.
 - Writing pricing: `InventoryPricingService.apply_price()` writes to `BusinessOffer.price` and creates `VariantPriceHistory` snapshots. `GET .../variants/<id>/pricing` accepts optional `cost_strategy` / `expected_profit_percentage` query params to calculate a suggested price from unsaved values without writing anything.
 - `VariantService.calculate_discounted_price(variant, offer=None)` accepts an optional offer parameter and reads price/discount from it.
@@ -246,7 +249,7 @@ Pipeline:
 - Never edit an applied migration to change current behavior; add a new migration.
 - Pair data normalization with database constraints when introducing canonical formats.
 - Keep seeders idempotent and clearly development-only.
-- The seed command creates location, canonical categories, catalog/inventory reference data, and customer fixtures, but no generated test catalog, admin account, stock, product variants, or notification provider.
+- The seed command creates location, canonical categories, catalog/inventory reference data, marketplace pricing-strategy reference data, and customer fixtures, but no generated test catalog, admin account, stock, product variants, or notification provider.
 - Canonical category IDs start at `1001`; category seeding updates those IDs without deleting pre-existing categories.
 
 Run focused tests while developing, then broader tests for shared infrastructure or cross-domain changes. Important suites include:

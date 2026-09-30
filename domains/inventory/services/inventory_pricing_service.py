@@ -17,7 +17,7 @@ from domains.inventory.models import (
     VariantPriceHistory,
 )
 from domains.inventory.services.price_history_mongo import log_price_change
-from domains.marketplace.models import BusinessOffer
+from domains.marketplace.models import BusinessOffer, PricingStrategy
 from domains.marketplace.models.offer_price_history import SOURCE_ADMIN
 from domains.marketplace.services import MarketplacePricingService
 
@@ -39,9 +39,13 @@ class InventoryPricingService:
             super().__init__(str(errors))
 
     def get_strategies(self):
+        # Display data comes from the PricingStrategy reference table, not the
+        # enum: the rows carry the Persian labels and the user-guide document
+        # the panels render. Codes themselves stay validated against
+        # strategy_codes() so the table and enum cannot drift apart unnoticed.
         return [
-            {"code": code, "name": name}
-            for code, name in VariantCostStrategyEnum.choices()
+            {"code": item.code, "name": item.name, "fa_name": item.fa_name, "description": item.description}
+            for item in PricingStrategy.objects.all()
         ]
 
     def get_variant_pricing(self, variant, business=None):
@@ -81,6 +85,17 @@ class InventoryPricingService:
                 ]
             })
         return None
+
+    def _strategy_row(self, code):
+        """Resolve a validated strategy code to its PricingStrategy row.
+
+        The code was already checked against strategy_codes(); this only maps
+        it onto the FK and turns table drift into a 400 instead of a 500.
+        """
+        try:
+            return MarketplacePricingService.resolve_strategies({"cost_strategy": code})["cost_strategy"]
+        except MarketplacePricingService.ValidationError as exc:
+            raise self.ValidationError(exc.errors) from exc
 
     @transaction.atomic
     def update_variant_pricing(
@@ -140,7 +155,7 @@ class InventoryPricingService:
         if expected_profit_percentage is not None:
             offer.expected_profit_percentage = Decimal(str(expected_profit_percentage))
         if cost_strategy is not None:
-            offer.cost_strategy = cost_strategy
+            offer.cost_strategy = self._strategy_row(cost_strategy)
         offer.save(update_fields=["expected_profit_percentage", "cost_strategy", "updated_at"])
         return offer
 
@@ -277,13 +292,13 @@ class InventoryPricingService:
         config, rows = self._pricing_context(variant)
         if config is None or not rows:
             return None
-        return self._calculate_basis(config.cost_strategy, rows)
+        return self._calculate_basis(config.cost_strategy.code, rows)
 
     def get_suggested_price(self, variant):
         config, rows = self._pricing_context(variant)
         if config is None or not rows:
             return None
-        basis = self._calculate_basis(config.cost_strategy, rows)
+        basis = self._calculate_basis(config.cost_strategy.code, rows)
         profit = Decimal(config.expected_profit_percentage)
         return basis * (Decimal("1") + profit / Decimal("100"))
 
@@ -291,7 +306,7 @@ class InventoryPricingService:
         config, rows = self._pricing_context(variant)
         if config is None:
             return None
-        basis = self._calculate_basis(config.cost_strategy, rows) if rows else None
+        basis = self._calculate_basis(config.cost_strategy.code, rows) if rows else None
         suggested_price = (
             basis * (Decimal("1") + Decimal(config.expected_profit_percentage) / Decimal("100"))
             if basis is not None
@@ -299,7 +314,7 @@ class InventoryPricingService:
         )
         money = Decimal("0.01")
         return {
-            "strategy": config.cost_strategy,
+            "strategy": config.cost_strategy.code,
             "expected_profit_percentage": config.expected_profit_percentage,
             "cost_basis": basis.quantize(money) if basis is not None else None,
             "suggested_price": suggested_price.quantize(money) if suggested_price is not None else None,
@@ -335,7 +350,7 @@ class InventoryPricingService:
         effective_strategy = (
             cost_strategy
             if cost_strategy is not None
-            else (config.cost_strategy if config is not None else None)
+            else (config.cost_strategy.code if config is not None else None)
         )
         effective_profit = (
             expected_profit_percentage
@@ -420,7 +435,7 @@ class InventoryPricingService:
                     "strategy": [_('Unsupported pricing cost strategy.')]
                 })
             queryset = queryset.filter(pk__in=BusinessOffer.objects.filter(
-                cost_strategy=strategy
+                cost_strategy__code=strategy
             ).values_list("variant_id", flat=True))
         if has_pricing is not None:
             # Pricing config lives on any offer, active or draft, so "has

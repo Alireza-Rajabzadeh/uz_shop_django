@@ -173,7 +173,7 @@ class InventoryReportingService:
                     "strategy": [_('Unsupported pricing cost strategy.')]
                 })
             queryset = queryset.filter(pk__in=BusinessOffer.objects.filter(
-                cost_strategy=strategy, is_active=True
+                cost_strategy__code=strategy, is_active=True
             ).values_list("variant_id", flat=True))
 
         scoped_consumptions = InventorySupplyConsumption.objects.filter(
@@ -281,7 +281,7 @@ class InventoryReportingService:
             config = configs.get(variant.id)
             suggested_price = None
             if config is not None and supplies:
-                basis = self.pricing_service.calculate_basis(config.cost_strategy, supplies)
+                basis = self.pricing_service.calculate_basis(config.cost_strategy.code, supplies)
                 suggested_price = (
                     basis * (Decimal("1") + Decimal(config.expected_profit_percentage) / Decimal("100"))
                 ).quantize(money)

@@ -300,6 +300,8 @@ class SupplyReceiveSerializer(ClosedSerializer):
 class PricingStrategyOptionSerializer(serializers.Serializer):
     code = serializers.CharField()
     name = serializers.CharField()
+    fa_name = serializers.CharField()
+    description = serializers.JSONField()
 
 
 class VariantPricingWriteSerializer(ClosedSerializer):

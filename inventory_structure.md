@@ -18,7 +18,7 @@ domains/inventory/
 │   ├── WarehouseStatusEnum.py        AVAILABLE = 1, UNAVAILABLE = 2
 │   ├── SerializedStockStatusEnum.py  IN_STOCK = 1, SOLD = 2, RETURNED = 3, DAMAGED = 4, LOST = 5
 │   ├── InventorySupplyCostTypeEnum.py SHIPMENT, CUSTOMS, INSURANCE, TAX, COMMISSION, HANDLING, STORAGE, OTHER (lowercase persisted codes)
-│   ├── VariantCostStrategyEnum.py    LATEST, WEIGHTED_AVERAGE, FIFO_NEXT (latest / weighted_average / fifo_next)
+│   ├── VariantCostStrategyEnum.py    LATEST, WEIGHTED_AVERAGE, FIFO_NEXT (latest / weighted_average / fifo_next); display data lives in marketplace.PricingStrategy
 │   └── VariantPriceHistorySourceEnum.py INVENTORY_PRICING / MANUAL
 ├── models/                           11 models (see below)
 └── services/
@@ -163,11 +163,13 @@ Authentication: `AdminJWTAuthentication`. Standard `api_response` envelope; list
 | `/api/inventory/variants/<variant_id>/pricing/apply` | `VariantPricingApplyView` | POST | view_inventory + adjust_stock + `catalog.change_productvariants`; optional `{price}` override, otherwise applies current suggested price |
 | `/api/inventory/variants/<variant_id>/pricing/history` | `VariantPricingHistoryView` | GET | view_inventory; newest-first immutable snapshots |
 | `/api/inventory/pricing` | `PricingListView` | GET | view_inventory. Paginated variant list with per-row pricing; filters `search`, `category_id`, `strategy`, `has_pricing`, ordering allowlist (`sku`, `product_name`, `current_price`, `remaining_quantity`) |
-| `/api/inventory/pricing-strategies` | `PricingStrategyOptions` | GET | view_inventory |
+| `/api/inventory/pricing-strategies` | `PricingStrategyOptions` | GET | view_inventory; returns `{code, name, fa_name, description}` from `marketplace.PricingStrategy` |
 
 ### Variant pricing configuration
 
-Pricing configuration is `expected_profit_percentage` (`DecimalField(5,2)`, DB-checked `>= 0`, default 0) and `cost_strategy` — a system-defined choice from `VariantCostStrategyEnum`: `latest`, `weighted_average`, `fifo_next`. It is stored on `BusinessOffer` (the legacy one-to-one `VariantPricing` table was dropped by `inventory.0015` after `marketplace.0005` migrated the values), and **no offer is required to hold it**: saving a strategy for an unconfigured variant creates a draft offer with `is_active=False`. `is_active` is only the marketplace listing flag, never a prerequisite for reading or writing pricing configuration. No suggested selling price or cost basis is stored anywhere; both are calculated on demand and never persisted, and catalog prices are never updated automatically.
+Pricing configuration is `expected_profit_percentage` (`DecimalField(5,2)`, DB-checked `>= 0`, default 0) and `cost_strategy` — the `code` of a `marketplace.PricingStrategy` row (`marketplace_pricing_strategy`: `code`, `name`, `fa_name`, `description`). The codes themselves come from `VariantCostStrategyEnum`: `latest`, `weighted_average`, `fifo_next`. The enum stays the validation vocabulary and drives `_calculate_basis()`; the table is seed-only display data (Persian label plus a content-component user guide) with a consistency test keeping the two in step, and `BusinessOffer.cost_strategy` is a `PROTECT` FK to it defaulting to id 1 (`latest`). The stored config lives on `BusinessOffer` (the legacy one-to-one `VariantPricing` table was dropped by `inventory.0015` after `marketplace.0005` migrated the values), and **no offer is required to hold it**: saving a strategy for an unconfigured variant creates a draft offer with `is_active=False`. `is_active` is only the marketplace listing flag, never a prerequisite for reading or writing pricing configuration. No suggested selling price or cost basis is stored anywhere; both are calculated on demand and never persisted, and catalog prices are never updated automatically.
+
+Code strings are what cross the API boundary in both directions; only the persistence layer resolves them to rows (`MarketplacePricingService.resolve_strategies`, `InventoryPricingService._strategy_row`). `OfferPriceHistory.cost_strategy` and `VariantPriceHistory.cost_strategy` stay `CharField` snapshots of the code so the audit trail does not move with the reference data.
 
 Strategy meanings (implemented in `InventoryPricingService` over received supplies with `remaining_quantity > 0`):
 
@@ -186,7 +188,7 @@ suggested_price = cost_basis * (1 + expected_profit_percentage / 100)
 - Catalog prices remain unchanged when supplies, costs, strategies, or expected-profit percentages change. `POST .../pricing/apply` is the only inventory-pricing workflow that writes `BusinessOffer.price`: it row-locks the offer, requires a current non-null cost basis and suggested price, applies either the suggestion or the optional custom override, and creates `VariantPriceHistory` in the same transaction. Suggested applications use source `inventory_pricing`; custom overrides use `manual`. Any history-write failure rolls the price back.
 - History snapshots store `old_price`, `new_price`, `cost_basis`, selected strategy, expected profit, source, and creation time. The variant FK uses PROTECT so applied-price audit history cannot disappear through variant deletion.
 
-Managed by `InventoryPricingService.get_variant_pricing` / `update_variant_pricing` (row-locked upsert with service-level strategy/profit validation; creates an inactive draft `BusinessOffer` when the variant has none), `get_cost_basis`, `get_suggested_price`, `get_pricing_summary`, `get_variant_pricing_overview` (optionally calculating with unsaved overrides), `search_pricing` / `get_pricing_overview_map`, `apply_price`, `get_price_history`, and `get_strategies`.
+Managed by `InventoryPricingService.get_variant_pricing` / `update_variant_pricing` (row-locked upsert with service-level strategy/profit validation; creates an inactive draft `BusinessOffer` when the variant has none), `get_cost_basis`, `get_suggested_price`, `get_pricing_summary`, `get_variant_pricing_overview` (optionally calculating with unsaved overrides), `search_pricing` / `get_pricing_overview_map`, `apply_price`, `get_price_history`, and `get_strategies` (reads the `PricingStrategy` rows, not the enum).
 
 ### Supply APIs (`InventorySupplyService`)
 

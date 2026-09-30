@@ -1,10 +1,21 @@
 from rest_framework import serializers
 
-from ..models import BusinessOffer, OfferPriceHistory
+from ..models import BusinessOffer, OfferPriceHistory, PricingStrategy
 from ..services import MarketplacePricingService
 
 
 class BusinessOfferSerializer(serializers.ModelSerializer):
+    # cost_strategy is a PricingStrategy FK, but the API contract is the code
+    # string ("latest", ...). A plain ModelSerializer would leak the row id
+    # here and start accepting ids, so both directions are pinned to `code`.
+    # required=False mirrors the old CharField default: omitting the field on
+    # create falls back to BusinessOffer's "latest" default.
+    cost_strategy = serializers.SlugRelatedField(
+        slug_field="code",
+        queryset=PricingStrategy.objects.all(),
+        required=False,
+    )
+
     class Meta:
         model = BusinessOffer
         fields = [

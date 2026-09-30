@@ -257,7 +257,7 @@ class VendorInventoryPricingTests(TestCase):
         # Creating config must never publish the variant.
         self.assertFalse(offer.is_active)
         self.assertEqual(str(offer.price), "0.00")
-        self.assertEqual(offer.cost_strategy, "weighted_average")
+        self.assertEqual(offer.cost_strategy.code, "weighted_average")
         self.assertEqual(offer.expected_profit_percentage, Decimal("25.00"))
 
         data = response.data["data"]
@@ -278,7 +278,7 @@ class VendorInventoryPricingTests(TestCase):
         offers = BusinessOffer.objects.filter(variant=self.variant)
         self.assertEqual(offers.count(), 1)
         offer = offers.get()
-        self.assertEqual(offer.cost_strategy, "fifo_next")
+        self.assertEqual(offer.cost_strategy.code, "fifo_next")
         self.assertEqual(offer.expected_profit_percentage, Decimal("20.00"))
         self.assertFalse(offer.is_active)
 
@@ -340,7 +340,7 @@ class VendorInventoryPricingTests(TestCase):
         self.assertEqual(response.status_code, 200, response.data)
         offer = BusinessOffer.objects.get(business=self.business, variant=self.variant)
         self.assertEqual(str(offer.price), "150.00")
-        self.assertEqual(offer.cost_strategy, "fifo_next")
+        self.assertEqual(offer.cost_strategy.code, "fifo_next")
         self.assertEqual(offer.expected_profit_percentage, Decimal("20.00"))
         # Pricing the variant is not a listing decision.
         self.assertFalse(offer.is_active)
@@ -377,7 +377,7 @@ class VendorInventoryPricingTests(TestCase):
         self.assertEqual(offers.count(), 1)
         offer = offers.get()
         self.assertEqual(str(offer.price), "250.00")
-        self.assertEqual(offer.cost_strategy, "latest")
+        self.assertEqual(offer.cost_strategy.code, "latest")
         self.assertEqual(offer.expected_profit_percentage, Decimal("15.00"))
         self.assertFalse(offer.is_active)
 
@@ -401,5 +401,5 @@ class VendorInventoryPricingTests(TestCase):
         self.assertEqual(response.status_code, 200, response.data)
         offer = BusinessOffer.objects.get(variant=self.variant)
         self.assertEqual(str(offer.price), "300.00")
-        self.assertEqual(offer.cost_strategy, "fifo_next")
+        self.assertEqual(offer.cost_strategy.code, "fifo_next")
         self.assertEqual(offer.expected_profit_percentage, Decimal("10.00"))
