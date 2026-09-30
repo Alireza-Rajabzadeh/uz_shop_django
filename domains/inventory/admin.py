@@ -39,9 +39,9 @@ class InventoryUnitAdmin(ModelAdmin):
 
 @admin.register(InventoryAttributeDefinition)
 class InventoryAttributeDefinitionAdmin(ModelAdmin):
-    list_display = ["name", "code", "business", "type", "created_at"]
+    list_display = ["name", "fa_title", "code", "business", "type", "created_at"]
     list_filter = ["type", "business"]
-    search_fields = ["name", "code"]
+    search_fields = ["name", "fa_title", "code"]
     autocomplete_fields = ["business"]
     readonly_fields = ["created_at", "updated_at"]
 

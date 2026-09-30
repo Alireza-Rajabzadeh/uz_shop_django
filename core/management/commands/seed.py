@@ -6,6 +6,9 @@ from core.management.seeders.business_payment_statuses import BusinessPaymentSta
 from core.management.seeders.categories import CategorySeeder
 from core.management.seeders.category_details import CategoryDetailSeeder
 from core.management.seeders.inventory import InventorySeeder
+from core.management.seeders.inventory_attribute_definitions import (
+    InventoryAttributeDefinitionSeeder,
+)
 from core.management.seeders.product_statuses import ProductStatusSeeder
 from core.management.seeders.product_variant_statuses import ProductVariantStatusSeeder
 from core.management.seeders.order import OrderSeeder
@@ -34,6 +37,7 @@ class Command(BaseCommand):
             ProductStatusSeeder(),
             ProductVariantStatusSeeder(),
             InventorySeeder(),
+            InventoryAttributeDefinitionSeeder(),
             MarketplaceSeeder(),
             CustomerSeeder(),
             OrderSeeder(),

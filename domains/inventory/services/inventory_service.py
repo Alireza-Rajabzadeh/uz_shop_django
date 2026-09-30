@@ -16,13 +16,15 @@ from domains.inventory.enums.InventoryUnitStateEnum import (
 )
 from domains.inventory.models import (
     Inventory,
-    InventoryAttributeDefinition,
     InventoryType,
     InventoryTransfer,
     InventoryUnit,
     InventoryUnitAttribute,
     Warehouse,
     WarehouseStatus,
+)
+from domains.inventory.services.inventory_attribute_service import (
+    InventoryAttributeService,
 )
 from domains.marketplace.models import BusinessOffer
 
@@ -375,7 +377,9 @@ class InventoryService:
                 sellable=0,
                 reserved=0,
             )
-        serial_attr_def = InventoryAttributeDefinition.objects.filter(code="serial_number").first()
+        serial_attr_def = InventoryAttributeService.resolve_definition(
+            "serial_number", business
+        )
         if serial_attr_def is None:
             raise self.ValidationError({
                 "serial_items": [_('Inventory setup is missing the serial_number attribute definition.')]
@@ -722,7 +726,9 @@ class InventoryService:
                 },
                 "serial_items": None,
             }
-        serial_attr_def = InventoryAttributeDefinition.objects.filter(code="serial_number").first()
+        serial_attr_def = InventoryAttributeService.resolve_definition(
+            "serial_number", business
+        )
         units = InventoryUnit.objects.filter(
             inventory__variant=variant
         ).exclude(
@@ -825,7 +831,9 @@ class InventoryService:
 
     @transaction.atomic
     def receive_serialized_stock(self, *, variant, warehouse, serial_numbers, supply, business=None):
-        serial_attr_def = InventoryAttributeDefinition.objects.filter(code="serial_number").first()
+        serial_attr_def = InventoryAttributeService.resolve_definition(
+            "serial_number", business
+        )
         if serial_attr_def is None:
             raise self.ValidationError({
                 "serial_items": [_('Inventory setup is missing the serial_number attribute definition.')]

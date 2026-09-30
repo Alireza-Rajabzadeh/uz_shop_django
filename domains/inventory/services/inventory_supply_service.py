@@ -15,6 +15,7 @@ from domains.inventory.models import (
     InventorySupplyCost,
     InventoryUnit,
 )
+from domains.inventory.services.inventory_attribute_service import InventoryAttributeService
 from domains.inventory.services.inventory_cost_service import InventoryCostService
 from domains.inventory.services.inventory_service import InventoryService
 from domains.order.models import OrderItem
@@ -248,7 +249,7 @@ class InventorySupplyService:
 
     def _receive_serialized_supply(self, supply, serial_items):
         from domains.business.models import BusinessProfile
-        from domains.inventory.models import InventoryAttributeDefinition, InventoryUnitAttribute
+        from domains.inventory.models import InventoryUnitAttribute
 
         business = supply.business or BusinessProfile.objects.get(id=1)
         inventory, _ = Inventory.objects.select_for_update().get_or_create(
@@ -258,7 +259,9 @@ class InventorySupplyService:
             defaults={"quantity": 0, "sellable": 0, "reserved": 0},
         )
         if serial_items:
-            serial_attr_def = InventoryAttributeDefinition.objects.filter(code="serial_number").first()
+            serial_attr_def = InventoryAttributeService.resolve_definition(
+                "serial_number", business
+            )
             units = []
             for item in serial_items:
                 units.append(InventoryUnit(

@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from domains.catalog.models import ProductVariants
+from domains.inventory.enums.InventoryAttributeTypeEnum import InventoryAttributeTypeEnum
 from domains.inventory.enums.InventorySupplyCostTypeEnum import InventorySupplyCostTypeEnum
 from domains.inventory.enums.VariantCostStrategyEnum import VariantCostStrategyEnum
 from domains.inventory.models import Warehouse
@@ -476,3 +477,29 @@ class ReportSupplyRowSerializer(serializers.Serializer):
 class ReportSupplyQuerySerializer(serializers.Serializer):
     search = serializers.CharField(required=False, allow_blank=True)
     ordering = serializers.CharField(required=False, allow_blank=True)
+
+
+class InventoryAttributeDefinitionSerializer(serializers.Serializer):
+    """A unit attribute definition in either scope.
+
+    ``is_global`` tells the panel whether the row is shared reference data
+    (and therefore not editable by the vendor) or one the vendor inserted.
+    """
+
+    id = serializers.IntegerField()
+    code = serializers.CharField()
+    name = serializers.CharField()
+    fa_title = serializers.CharField()
+    type = serializers.CharField()
+    is_global = serializers.BooleanField()
+
+
+class InventoryAttributeDefinitionWriteSerializer(ClosedSerializer):
+    name = serializers.CharField(max_length=100)
+    fa_title = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
+    code = serializers.CharField(max_length=50, required=False, allow_blank=True, default="")
+    type = serializers.ChoiceField(
+        choices=InventoryAttributeTypeEnum.choices(),
+        required=False,
+        default=InventoryAttributeTypeEnum.TEXT.value,
+    )

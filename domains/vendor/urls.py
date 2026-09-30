@@ -61,6 +61,7 @@ from .views.inventory import (
     VendorInventoryOverviewView,
     VendorSupplyOverviewView,
     VendorWarehouseStatusesView,
+    VendorInventoryAttributeDefinitionsView,
     VendorCountryOptionsView,
     VendorStateOptionsView,
     VendorCityOptionsView,
@@ -131,6 +132,10 @@ urlpatterns = [
     path("pricing-strategies", VendorPricingStrategiesView.as_view()),
     path("supply-cost-types", VendorSupplyCostTypesView.as_view()),
     path("warehouse-statuses", VendorWarehouseStatusesView.as_view()),
+    path(
+        "inventory/attribute-definitions",
+        VendorInventoryAttributeDefinitionsView.as_view(),
+    ),
     path("warehouses", VendorWarehouseListView.as_view()),
     path("warehouses/<int:warehouse_id>", VendorWarehouseDetailView.as_view()),
     # Location options

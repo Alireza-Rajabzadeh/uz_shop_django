@@ -7,6 +7,8 @@ from core.responses import api_response
 from domains.catalog.models import Product, ProductVariants
 from domains.catalog.services.variant_service import VariantService
 from domains.inventory.api.serializers import (
+    InventoryAttributeDefinitionSerializer,
+    InventoryAttributeDefinitionWriteSerializer,
     InventoryVariantDetailSerializer,
     PricingStrategyOptionSerializer,
     SupplyCostTypeOptionSerializer,
@@ -20,6 +22,7 @@ from domains.inventory.api.serializers import (
     VariantPriceHistorySerializer,
 )
 from domains.inventory.enums.InventorySupplyCostTypeEnum import InventorySupplyCostTypeEnum
+from domains.inventory.services.inventory_attribute_service import InventoryAttributeService
 from domains.inventory.services.inventory_pricing_service import InventoryPricingService
 from domains.inventory.services.inventory_service import InventoryService
 from domains.inventory.services.inventory_supply_service import InventorySupplyService
@@ -162,6 +165,44 @@ class VendorWarehouseStatusesView(VendorInventoryAPIView):
         statuses = WarehouseStatus.objects.all().order_by("id")
         data = [{"id": s.id, "name": s.name} for s in statuses]
         return api_response(data=data)
+
+
+class VendorInventoryAttributeDefinitionsView(VendorInventoryAPIView):
+    """List global plus own attribute definitions, or insert a missing one.
+
+    The serialized-unit flow offers every definition the vendor may use:
+    shared reference data (``business IS NULL``) and the rows this vendor
+    created. A vendor that cannot find an attribute inserts it here, which
+    only ever creates a row owned by its own business.
+    """
+
+    def get(self, request):
+        business = self._get_business(request)
+        definitions = InventoryAttributeService.list_definitions(business)
+        return api_response(
+            data=InventoryAttributeDefinitionSerializer(definitions, many=True).data
+        )
+
+    def post(self, request):
+        business = self._get_business(request)
+        serializer = InventoryAttributeDefinitionWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+        try:
+            definition = InventoryAttributeService.create_definition(
+                business,
+                name=payload["name"],
+                fa_title=payload.get("fa_title", ""),
+                code=payload.get("code", ""),
+                attr_type=payload.get("type"),
+            )
+        except InventoryAttributeService.ValidationError as exc:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError(exc.errors) from exc
+        return api_response(
+            data=InventoryAttributeDefinitionSerializer(definition).data,
+            status_code=201,
+        )
 
 
 class VendorVariantSupplyListView(VendorInventoryAPIView):
