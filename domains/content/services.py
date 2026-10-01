@@ -69,7 +69,9 @@ class PageService:
     HOME_SLUG = "home"
 
     def get_by_slug(self, slug):
-        return Page.objects.get(slug=slug)
+        # Slug routes serve the shared storefront only: a business's own page
+        # with the same slug is reachable through the vendor/admin APIs.
+        return Page.objects.get(slug=slug, business__isnull=True)
 
     def get_home_page(self):
         return self.get_by_slug(self.HOME_SLUG)
@@ -87,7 +89,7 @@ class PageService:
 
 class LandingPageService:
     def get_by_slug(self, slug):
-        return LandingPage.objects.get(slug=slug)
+        return LandingPage.objects.get(slug=slug, business__isnull=True)
 
     def delete_page(self, instance):
         instance.delete()
