@@ -265,6 +265,38 @@ class VendorContentAPITests(APITestCase):
         self.assertEqual(own_response.data["data"]["content"]["components"], [])
         self.assertEqual(foreign_response.status_code, 404)
 
+    def test_preview_resolves_products_through_the_authoring_loaders(self):
+        # The vendor's own products are still `pending`, which the public
+        # storefront loader filters out. Previewing must resolve them the
+        # authoring way (as the edit screen does) or the slider renders empty.
+        pending = ProductStatus.objects.get(name="pending")
+        draft_product = Product.objects.create(name="Draft product", status=pending)
+        draft_product.categories.add(self.category)
+
+        self.own_page.draft_content = {
+            "schema_version": 1,
+            "contract_version": 4,
+            "components": [
+                {
+                    "id": "c1",
+                    "key": "product_slider",
+                    "version": 1,
+                    "props": {"items": [draft_product.id]},
+                }
+            ],
+        }
+        self.own_page.save()
+
+        response = self.client.get(
+            f"/api/business-content/vendor/landing-pages/{self.own_page.id}/preview"
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        components = response.data["data"]["content"]["components"]
+        items = components[0]["props"]["items"]
+        self.assertEqual([item["id"] for item in items], [draft_product.id])
+        self.assertEqual(items[0]["status_name"], "pending")
+
     # ── pages ────────────────────────────────────────────────────────
 
     def test_page_endpoints_are_scoped(self):

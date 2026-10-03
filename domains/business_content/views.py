@@ -332,7 +332,7 @@ class VendorContentPreview(VendorContentAPIView):
         _, instance = self.get_object(request, resource_id)
         if instance.status not in self.allowed_statuses:
             raise NotFound(_(self.not_found_message))
-        instance.selected_content = LandingPageContentResolver().resolve(
+        instance.selected_content = LandingPageContentResolver.for_authoring().resolve(
             instance.draft_content
         )
         return api_response(data=self.content_serializer(instance).data)
