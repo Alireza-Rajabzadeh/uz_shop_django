@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: uz_shop_django\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-03 09:51+0000\n"
+"POT-Creation-Date: 2026-10-03 14:17+0000\n"
 "PO-Revision-Date: 2026-07-23 12:11+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -43,227 +43,260 @@ msgstr "شماره کارت الزامی است."
 msgid "Card number must contain digits only."
 msgstr "شماره کارت باید فقط شامل ارقام باشد."
 
-#: domains/business_content/contracts.py:35 domains/content/contracts.py:35
+#: domains/business_content/contracts.py:41 domains/content/contracts.py:41
 msgid "The content component contract is unavailable or invalid."
 msgstr "قرارداد اجزای محتوا در دسترس نیست یا نامعتبر است."
 
-#: domains/business_content/contracts.py:42 domains/content/contracts.py:42
+#: domains/business_content/contracts.py:48 domains/content/contracts.py:48
 msgid ""
 "A content contracts payload must contain only contract_version and "
 "components."
-msgstr "ساختار قرارداد محتوا باید تنها شامل contract_version و components باشد."
+msgstr ""
+"ساختار قرارداد محتوا باید تنها شامل contract_version و components باشد."
 
-#: domains/business_content/contracts.py:45 domains/content/contracts.py:45
+#: domains/business_content/contracts.py:51 domains/content/contracts.py:51
 msgid "contract_version must be an integer."
 msgstr "contract_version باید یک عدد صحیح باشد."
 
-#: domains/business_content/contracts.py:47
-#: domains/business_content/contracts.py:222 domains/content/contracts.py:47
-#: domains/content/contracts.py:222
+#: domains/business_content/contracts.py:53
+#: domains/business_content/contracts.py:254 domains/content/contracts.py:53
+#: domains/content/contracts.py:254
 msgid "components must be an array."
 msgstr "components باید یک آرایه باشد."
 
-#: domains/business_content/contracts.py:54
-#: domains/business_content/contracts.py:91
-#: domains/business_content/contracts.py:100
-#: domains/business_content/contracts.py:262 domains/content/contracts.py:54
-#: domains/content/contracts.py:91 domains/content/contracts.py:100
-#: domains/content/contracts.py:262
+#: domains/business_content/contracts.py:60
+#: domains/business_content/contracts.py:123
+#: domains/business_content/contracts.py:132
+#: domains/business_content/contracts.py:326 domains/content/contracts.py:60
+#: domains/content/contracts.py:123 domains/content/contracts.py:132
+#: domains/content/contracts.py:294
 #, python-format
 msgid "%(location)s must be an object."
 msgstr "%(location)s باید یک شیء باشد."
 
-#: domains/business_content/contracts.py:59 domains/content/contracts.py:59
+#: domains/business_content/contracts.py:65 domains/content/contracts.py:65
 #, python-format
+#| msgid ""
+#| "%(location)s must contain only key, name, version, description, and props."
 msgid ""
-"%(location)s must contain only key, name, version, description, and props."
-msgstr "%(location)s باید تنها شامل key، name، version، description و props باشد."
+"%(location)s must contain only key, name, version, description, "
+"allowedContexts, and props."
+msgstr ""
+"%(location)s باید تنها شامل key، name، version، description، allowedContexts و "
+"props باشد."
 
-#: domains/business_content/contracts.py:67 domains/content/contracts.py:67
+#: domains/business_content/contracts.py:74 domains/content/contracts.py:74
 #, python-format
 msgid "%(location)s.key must be a non-empty string."
 msgstr "%(location)s.key باید رشته‌ای غیرخالی باشد."
 
-#: domains/business_content/contracts.py:71 domains/content/contracts.py:71
+#: domains/business_content/contracts.py:78 domains/content/contracts.py:78
 #, python-format
 msgid "%(location)s.name must be a string."
 msgstr "%(location)s.name باید رشته باشد."
 
-#: domains/business_content/contracts.py:75 domains/content/contracts.py:75
+#: domains/business_content/contracts.py:82 domains/content/contracts.py:82
 #, python-format
 msgid "%(location)s.version must be an integer."
 msgstr "%(location)s.version باید عدد صحیح باشد."
 
-#: domains/business_content/contracts.py:80 domains/content/contracts.py:80
+#: domains/business_content/contracts.py:87 domains/content/contracts.py:87
 #, python-format
 msgid "Duplicate component key/version: %(key)s."
 msgstr "کلید/نسخه تکراری مولفه: %(key)s."
 
-#: domains/business_content/contracts.py:105
-#: domains/business_content/contracts.py:330 domains/content/contracts.py:105
-#: domains/content/contracts.py:330
+#: domains/business_content/contracts.py:102 domains/content/contracts.py:102
+#, python-format
+msgid "%(location)s must be a non-empty array."
+msgstr "%(location)s باید یک آرایه غیرخالی باشد."
+
+#: domains/business_content/contracts.py:106 domains/content/contracts.py:106
+#, python-format
+msgid "%(location)s must contain only context names."
+msgstr "%(location)s باید تنها شامل نام زمینه‌ها باشد."
+
+#: domains/business_content/contracts.py:110 domains/content/contracts.py:110
+#, python-format
+msgid "%(location)s must not repeat a context."
+msgstr "%(location)s نباید زمینه تکراری داشته باشد."
+
+#: domains/business_content/contracts.py:115 domains/content/contracts.py:115
+#, python-format
+msgid "%(location)s contains unsupported contexts: %(contexts)s."
+msgstr "%(location)s شامل زمینه‌های پشتیبانی‌نشده است: %(contexts)s."
+
+#: domains/business_content/contracts.py:137
+#: domains/business_content/contracts.py:394 domains/content/contracts.py:137
+#: domains/content/contracts.py:362
 #, python-format
 msgid "%(location)s uses unsupported contract type %(type)s."
 msgstr "%(location)s نوع قرارداد پشتیبانی‌نشده %(type)s را استفاده می‌کند."
 
-#: domains/business_content/contracts.py:116 domains/content/contracts.py:116
+#: domains/business_content/contracts.py:148 domains/content/contracts.py:148
 #, python-format
 msgid "%(location)s.%(field)s must be a boolean."
 msgstr "%(location)s.%(field)s باید یک مقدار بولی باشد."
 
-#: domains/business_content/contracts.py:122 domains/content/contracts.py:122
+#: domains/business_content/contracts.py:154 domains/content/contracts.py:154
 #, python-format
 msgid "%(location)s.%(field)s must be an integer."
 msgstr "%(location)s.%(field)s باید عدد صحیح باشد."
 
-#: domains/business_content/contracts.py:128 domains/content/contracts.py:128
+#: domains/business_content/contracts.py:160 domains/content/contracts.py:160
 #, python-format
 msgid "%(location)s.%(field)s must be a string."
 msgstr "%(location)s.%(field)s باید رشته باشد."
 
-#: domains/business_content/contracts.py:136 domains/content/contracts.py:136
+#: domains/business_content/contracts.py:168 domains/content/contracts.py:168
 #, python-format
 msgid "%(location)s.%(field)s must be a positive integer."
 msgstr "%(location)s.%(field)s باید عدد صحیح مثبت باشد."
 
-#: domains/business_content/contracts.py:144 domains/content/contracts.py:144
+#: domains/business_content/contracts.py:176 domains/content/contracts.py:176
 #, python-format
 msgid "%(location)s.enum must be an array of strings or integers."
 msgstr "%(location)s.enum باید آرایه‌ای از رشته‌ها یا اعداد صحیح باشد."
 
-#: domains/business_content/contracts.py:160 domains/content/contracts.py:160
+#: domains/business_content/contracts.py:192 domains/content/contracts.py:192
 #, python-format
 msgid "%(location)s.cardinality must be one of %(options)s."
 msgstr "%(location)s.cardinality باید یکی از %(options)s باشد."
 
-#: domains/business_content/contracts.py:166 domains/content/contracts.py:166
+#: domains/business_content/contracts.py:198 domains/content/contracts.py:198
 #, python-format
 msgid "%(location)s.data_source must be an object."
 msgstr "%(location)s.data_source باید یک شیء باشد."
 
-#: domains/business_content/contracts.py:170 domains/content/contracts.py:170
+#: domains/business_content/contracts.py:202 domains/content/contracts.py:202
 #, python-format
 msgid "%(location)s.data_source.resource must be one of %(options)s."
 msgstr "%(location)s.data_source.resource باید یکی از %(options)s باشد."
 
-#: domains/business_content/contracts.py:178 domains/content/contracts.py:178
+#: domains/business_content/contracts.py:210 domains/content/contracts.py:210
 #, python-format
 msgid "%(location)s.data_source.store must be 'id'."
 msgstr "%(location)s.data_source.store باید 'id' باشد."
 
-#: domains/business_content/contracts.py:182 domains/content/contracts.py:182
+#: domains/business_content/contracts.py:214 domains/content/contracts.py:214
 #, python-format
 msgid "%(location)s.data_source.searchable must be a boolean."
 msgstr "%(location)s.data_source.searchable باید یک مقدار بولی باشد."
 
-#: domains/business_content/contracts.py:200 domains/content/contracts.py:200
+#: domains/business_content/contracts.py:232 domains/content/contracts.py:232
 msgid "Draft content must be an object."
 msgstr "پیش‌نویس محتوا باید یک شیء باشد."
 
-#: domains/business_content/contracts.py:205 domains/content/contracts.py:205
+#: domains/business_content/contracts.py:237 domains/content/contracts.py:237
 msgid ""
 "Draft content must contain only schema_version, contract_version, and "
 "components."
-msgstr "پیش‌نویس محتوا باید تنها شامل schema_version، contract_version و components باشد."
+msgstr ""
+"پیش‌نویس محتوا باید تنها شامل schema_version، contract_version و components "
+"باشد."
 
-#: domains/business_content/contracts.py:211 domains/content/contracts.py:211
+#: domains/business_content/contracts.py:243 domains/content/contracts.py:243
 #, python-format
 msgid "schema_version must be %(version)s."
 msgstr "schema_version باید %(version)s باشد."
 
-#: domains/business_content/contracts.py:218 domains/content/contracts.py:218
+#: domains/business_content/contracts.py:250 domains/content/contracts.py:250
 #, python-format
 msgid "contract_version must be %(version)s."
 msgstr "contract_version باید %(version)s باشد."
 
-#: domains/business_content/contracts.py:233 domains/content/contracts.py:233
+#: domains/business_content/contracts.py:265 domains/content/contracts.py:265
 #, python-format
 msgid "%(location)s must contain only id, key, version, and props."
 msgstr "%(location)s باید تنها شامل id، key، version و props باشد."
 
-#: domains/business_content/contracts.py:238 domains/content/contracts.py:238
+#: domains/business_content/contracts.py:270 domains/content/contracts.py:270
 #, python-format
 msgid "%(location)s.id must be a non-empty string."
 msgstr "%(location)s.id باید رشته‌ای غیرخالی باشد."
 
-#: domains/business_content/contracts.py:242 domains/content/contracts.py:242
+#: domains/business_content/contracts.py:274 domains/content/contracts.py:274
 #, python-format
 msgid "Duplicate component id: %(id)s."
 msgstr "شناسه تکراری مولفه: %(id)s."
 
-#: domains/business_content/contracts.py:247 domains/content/contracts.py:247
+#: domains/business_content/contracts.py:279 domains/content/contracts.py:279
 #, python-format
 msgid "%(location)s has an invalid key or version."
 msgstr "%(location)s کلید یا نسخه نامعتبری دارد."
 
-#: domains/business_content/contracts.py:252 domains/content/contracts.py:252
+#: domains/business_content/contracts.py:284 domains/content/contracts.py:284
 #, python-format
 msgid "Unknown component key/version: %(key)s."
 msgstr "کلید/نسخه ناشناخته مولفه: %(key)s."
 
-#: domains/business_content/contracts.py:267 domains/content/contracts.py:267
+#: domains/business_content/contracts.py:317
+#, python-format
+msgid "components[%(index)s] is not available for this type of page."
+msgstr "components[%(index)s] برای این نوع صفحه در دسترس نیست."
+
+#: domains/business_content/contracts.py:331 domains/content/contracts.py:299
 #, python-format
 msgid "%(location)s contains unknown properties: %(properties)s."
 msgstr "%(location)s شامل ویژگی‌های ناشناخته %(properties)s است."
 
-#: domains/business_content/contracts.py:273 domains/content/contracts.py:273
+#: domains/business_content/contracts.py:337 domains/content/contracts.py:305
 #, python-format
 msgid "%(location)s is missing required properties: %(properties)s."
 msgstr "%(location)s فاقد ویژگی‌های الزامی %(properties)s است."
 
-#: domains/business_content/contracts.py:279 domains/content/contracts.py:279
+#: domains/business_content/contracts.py:343 domains/content/contracts.py:311
 #, python-format
 msgid "%(location)s cannot be empty."
 msgstr "%(location)s نباید خالی باشد."
 
-#: domains/business_content/contracts.py:291 domains/content/contracts.py:291
+#: domains/business_content/contracts.py:355 domains/content/contracts.py:323
 #, python-format
 msgid "%(location)s uses an unsupported model resource."
 msgstr "%(location)s منبع مدل پشتیبانی‌نشده‌ای دارد."
 
-#: domains/business_content/contracts.py:295 domains/content/contracts.py:295
+#: domains/business_content/contracts.py:359 domains/content/contracts.py:327
 #, python-format
 msgid "%(location)s must store model IDs."
 msgstr "%(location)s باید شناسه مدل‌ها را ذخیره کند."
 
-#: domains/business_content/contracts.py:305 domains/content/contracts.py:305
+#: domains/business_content/contracts.py:369 domains/content/contracts.py:337
 #, python-format
 msgid "%(location)s uses unsupported cardinality %(cardinality)s."
 msgstr "%(location)s تعدادپذیری پشتیبانی‌نشده %(cardinality)s را استفاده می‌کند."
 
-#: domains/business_content/contracts.py:336 domains/content/contracts.py:336
+#: domains/business_content/contracts.py:400 domains/content/contracts.py:368
 #, python-format
 msgid "%(location)s must be a valid %(type)s."
 msgstr "%(location)s باید مقدار معتبری از نوع %(type)s باشد."
 
-#: domains/business_content/contracts.py:344 domains/content/contracts.py:344
+#: domains/business_content/contracts.py:408 domains/content/contracts.py:376
 #, python-format
 msgid "%(location)s must contain at least %(count)s item(s)."
 msgstr "%(location)s باید دست‌کم %(count)s مورد داشته باشد."
 
-#: domains/business_content/contracts.py:349 domains/content/contracts.py:349
+#: domains/business_content/contracts.py:413 domains/content/contracts.py:381
 #, python-format
 msgid "%(location)s must contain at most %(count)s item(s)."
 msgstr "%(location)s باید حداکثر %(count)s مورد داشته باشد."
 
-#: domains/business_content/contracts.py:354 domains/content/contracts.py:354
+#: domains/business_content/contracts.py:418 domains/content/contracts.py:386
 #, python-format
 msgid "%(location)s must be one of %(options)s."
 msgstr "%(location)s باید یکی از %(options)s باشد."
 
-#: domains/business_content/serializers.py:33
+#: domains/business_content/serializers.py:62
 msgid "A content item with this slug already exists in this scope."
 msgstr "محتوایی با این اسلاگ از قبل در این محدوده وجود دارد."
 
-#: domains/business_content/views.py:101 domains/business_content/views.py:104
+#: domains/business_content/views.py:102 domains/business_content/views.py:105
 #: domains/content/views.py:149 domains/content/views.py:177
 #: domains/content/views.py:302 domains/content/views.py:383
 #: domains/content/views.py:386
 msgid "Landing page not found."
 msgstr "صفحه فرود پیدا نشد."
 
-#: domains/business_content/views.py:146 domains/business_content/views.py:149
-#: domains/business_content/views.py:168 domains/business_content/views.py:171
+#: domains/business_content/views.py:147 domains/business_content/views.py:150
+#: domains/business_content/views.py:169 domains/business_content/views.py:172
 #: domains/content/views.py:210 domains/content/views.py:238
 #: domains/content/views.py:370 domains/content/views.py:426
 #: domains/content/views.py:429 domains/content/views.py:448
@@ -271,23 +304,23 @@ msgstr "صفحه فرود پیدا نشد."
 msgid "Page not found."
 msgstr "صفحه پیدا نشد."
 
-#: domains/business_content/views.py:206 domains/content/views.py:486
+#: domains/business_content/views.py:207 domains/content/views.py:486
 msgid "content contracts file not found"
 msgstr "فایل قرارداد محتوا پیدا نشد"
 
-#: domains/business_content/views.py:208
+#: domains/business_content/views.py:209
 msgid "Run sync_business_content_contracts to generate the file."
 msgstr "برای ساخت فایل، sync_business_content_contracts را اجرا کنید."
 
-#: domains/business_content/views.py:217 domains/content/views.py:497
+#: domains/business_content/views.py:218 domains/content/views.py:497
 msgid "content contracts file is invalid"
 msgstr "فایل قرارداد محتوا نامعتبر است"
 
-#: domains/business_content/views.py:218 domains/content/views.py:498
+#: domains/business_content/views.py:219 domains/content/views.py:498
 msgid "The contracts file could not be parsed."
 msgstr "فایل قرارداد قابل تجزیه نبود."
 
-#: domains/business_content/views.py:264
+#: domains/business_content/views.py:265
 msgid "Business profile not found."
 msgstr "پروفایل کسب‌وکار پیدا نشد."
 

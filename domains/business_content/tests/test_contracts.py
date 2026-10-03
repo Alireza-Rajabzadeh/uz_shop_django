@@ -2,7 +2,9 @@ from rest_framework import serializers
 from rest_framework.test import APITestCase
 
 from ..contracts import (
+    ALLOWED_CONTEXTS,
     empty_draft_content,
+    enforce_draft_context,
     load_content_contracts,
     validate_contracts_payload,
     validate_draft_content,
@@ -44,6 +46,16 @@ class ContractFileInvariantTests(APITestCase):
         self.assertEqual(envelope["contract_version"], load_content_contracts()["contract_version"])
         self.assertEqual(envelope["schema_version"], 1)
 
+    def test_every_component_declares_supported_contexts(self):
+        # `allowedContexts` decides which picker a component appears in, so a
+        # missing or unrecognised entry would silently hide it everywhere.
+        payload = load_content_contracts()
+        for component in payload["components"]:
+            with self.subTest(component=component["key"]):
+                contexts = component["allowedContexts"]
+                self.assertTrue(contexts)
+                self.assertLessEqual(set(contexts), ALLOWED_CONTEXTS)
+
     def test_small_banner_image_prop_carries_ratio_metadata(self):
         payload = load_content_contracts()
         small_banner = next(
@@ -78,6 +90,7 @@ class ContractsPayloadValidationTests(APITestCase):
                     "key": "test_component",
                     "name": "Test Component",
                     "version": 1,
+                    "allowedContexts": ["page"],
                     "props": {
                         "products": {
                             "type": "model",
@@ -92,6 +105,38 @@ class ContractsPayloadValidationTests(APITestCase):
 
     def test_accepts_valid_payload(self):
         self.assertEqual(validate_contracts_payload(self.valid_payload()), self.valid_payload())
+
+    def test_rejects_missing_allowed_contexts(self):
+        # Placement is required, not optional: a component that forgets it
+        # would otherwise default to somewhere the author never chose.
+        payload = self.valid_payload()
+        payload["components"][0].pop("allowedContexts")
+        with self.assertRaises(serializers.ValidationError):
+            validate_contracts_payload(payload)
+
+    def test_rejects_empty_allowed_contexts(self):
+        payload = self.valid_payload()
+        payload["components"][0]["allowedContexts"] = []
+        with self.assertRaises(serializers.ValidationError):
+            validate_contracts_payload(payload)
+
+    def test_rejects_unsupported_context(self):
+        payload = self.valid_payload()
+        payload["components"][0]["allowedContexts"] = ["page", "header"]
+        with self.assertRaises(serializers.ValidationError):
+            validate_contracts_payload(payload)
+
+    def test_rejects_repeated_contexts(self):
+        payload = self.valid_payload()
+        payload["components"][0]["allowedContexts"] = ["page", "page"]
+        with self.assertRaises(serializers.ValidationError):
+            validate_contracts_payload(payload)
+
+    def test_rejects_extra_component_fields(self):
+        payload = self.valid_payload()
+        payload["components"][0]["category"] = "merchandising"
+        with self.assertRaises(serializers.ValidationError):
+            validate_contracts_payload(payload)
 
     def test_rejects_unknown_prop_type(self):
         payload = self.valid_payload()
@@ -199,3 +244,48 @@ class DraftContentValidationTests(APITestCase):
             with self.subTest(link=link):
                 content = content_with_link(link)
                 self.assertEqual(validate_draft_content(content), content)
+
+
+class DraftContextEnforcementTests(APITestCase):
+    """`enforce_draft_context` is the server-side floor under the palette filter.
+
+    The panel narrows the picker to the same rule, but a narrowed picker only
+    decides what is *offered* — this is what rejects a component that does not
+    belong in the page's context.
+    """
+
+    @staticmethod
+    def content_with(key, props=None):
+        return {
+            "schema_version": 1,
+            "contract_version": 4,
+            "components": [
+                {"id": "item-1", "key": key, "version": 1, "props": props or {}}
+            ],
+        }
+
+    def test_accepts_a_component_that_declares_the_context(self):
+        content = self.content_with("social_links")
+        # `social_links` declares page, section, and footer.
+        self.assertEqual(enforce_draft_context(content, "footer"), content)
+        self.assertEqual(enforce_draft_context(content, "page"), content)
+
+    def test_rejects_a_component_that_does_not_declare_the_context(self):
+        # `picture` declares page and section only.
+        with self.assertRaises(serializers.ValidationError):
+            enforce_draft_context(self.content_with("picture"), "footer")
+
+    def test_failure_names_the_component_without_exposing_a_prop_path(self):
+        # The panel rewrites `components[N]` into the Persian component name
+        # it already carries, so the path has to survive the translation —
+        # but a prop path would be index maths the vendor cannot act on.
+        with self.assertRaises(serializers.ValidationError) as raised:
+            enforce_draft_context(self.content_with("picture"), "footer")
+
+        message = str(raised.exception)
+        self.assertIn("components[0]", message)
+        self.assertNotIn("props", message)
+        self.assertTrue(
+            any("\u0600" <= char <= "\u06FF" for char in message),
+            f"expected a Persian message, got: {message}",
+        )

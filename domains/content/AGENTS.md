@@ -133,3 +133,5 @@ python manage.py sync_content_contracts --url <endpoint>
 ```
 
 `contracts.py` validates both the contract file itself (`validate_contracts_payload`) and authored documents against it (`validate_draft_content`). The `business_content` domain syncs its own independent copy via `sync_business_content_contracts`; the two vocabularies may diverge.
+
+Every synced component carries `allowedContexts` — a non-empty, duplicate-free subset of `ALLOWED_CONTEXTS` (`page`, `section`, `footer`) — beside `key`, `name`, `version`, `description`, and `props`. Both domains validate the field identically because both files come from the same panel source, but only `business_content` *enforces* it against a row; this domain has no row context to resolve. Keep `ALLOWED_CONTEXTS` in step with `domains/business_content/contracts.py` and with `ContentContext` in the panels.

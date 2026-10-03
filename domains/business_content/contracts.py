@@ -25,6 +25,12 @@ ALLOWED_PROP_TYPES = {
 }
 ALLOWED_MODEL_RESOURCES = {"products", "categories"}
 ALLOWED_CARDINALITIES = {"one", "many"}
+#: Contexts a component may declare in `allowedContexts`. A content row
+#: carries exactly one context (see `SuggestionPage.Context`) and a component
+#: is offered only when that context is listed here, so classifying a new
+#: component is one edit to its contract rather than a change to every
+#: suggestion row. Kept in step with `ContentContext` in the panels.
+ALLOWED_CONTEXTS = {"page", "section", "footer"}
 
 
 def load_content_contracts():
@@ -53,10 +59,10 @@ def validate_contracts_payload(payload):
             raise serializers.ValidationError(
                 _("%(location)s must be an object.") % {"location": location}
             )
-        required = {"key", "name", "version", "props"}
+        required = {"key", "name", "version", "allowedContexts", "props"}
         if set(component) - required - {"description"}:
             raise serializers.ValidationError(
-                _("%(location)s must contain only key, name, version, description, and props.")
+                _("%(location)s must contain only key, name, version, description, allowedContexts, and props.")
                 % {"location": location}
             )
         if (
@@ -81,8 +87,33 @@ def validate_contracts_payload(payload):
                 % {"key": f"{component['key']}@{component['version']}"}
             )
         definitions[key] = component
+        _validate_allowed_contexts(
+            component.get("allowedContexts"), f"{location}.allowedContexts"
+        )
         _validate_props(component.get("props", {}), f"{location}.props")
     return payload
+
+
+def _validate_allowed_contexts(contexts, location):
+    """`allowedContexts` is required: a component must declare its placement."""
+    if not isinstance(contexts, list) or not contexts:
+        raise serializers.ValidationError(
+            _("%(location)s must be a non-empty array.") % {"location": location}
+        )
+    if any(not isinstance(item, str) for item in contexts):
+        raise serializers.ValidationError(
+            _("%(location)s must contain only context names.") % {"location": location}
+        )
+    if len(set(contexts)) != len(contexts):
+        raise serializers.ValidationError(
+            _("%(location)s must not repeat a context.") % {"location": location}
+        )
+    unknown = [item for item in contexts if item not in ALLOWED_CONTEXTS]
+    if unknown:
+        raise serializers.ValidationError(
+            _("%(location)s contains unsupported contexts: %(contexts)s.")
+            % {"location": location, "contexts": ", ".join(sorted(unknown))}
+        )
 
 
 def _validate_props(properties, location):
@@ -253,6 +284,38 @@ def validate_draft_content(value):
                 % {"key": f"{component['key']}@{component['version']}"}
             )
         _validate_object(component["props"], definition.get("props", {}), f"{location}.props")
+    return value
+
+
+def enforce_draft_context(value, context):
+    """Reject components that are not allowed in ``context``.
+
+    ``value`` has already been through :func:`validate_draft_content`, so the
+    envelope and every key/version lookup is known good — this only reads the
+    component keys back out. Only the business_content domain calls it: the
+    platform `content` domain has no contexts to resolve a row against.
+
+    The message keeps the ``components[N]`` shape the panels already know how
+    to replace with a Persian component name, and never exposes a prop path.
+    """
+    if not isinstance(value, dict) or not isinstance(value.get("components"), list):
+        return value
+
+    contract = load_content_contracts()
+    allowed = {
+        component.get("key")
+        for component in contract.get("components", [])
+        if context in component.get("allowedContexts", [])
+    }
+    for index, component in enumerate(value["components"]):
+        if not isinstance(component, dict):
+            continue
+        if component.get("key") in allowed:
+            continue
+        raise serializers.ValidationError(
+            _("components[%(index)s] is not available for this type of page.")
+            % {"index": index}
+        )
     return value
 
 

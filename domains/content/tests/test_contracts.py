@@ -6,6 +6,7 @@ from core.services import CacheService
 from domains.catalog.models import Category, CategoryStatus, Product, ProductStatus
 
 from ..contracts import (
+    ALLOWED_CONTEXTS,
     empty_draft_content,
     load_content_contracts,
     validate_contracts_payload,
@@ -36,6 +37,16 @@ class ContractFileInvariantTests(APITestCase):
                 "social_links",
             ],
         )
+
+    def test_every_component_declares_supported_contexts(self):
+        # `allowedContexts` decides which picker a component appears in, so a
+        # missing or unrecognised entry would silently hide it everywhere.
+        payload = load_content_contracts()
+        for component in payload["components"]:
+            with self.subTest(component=component["key"]):
+                contexts = component["allowedContexts"]
+                self.assertTrue(contexts)
+                self.assertLessEqual(set(contexts), ALLOWED_CONTEXTS)
 
     def test_small_banner_image_prop_carries_ratio_metadata(self):
         payload = load_content_contracts()
@@ -71,6 +82,7 @@ class ContractsPayloadValidationTests(APITestCase):
                     "key": "test_component",
                     "name": "Test Component",
                     "version": 1,
+                    "allowedContexts": ["page"],
                     "props": {
                         "products": {
                             "type": "model",
@@ -85,6 +97,38 @@ class ContractsPayloadValidationTests(APITestCase):
 
     def test_accepts_valid_payload(self):
         self.assertEqual(validate_contracts_payload(self.valid_payload()), self.valid_payload())
+
+    def test_rejects_missing_allowed_contexts(self):
+        # Placement is required, not optional: a component that forgets it
+        # would otherwise default to somewhere the author never chose.
+        payload = self.valid_payload()
+        payload["components"][0].pop("allowedContexts")
+        with self.assertRaises(serializers.ValidationError):
+            validate_contracts_payload(payload)
+
+    def test_rejects_empty_allowed_contexts(self):
+        payload = self.valid_payload()
+        payload["components"][0]["allowedContexts"] = []
+        with self.assertRaises(serializers.ValidationError):
+            validate_contracts_payload(payload)
+
+    def test_rejects_unsupported_context(self):
+        payload = self.valid_payload()
+        payload["components"][0]["allowedContexts"] = ["page", "header"]
+        with self.assertRaises(serializers.ValidationError):
+            validate_contracts_payload(payload)
+
+    def test_rejects_repeated_contexts(self):
+        payload = self.valid_payload()
+        payload["components"][0]["allowedContexts"] = ["page", "page"]
+        with self.assertRaises(serializers.ValidationError):
+            validate_contracts_payload(payload)
+
+    def test_rejects_extra_component_fields(self):
+        payload = self.valid_payload()
+        payload["components"][0]["category"] = "merchandising"
+        with self.assertRaises(serializers.ValidationError):
+            validate_contracts_payload(payload)
 
     def test_rejects_unknown_prop_type(self):
         payload = self.valid_payload()

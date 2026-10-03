@@ -90,17 +90,30 @@ class SuggestionPage(models.Model):
     The *result* of acting on a suggestion is still a per-business `Page` —
     the suggestion only describes what to offer.
 
-    `component_lists` holds the component vocabulary a suggestion may be built
-    from and starts empty until the rules for which components each suggestion
-    allows are agreed.
+    `context` is the placement a suggestion's pages are authored in. The
+    panel offers a component only when `context` appears in that component's
+    `allowedContexts` contract field, so classifying a new component is one
+    edit to its contract rather than a change to every suggestion row. It
+    replaces the earlier `component_lists` allow-list, which scaled with
+    components x suggestions and could drift out of date on rename.
     """
+
+    class Context(models.TextChoices):
+        #: A full page: the ordinary case for every standard shop page.
+        PAGE = "page", "Page"
+        #: A block embedded inside a larger page.
+        SECTION = "section", "Section"
+        #: The site footer.
+        FOOTER = "footer", "Footer"
 
     title = models.CharField(max_length=255)
     descriptions = models.TextField(blank=True, default="")
     required = models.BooleanField(default=False)
     activate = models.BooleanField(default=True)
     slug = models.SlugField(allow_unicode=True)
-    component_lists = models.JSONField(default=list, blank=True)
+    context = models.CharField(
+        max_length=16, choices=Context.choices, default=Context.PAGE
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

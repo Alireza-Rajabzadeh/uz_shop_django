@@ -2,9 +2,38 @@ from django.core.validators import validate_unicode_slug
 from django.utils.translation import gettext as _
 from rest_framework import serializers
 
-from .contracts import empty_draft_content, validate_draft_content
+from .contracts import empty_draft_content, enforce_draft_context, validate_draft_content
 from .models import LandingPage, Page, SEORecord, SuggestionPage
 from .services import LandingPageContentResolver, SEOService
+
+
+class ContentContextScopeMixin:
+    """Restrict ``draft_content`` to the components allowed for this row's context.
+
+    A page's context is whatever the `SuggestionPage` holding its canonical
+    slug declares, so the panel's suggestion list and the API agree on what a
+    page is without a foreign key — changing a suggestion's context applies
+    immediately to every page carrying that slug. A slug outside the standard
+    set falls back to the default context, which every component currently
+    allows, so an arbitrary page is never locked out of its own vocabulary.
+
+    The slug is read from the payload on create and from the stored row on
+    update, so a PATCH that omits ``slug`` still resolves against the saved one.
+    """
+
+    def validate_draft_content(self, value):
+        slug = getattr(self, "initial_data", {}).get("slug")
+        if not isinstance(slug, str) or not slug.strip():
+            slug = getattr(self.instance, "slug", "")
+        # `iexact` because the panels normalize the slug they match on (trim +
+        # lowercase) before resolving a context, and the two must agree.
+        context = (
+            SuggestionPage.objects.filter(slug__iexact=str(slug).strip())
+            .values_list("context", flat=True)
+            .first()
+            or SuggestionPage.Context.PAGE.value
+        )
+        return enforce_draft_context(value, context)
 
 
 class BusinessSlugScopeMixin:
@@ -35,7 +64,9 @@ class BusinessSlugScopeMixin:
         return slug
 
 
-class LandingPageSerializer(BusinessSlugScopeMixin, serializers.ModelSerializer):
+class LandingPageSerializer(
+    BusinessSlugScopeMixin, ContentContextScopeMixin, serializers.ModelSerializer
+):
     slug = serializers.SlugField(
         max_length=50,
         allow_unicode=True,
@@ -99,7 +130,9 @@ class LandingPageDetailSerializer(LandingPageSerializer):
         return LandingPageContentResolver.for_authoring().resolve(page.draft_content)
 
 
-class PageSerializer(BusinessSlugScopeMixin, serializers.ModelSerializer):
+class PageSerializer(
+    BusinessSlugScopeMixin, ContentContextScopeMixin, serializers.ModelSerializer
+):
     slug = serializers.SlugField(
         max_length=50,
         allow_unicode=True,
@@ -180,11 +213,12 @@ class SEORecordSerializer(serializers.ModelSerializer):
 class SuggestionPageSerializer(serializers.ModelSerializer):
     """Read-only projection of the pages the panel offers to create.
 
-    ``activate`` is a management flag the view filters on server-side, and
-    ``component_lists`` has no consumer yet, so neither is sent to the panels.
+    ``activate`` is a management flag the view filters on server-side, so it
+    is not sent to the panels. ``context`` is: the editor filters the component
+    palette by it, matching the ``allowedContexts`` each contract declares.
     """
 
     class Meta:
         model = SuggestionPage
-        fields = ["id", "title", "descriptions", "required", "slug"]
+        fields = ["id", "title", "descriptions", "required", "slug", "context"]
         read_only_fields = fields

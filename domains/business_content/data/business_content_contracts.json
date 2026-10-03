@@ -6,6 +6,10 @@
       "name": "Hero Banner Slider",
       "version": 1,
       "description": "A prominent wide banner slider designed for the first section of a page.",
+      "allowedContexts": [
+        "page",
+        "section"
+      ],
       "props": {
         "slides": {
           "type": "array",
@@ -63,6 +67,10 @@
       "name": "Product Slider",
       "version": 1,
       "description": "Displays a horizontal slider of products.",
+      "allowedContexts": [
+        "page",
+        "section"
+      ],
       "props": {
         "title": {
           "type": "string",
@@ -114,6 +122,10 @@
       "name": "Product Slider With Promotion",
       "version": 1,
       "description": "A product slider with a fixed promotional image at its starting edge.",
+      "allowedContexts": [
+        "page",
+        "section"
+      ],
       "props": {
         "title": {
           "type": "string",
@@ -129,7 +141,12 @@
         },
         "variant": {
           "type": "string",
-          "enum": ["default", "primary", "accent", "dark"],
+          "enum": [
+            "default",
+            "primary",
+            "accent",
+            "dark"
+          ],
           "default": "default",
           "description": "Visual variant of the slider section."
         },
@@ -172,6 +189,10 @@
       "name": "Small Banner",
       "version": 1,
       "description": "Displays a row of small linked banner cards.",
+      "allowedContexts": [
+        "page",
+        "section"
+      ],
       "props": {
         "title": {
           "type": "string",
@@ -224,6 +245,10 @@
       "name": "Category Grid",
       "version": 1,
       "description": "Displays a horizontally scrollable grid of category shortcuts.",
+      "allowedContexts": [
+        "page",
+        "section"
+      ],
       "props": {
         "title": {
           "type": "string",
@@ -248,23 +273,15 @@
       }
     },
     {
-      "key": "rich_text",
-      "name": "Rich Text",
-      "version": 1,
-      "description": "Displays a section of rich text content.",
-      "props": {
-        "content": {
-          "type": "rich_text",
-          "required": true,
-          "description": "Rich text (Markdown) content to display."
-        }
-      }
-    },
-    {
       "key": "link_list",
       "name": "Link List",
       "version": 1,
       "description": "Displays an optional title and a list of linked entries.",
+      "allowedContexts": [
+        "page",
+        "section",
+        "footer"
+      ],
       "props": {
         "title": {
           "type": "string",
@@ -294,10 +311,33 @@
       }
     },
     {
+      "key": "rich_text",
+      "name": "Rich Text",
+      "version": 1,
+      "description": "Displays a section of rich text content.",
+      "allowedContexts": [
+        "page",
+        "section",
+        "footer"
+      ],
+      "props": {
+        "content": {
+          "type": "rich_text",
+          "required": true,
+          "description": "Rich text (Markdown) content to display."
+        }
+      }
+    },
+    {
       "key": "business_contact",
       "name": "Business Contact",
       "version": 1,
       "description": "Displays public business contact details. Empty phone_keys preserves backend ordering; explicit keys use the selected key order.",
+      "allowedContexts": [
+        "page",
+        "section",
+        "footer"
+      ],
       "props": {
         "phone_keys": {
           "type": "array",
@@ -330,6 +370,11 @@
       "name": "Social Links",
       "version": 1,
       "description": "Displays public social links. Empty social_keys preserves backend ordering; explicit keys use the selected key order.",
+      "allowedContexts": [
+        "page",
+        "section",
+        "footer"
+      ],
       "props": {
         "social_keys": {
           "type": "array",
@@ -346,6 +391,10 @@
       "name": "Picture",
       "version": 1,
       "description": "Displays a single image with optional caption and link.",
+      "allowedContexts": [
+        "page",
+        "section"
+      ],
       "props": {
         "image": {
           "type": "image",
@@ -367,7 +416,10 @@
         },
         "objectFit": {
           "type": "string",
-          "enum": ["cover", "contain"],
+          "enum": [
+            "cover",
+            "contain"
+          ],
           "default": "cover",
           "description": "How the image fills its container."
         },

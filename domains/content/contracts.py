@@ -25,6 +25,12 @@ ALLOWED_PROP_TYPES = {
 }
 ALLOWED_MODEL_RESOURCES = {"products", "categories"}
 ALLOWED_CARDINALITIES = {"one", "many"}
+#: Contexts a component may declare in `allowedContexts`. The vocabulary is
+#: shared with `business_content` because both files are synced from the same
+#: panel contract source; the platform `content` domain does not resolve a
+#: row's context, so it validates the field without enforcing it. Kept in
+#: step with `ContentContext` in the panels.
+ALLOWED_CONTEXTS = {"page", "section", "footer"}
 
 
 def load_content_contracts():
@@ -53,10 +59,10 @@ def validate_contracts_payload(payload):
             raise serializers.ValidationError(
                 _("%(location)s must be an object.") % {"location": location}
             )
-        required = {"key", "name", "version", "props"}
+        required = {"key", "name", "version", "allowedContexts", "props"}
         if set(component) - required - {"description"}:
             raise serializers.ValidationError(
-                _("%(location)s must contain only key, name, version, description, and props.")
+                _("%(location)s must contain only key, name, version, description, allowedContexts, and props.")
                 % {"location": location}
             )
         if (
@@ -81,8 +87,33 @@ def validate_contracts_payload(payload):
                 % {"key": f"{component['key']}@{component['version']}"}
             )
         definitions[key] = component
+        _validate_allowed_contexts(
+            component.get("allowedContexts"), f"{location}.allowedContexts"
+        )
         _validate_props(component.get("props", {}), f"{location}.props")
     return payload
+
+
+def _validate_allowed_contexts(contexts, location):
+    """`allowedContexts` is required: a component must declare its placement."""
+    if not isinstance(contexts, list) or not contexts:
+        raise serializers.ValidationError(
+            _("%(location)s must be a non-empty array.") % {"location": location}
+        )
+    if any(not isinstance(item, str) for item in contexts):
+        raise serializers.ValidationError(
+            _("%(location)s must contain only context names.") % {"location": location}
+        )
+    if len(set(contexts)) != len(contexts):
+        raise serializers.ValidationError(
+            _("%(location)s must not repeat a context.") % {"location": location}
+        )
+    unknown = [item for item in contexts if item not in ALLOWED_CONTEXTS]
+    if unknown:
+        raise serializers.ValidationError(
+            _("%(location)s contains unsupported contexts: %(contexts)s.")
+            % {"location": location, "contexts": ", ".join(sorted(unknown))}
+        )
 
 
 def _validate_props(properties, location):

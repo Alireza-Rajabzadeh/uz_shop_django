@@ -34,8 +34,8 @@ class SEORecordAdmin(admin.ModelAdmin):
 
 @admin.register(SuggestionPage)
 class SuggestionPageAdmin(admin.ModelAdmin):
-    list_display = ["id", "title", "slug", "required", "activate", "updated_at"]
-    list_filter = ["required", "activate"]
+    list_display = ["id", "title", "slug", "context", "required", "activate", "updated_at"]
+    list_filter = ["context", "required", "activate"]
     search_fields = ["title", "slug", "descriptions"]
     prepopulated_fields = {"slug": ["title"]}
     readonly_fields = ["created_at", "updated_at"]

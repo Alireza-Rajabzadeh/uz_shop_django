@@ -58,12 +58,14 @@ Catalog / Inventory / Business
 - `Page` — table `business_content_page`. `business` FK (required, `related_name="business_content_pages"`), plus `title`, `slug`, `draft_content` / `published_content` JSON, `status` (`draft` / `published` / `archived`), nullable `published_at`, `cache_ttl`, `created_at`, `updated_at`.
 - `LandingPage` — table `business_content_landing_page`, same field shape (`related_name="business_content_landing_pages"`).
 - `SEORecord` — table `business_content_seo_record`. Resource-referencing (`resource_type` + `resource_id`), unique on that pair. `resource_type` is `landing_page` or `page`, addressing rows in *this* domain's tables only.
+- `SuggestionPage` — table `business_content_suggestion_page`. Shared reference data with **no** `business` FK: it describes what the panel offers a vendor to create, and the per-business part of the flow is the `Page` that results. Fields: `title`, `descriptions`, `required`, `activate`, a globally unique `slug`, `context`, `created_at`, `updated_at`. Seeded from `data/suggestion_pages.py` by `0004` / `0005`.
 
 Constraints:
 
 - `business_content_landing_page_business_slug_unique` on `(business, slug)`
 - `business_content_page_business_slug_unique` on `(business, slug)`
 - `business_content_seo_resource_unique` on `(resource_type, resource_id)`
+- `business_content_suggestion_page_slug_unique` on `(slug)`
 
 `business` is NOT NULL, so unlike `content` there is no partial "global slug" constraint.
 
@@ -78,6 +80,16 @@ python manage.py sync_business_content_contracts --url <endpoint>
 `--url` defaults to `BUSINESS_CONTENT_CONTRACTS_URL`, then `CLIENT_PANEL_BASE_URL`, then `http://localhost:3000/api/content/components`. Point it at a different endpoint (or edit the file directly) to give business pages their own vocabulary — the file starts as a byte-for-byte copy of the platform one, so nothing diverges until you do.
 
 `contracts.py` validates the file itself (`validate_contracts_payload`) and authored documents against it (`validate_draft_content`). If you diverge the vocabulary, `tests/test_contracts.py` pins the current component list and must be updated in the same change.
+
+### Allowed contexts
+
+Each component declares `allowedContexts`: a non-empty, duplicate-free subset of `ALLOWED_CONTEXTS` (`page`, `section`, `footer`). A content row carries exactly one context, and a component is usable only when it lists that context:
+
+- Where a row's context comes from: the `SuggestionPage` whose slug matches the row's, resolved with `slug__iexact`. No match falls back to `page`, which every current component allows — so an arbitrary page is never locked out of its own vocabulary. The panel resolves it the same way for its picker.
+- Enforcement: `enforce_draft_context()` (called from `ContentContextScopeMixin.validate_draft_content`, so it runs after the structural validator and sees the payload or stored slug). Its message keeps the `components[N]` shape the panels translate into a Persian component name and never exposes a prop path.
+- Adding a component means editing its contract only. The suggestions table never grows with the component list — a new footer component just adds `footer` to its own `allowedContexts`.
+
+The platform `domains/content` domain validates the same field (the two files are synced from the same panel source) but does not enforce it: it has no row context to resolve. Keep `ALLOWED_CONTEXTS` identical across the two, and in step with `ContentContext` in the panels.
 
 ## Public delivery
 
@@ -101,7 +113,8 @@ Mounted under `/api/business-content/vendor/`, JWT vendor auth + `IsAuthenticate
 - `GET .../<id>/preview` — resolve `draft_content` through `LandingPageContentResolver.for_authoring()`.
 - `GET|PUT|DELETE .../<id>/seo` — the page's `SEORecord`.
 - `GET /api/business-content/vendor/options/products|categories` — picker options, filtered to the business's registered categories.
-- `GET /api/business-content/vendor/component-contracts` — this domain's vocabulary.
+- `GET /api/business-content/vendor/component-contracts` — this domain's vocabulary, including each component's `allowedContexts`.
+- `GET /api/business-content/vendor/suggestions` — the active `SuggestionPage` rows in seeded order. The view applies `activate` server-side, so the panels read `slug` (canonical-slug lock) and `context` (which components the editor offers) straight from the response.
 
 There is no `/admin/*` tier: the admin panel edits platform content under `/api/content/admin/`.
 
