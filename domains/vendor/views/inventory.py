@@ -451,14 +451,17 @@ class VendorSupplyOverviewView(VendorInventoryAPIView):
         if not business:
             return api_response(data=[])
 
-        from domains.inventory.models import InventorySupply
+        # Every supply the business owns, newest first — no page cap, this
+        # is the panel's full supply history. The service queryset is
+        # required, not a bare model query: it carries the extra_cost_total
+        # annotation serialize_supply_row() reads (a raw queryset raised
+        # AttributeError, so the endpoint 500'd and the page showed an
+        # empty list). Scope by business_id alone — joining the business's
+        # categories drops supplies whose product left a category and
+        # duplicates products sitting in two of them.
+        supplies = supply_service.search_supplies(business_id=business.id)
 
-        supplies = InventorySupply.objects.filter(
-            business_id=business.id,
-            variant__product__categories__id__in=business.categories.values_list("category_id", flat=True)
-        ).select_related("variant", "variant__product", "warehouse").order_by("-supplied_at")[:50]
-
-        rows = [supply_service.serialize_supply_row(s) for s in supplies]
+        rows = [supply_service.serialize_supply_row(item) for item in supplies]
         return api_response(data=SupplyListSerializer(rows, many=True).data)
 
 
