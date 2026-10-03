@@ -2,6 +2,7 @@ import json
 import math
 from pathlib import Path
 
+from django.utils.translation import gettext as _
 from rest_framework import serializers
 
 
@@ -31,43 +32,53 @@ def load_content_contracts():
         return json.loads(CONTRACTS_FILE.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise serializers.ValidationError(
-            "The content component contract is unavailable or invalid."
+            _("The content component contract is unavailable or invalid.")
         ) from exc
 
 
 def validate_contracts_payload(payload):
     if not isinstance(payload, dict) or set(payload) != {"contract_version", "components"}:
         raise serializers.ValidationError(
-            "A content contracts payload must contain only contract_version and components."
+            _("A content contracts payload must contain only contract_version and components.")
         )
     if type(payload["contract_version"]) is not int:
-        raise serializers.ValidationError("contract_version must be an integer.")
+        raise serializers.ValidationError(_("contract_version must be an integer."))
     if not isinstance(payload["components"], list):
-        raise serializers.ValidationError("components must be an array.")
+        raise serializers.ValidationError(_("components must be an array."))
 
     definitions = {}
     for index, component in enumerate(payload["components"]):
         location = f"components[{index}]"
         if not isinstance(component, dict):
-            raise serializers.ValidationError(f"{location} must be an object.")
+            raise serializers.ValidationError(
+                _("%(location)s must be an object.") % {"location": location}
+            )
         required = {"key", "name", "version", "props"}
         if set(component) - required - {"description"}:
             raise serializers.ValidationError(
-                f"{location} must contain only key, name, version, description, and props."
+                _("%(location)s must contain only key, name, version, description, and props.")
+                % {"location": location}
             )
         if (
             not isinstance(component.get("key"), str)
             or not component["key"].strip()
         ):
-            raise serializers.ValidationError(f"{location}.key must be a non-empty string.")
+            raise serializers.ValidationError(
+                _("%(location)s.key must be a non-empty string.") % {"location": location}
+            )
         if not isinstance(component.get("name"), str):
-            raise serializers.ValidationError(f"{location}.name must be a string.")
+            raise serializers.ValidationError(
+                _("%(location)s.name must be a string.") % {"location": location}
+            )
         if type(component.get("version")) is not int:
-            raise serializers.ValidationError(f"{location}.version must be an integer.")
+            raise serializers.ValidationError(
+                _("%(location)s.version must be an integer.") % {"location": location}
+            )
         key = (component["key"], component["version"])
         if key in definitions:
             raise serializers.ValidationError(
-                f"Duplicate component key/version: {component['key']}@{component['version']}."
+                _("Duplicate component key/version: %(key)s.")
+                % {"key": f"{component['key']}@{component['version']}"}
             )
         definitions[key] = component
         _validate_props(component.get("props", {}), f"{location}.props")
@@ -76,18 +87,23 @@ def validate_contracts_payload(payload):
 
 def _validate_props(properties, location):
     if not isinstance(properties, dict):
-        raise serializers.ValidationError(f"{location} must be an object.")
+        raise serializers.ValidationError(
+            _("%(location)s must be an object.") % {"location": location}
+        )
     for name, definition in properties.items():
         _validate_prop(definition, f"{location}.{name}")
 
 
 def _validate_prop(definition, location):
     if not isinstance(definition, dict):
-        raise serializers.ValidationError(f"{location} must be an object.")
+        raise serializers.ValidationError(
+            _("%(location)s must be an object.") % {"location": location}
+        )
     value_type = definition.get("type")
     if value_type not in ALLOWED_PROP_TYPES:
         raise serializers.ValidationError(
-            f"{location} uses unsupported contract type {value_type!r}."
+            _("%(location)s uses unsupported contract type %(type)s.")
+            % {"location": location, "type": repr(value_type)}
         )
 
     optional_booleans = {"required", "enforce_dimensions"}
@@ -96,23 +112,38 @@ def _validate_prop(definition, location):
     optional_positive_numbers = {"width", "height"}
     for field in optional_booleans:
         if field in definition and type(definition[field]) is not bool:
-            raise serializers.ValidationError(f"{location}.{field} must be a boolean.")
+            raise serializers.ValidationError(
+                _("%(location)s.%(field)s must be a boolean.")
+                % {"location": location, "field": field}
+            )
     for field in optional_numbers:
         if field in definition and type(definition[field]) is not int:
-            raise serializers.ValidationError(f"{location}.{field} must be an integer.")
+            raise serializers.ValidationError(
+                _("%(location)s.%(field)s must be an integer.")
+                % {"location": location, "field": field}
+            )
     for field in optional_strings:
         if field in definition and not isinstance(definition[field], str):
-            raise serializers.ValidationError(f"{location}.{field} must be a string.")
+            raise serializers.ValidationError(
+                _("%(location)s.%(field)s must be a string.")
+                % {"location": location, "field": field}
+            )
     for field in optional_positive_numbers:
         if field in definition and (
             type(definition[field]) is not int or definition[field] <= 0
         ):
-            raise serializers.ValidationError(f"{location}.{field} must be a positive integer.")
+            raise serializers.ValidationError(
+                _("%(location)s.%(field)s must be a positive integer.")
+                % {"location": location, "field": field}
+            )
     if "enum" in definition and (
         not isinstance(definition["enum"], list)
         or not all(type(item) in {str, int} for item in definition["enum"])
     ):
-        raise serializers.ValidationError(f"{location}.enum must be an array of strings or integers.")
+        raise serializers.ValidationError(
+            _("%(location)s.enum must be an array of strings or integers.")
+            % {"location": location}
+        )
 
     if value_type == "model":
         _validate_model_prop(definition, location)
@@ -126,20 +157,31 @@ def _validate_model_prop(definition, location):
     cardinality = definition.get("cardinality")
     if cardinality not in ALLOWED_CARDINALITIES:
         raise serializers.ValidationError(
-            f"{location}.cardinality must be one of {', '.join(sorted(ALLOWED_CARDINALITIES))}."
+            _("%(location)s.cardinality must be one of %(options)s.")
+            % {"location": location, "options": ", ".join(sorted(ALLOWED_CARDINALITIES))}
         )
     data_source = definition.get("data_source")
     if not isinstance(data_source, dict):
-        raise serializers.ValidationError(f"{location}.data_source must be an object.")
+        raise serializers.ValidationError(
+            _("%(location)s.data_source must be an object.") % {"location": location}
+        )
     if data_source.get("resource") not in ALLOWED_MODEL_RESOURCES:
         raise serializers.ValidationError(
-            f"{location}.data_source.resource must be one of "
-            f"{', '.join(sorted(ALLOWED_MODEL_RESOURCES))}."
+            _("%(location)s.data_source.resource must be one of %(options)s.")
+            % {
+                "location": location,
+                "options": ", ".join(sorted(ALLOWED_MODEL_RESOURCES)),
+            }
         )
     if data_source.get("store") != "id":
-        raise serializers.ValidationError(f"{location}.data_source.store must be 'id'.")
+        raise serializers.ValidationError(
+            _("%(location)s.data_source.store must be 'id'.") % {"location": location}
+        )
     if "searchable" in data_source and type(data_source["searchable"]) is not bool:
-        raise serializers.ValidationError(f"{location}.data_source.searchable must be a boolean.")
+        raise serializers.ValidationError(
+            _("%(location)s.data_source.searchable must be a boolean.")
+            % {"location": location}
+        )
 
 
 def empty_draft_content():
@@ -155,26 +197,29 @@ def validate_draft_content(value):
     if value in ({}, None):
         return empty_draft_content()
     if not isinstance(value, dict):
-        raise serializers.ValidationError("Draft content must be an object.")
+        raise serializers.ValidationError(_("Draft content must be an object."))
 
     expected_fields = {"schema_version", "contract_version", "components"}
     if set(value) != expected_fields:
         raise serializers.ValidationError(
-            "Draft content must contain only schema_version, contract_version, and components."
+            _("Draft content must contain only schema_version, contract_version, and components.")
         )
 
     contract = load_content_contracts()
     if type(value["schema_version"]) is not int or value["schema_version"] != SCHEMA_VERSION:
-        raise serializers.ValidationError(f"schema_version must be {SCHEMA_VERSION}.")
+        raise serializers.ValidationError(
+            _("schema_version must be %(version)s.") % {"version": SCHEMA_VERSION}
+        )
     if (
         type(value["contract_version"]) is not int
         or value["contract_version"] != contract.get("contract_version")
     ):
         raise serializers.ValidationError(
-            f"contract_version must be {contract.get('contract_version')}."
+            _("contract_version must be %(version)s.")
+            % {"version": contract.get("contract_version")}
         )
     if not isinstance(value["components"], list):
-        raise serializers.ValidationError("components must be an array.")
+        raise serializers.ValidationError(_("components must be an array."))
 
     definitions = {
         (component["key"], component["version"]): component
@@ -185,19 +230,27 @@ def validate_draft_content(value):
         location = f"components[{index}]"
         if not isinstance(component, dict) or set(component) != {"id", "key", "version", "props"}:
             raise serializers.ValidationError(
-                f"{location} must contain only id, key, version, and props."
+                _("%(location)s must contain only id, key, version, and props.")
+                % {"location": location}
             )
         if not isinstance(component["id"], str) or not component["id"].strip():
-            raise serializers.ValidationError(f"{location}.id must be a non-empty string.")
+            raise serializers.ValidationError(
+                _("%(location)s.id must be a non-empty string.") % {"location": location}
+            )
         if component["id"] in instance_ids:
-            raise serializers.ValidationError(f"Duplicate component id: {component['id']}.")
+            raise serializers.ValidationError(
+                _("Duplicate component id: %(id)s.") % {"id": component["id"]}
+            )
         instance_ids.add(component["id"])
         if not isinstance(component["key"], str) or type(component["version"]) is not int:
-            raise serializers.ValidationError(f"{location} has an invalid key or version.")
+            raise serializers.ValidationError(
+                _("%(location)s has an invalid key or version.") % {"location": location}
+            )
         definition = definitions.get((component["key"], component["version"]))
         if definition is None:
             raise serializers.ValidationError(
-                f"Unknown component key/version: {component['key']}@{component['version']}."
+                _("Unknown component key/version: %(key)s.")
+                % {"key": f"{component['key']}@{component['version']}"}
             )
         _validate_object(component["props"], definition.get("props", {}), f"{location}.props")
     return value
@@ -205,21 +258,25 @@ def validate_draft_content(value):
 
 def _validate_object(value, properties, location):
     if not isinstance(value, dict):
-        raise serializers.ValidationError(f"{location} must be an object.")
+        raise serializers.ValidationError(
+            _("%(location)s must be an object.") % {"location": location}
+        )
     unknown = set(value) - set(properties)
     if unknown:
         raise serializers.ValidationError(
-            f"{location} contains unknown properties: {', '.join(sorted(unknown))}."
+            _("%(location)s contains unknown properties: %(properties)s.")
+            % {"location": location, "properties": ", ".join(sorted(unknown))}
         )
     missing = [name for name, definition in properties.items() if definition.get("required") and name not in value]
     if missing:
         raise serializers.ValidationError(
-            f"{location} is missing required properties: {', '.join(sorted(missing))}."
+            _("%(location)s is missing required properties: %(properties)s.")
+            % {"location": location, "properties": ", ".join(sorted(missing))}
         )
     for name, item in value.items():
         if properties[name].get("required") and item in (None, "", []):
             raise serializers.ValidationError(
-                f"{location}.{name} cannot be empty."
+                _("%(location)s cannot be empty.") % {"location": f"{location}.{name}"}
             )
         _validate_value(item, properties[name], f"{location}.{name}")
 
@@ -231,11 +288,11 @@ def _validate_value(value, definition, location):
         data_source = definition.get("data_source", {})
         if data_source.get("resource") not in {"products", "categories"}:
             raise serializers.ValidationError(
-                f"{location} uses an unsupported model resource."
+                _("%(location)s uses an unsupported model resource.") % {"location": location}
             )
         if data_source.get("store") != "id":
             raise serializers.ValidationError(
-                f"{location} must store model IDs."
+                _("%(location)s must store model IDs.") % {"location": location}
             )
         if cardinality == "many":
             valid = isinstance(value, list) and all(
@@ -245,7 +302,8 @@ def _validate_value(value, definition, location):
             valid = type(value) is int and value > 0
         else:
             raise serializers.ValidationError(
-                f"{location} uses unsupported cardinality {cardinality!r}."
+                _("%(location)s uses unsupported cardinality %(cardinality)s.")
+                % {"location": location, "cardinality": repr(cardinality)}
             )
     elif value_type in {"string", "color", "link", "image"}:
         valid = isinstance(value, str)
@@ -268,20 +326,31 @@ def _validate_value(value, definition, location):
         _validate_object(value, definition.get("properties", {}), location)
         valid = True
     else:
-        raise serializers.ValidationError(f"{location} uses unsupported contract type {value_type!r}.")
+        raise serializers.ValidationError(
+            _("%(location)s uses unsupported contract type %(type)s.")
+            % {"location": location, "type": repr(value_type)}
+        )
 
     if not valid:
-        raise serializers.ValidationError(f"{location} must be a valid {value_type}.")
+        raise serializers.ValidationError(
+            _("%(location)s must be a valid %(type)s.")
+            % {"location": location, "type": value_type}
+        )
     if isinstance(value, list):
         minimum = definition.get("min_items")
         maximum = definition.get("max_items")
         if minimum is not None and len(value) < minimum:
             raise serializers.ValidationError(
-                f"{location} must contain at least {minimum} item(s)."
+                _("%(location)s must contain at least %(count)s item(s).")
+                % {"location": location, "count": minimum}
             )
         if maximum is not None and len(value) > maximum:
             raise serializers.ValidationError(
-                f"{location} must contain at most {maximum} item(s)."
+                _("%(location)s must contain at most %(count)s item(s).")
+                % {"location": location, "count": maximum}
             )
     if "enum" in definition and value not in definition["enum"]:
-        raise serializers.ValidationError(f"{location} must be one of {definition['enum']}.")
+        raise serializers.ValidationError(
+            _("%(location)s must be one of %(options)s.")
+            % {"location": location, "options": definition["enum"]}
+        )

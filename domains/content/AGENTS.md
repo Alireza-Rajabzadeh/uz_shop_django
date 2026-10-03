@@ -110,6 +110,7 @@ Keep these boundaries in mind when adding future Content-domain features.
 - `SEORecord` must remain resource-referencing: do not add foreign keys from SEO to domain models. Add `BlogPost` as its own Content model when the time comes.
 - Use the existing model patterns: `db_table = "content_<table>"`, `TextChoices` status, `created_at`/`updated_at`, and admin registration in `admin.py`.
 - Slug uniqueness here is global (`content_landing_page_slug_unique`, `content_page_slug_unique`). Per-business slug scoping belongs in `business_content`.
+- API-facing messages (`ValidationError`, `NotFound`, `api_response(message=...)`) go through `gettext()` with an **English** msgid and a Persian msgstr in `locale/fa/LC_MESSAGES/django.po`. After adding one, run `python manage.py makemessages -l fa -l en` and `python manage.py compilemessages`. Never leave a `#, fuzzy` flag on an entry: `msgfmt` skips fuzzy entries so the message silently falls back to English, and the msgstr underneath is `msgmerge`'s guess — usually an unrelated string. `domains/business_content/contracts.py` is a deliberate copy of this one; localise both together.
 
 ## Admin API
 

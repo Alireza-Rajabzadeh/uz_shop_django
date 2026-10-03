@@ -111,6 +111,7 @@ There is no `/admin/*` tier: the admin panel edits platform content under `/api/
 - Keep common SEO values as columns; use `metadata` only for less common/future properties.
 - `SEORecord` stays resource-referencing — no foreign keys to domain models.
 - Slug scoping is per business and enforced both by the DB constraint and by `BusinessSlugScopeMixin.validate_slug` (which keeps duplicates a 400 instead of an `IntegrityError`). `business` is never read from the payload; the view assigns it on `save()`.
+- API-facing messages (`ValidationError`, `NotFound`, `api_response(message=...)`) go through `gettext()` with an **English** msgid and a Persian msgstr in `locale/fa/LC_MESSAGES/django.po`. After adding one, run `python manage.py makemessages -l fa -l en` and `python manage.py compilemessages`. Never leave a `#, fuzzy` flag on an entry: `msgfmt` skips fuzzy entries so the message silently falls back to English, and the msgstr underneath is `msgmerge`'s guess — usually an unrelated string.
 
 ## Tests
 

@@ -199,12 +199,14 @@ class PublicPage(PageBySlug):
 
 def read_component_contracts():
     """Return ``(payload, None)`` or ``(None, error_response)`` for the
-    synced contracts file, shared by the admin and vendor contract views."""
+    synced contracts file backing the vendor contract view."""
     if not CONTRACTS_FILE.exists():
         return None, api_response(
             success=False,
-            message="content contracts file not found",
-            errors={"detail": "Run sync_business_content_contracts to generate the file."},
+            message=_("content contracts file not found"),
+            errors={
+                "detail": _("Run sync_business_content_contracts to generate the file.")
+            },
             status_code=404,
         )
     try:
@@ -212,8 +214,8 @@ def read_component_contracts():
     except json.JSONDecodeError:
         return None, api_response(
             success=False,
-            message="content contracts file is invalid",
-            errors={"detail": "The contracts file could not be parsed."},
+            message=_("content contracts file is invalid"),
+            errors={"detail": _("The contracts file could not be parsed.")},
             status_code=500,
         )
 

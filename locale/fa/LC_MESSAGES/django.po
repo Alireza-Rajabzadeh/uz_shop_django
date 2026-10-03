@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: uz_shop_django\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-29 19:57+0000\n"
+"POT-Creation-Date: 2026-10-03 09:51+0000\n"
 "PO-Revision-Date: 2026-07-23 12:11+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -15,11 +15,11 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
 
-#: config/settings.py:333
+#: config/settings.py:334
 msgid "English"
 msgstr "انگلیسی"
 
-#: config/settings.py:333
+#: config/settings.py:334
 msgid "Persian"
 msgstr "فارسی"
 
@@ -42,6 +42,254 @@ msgstr "شماره کارت الزامی است."
 #: core/utils/card_number.py:35 core/utils/card_number.py:42
 msgid "Card number must contain digits only."
 msgstr "شماره کارت باید فقط شامل ارقام باشد."
+
+#: domains/business_content/contracts.py:35 domains/content/contracts.py:35
+msgid "The content component contract is unavailable or invalid."
+msgstr "قرارداد اجزای محتوا در دسترس نیست یا نامعتبر است."
+
+#: domains/business_content/contracts.py:42 domains/content/contracts.py:42
+msgid ""
+"A content contracts payload must contain only contract_version and "
+"components."
+msgstr "ساختار قرارداد محتوا باید تنها شامل contract_version و components باشد."
+
+#: domains/business_content/contracts.py:45 domains/content/contracts.py:45
+msgid "contract_version must be an integer."
+msgstr "contract_version باید یک عدد صحیح باشد."
+
+#: domains/business_content/contracts.py:47
+#: domains/business_content/contracts.py:222 domains/content/contracts.py:47
+#: domains/content/contracts.py:222
+msgid "components must be an array."
+msgstr "components باید یک آرایه باشد."
+
+#: domains/business_content/contracts.py:54
+#: domains/business_content/contracts.py:91
+#: domains/business_content/contracts.py:100
+#: domains/business_content/contracts.py:262 domains/content/contracts.py:54
+#: domains/content/contracts.py:91 domains/content/contracts.py:100
+#: domains/content/contracts.py:262
+#, python-format
+msgid "%(location)s must be an object."
+msgstr "%(location)s باید یک شیء باشد."
+
+#: domains/business_content/contracts.py:59 domains/content/contracts.py:59
+#, python-format
+msgid ""
+"%(location)s must contain only key, name, version, description, and props."
+msgstr "%(location)s باید تنها شامل key، name، version، description و props باشد."
+
+#: domains/business_content/contracts.py:67 domains/content/contracts.py:67
+#, python-format
+msgid "%(location)s.key must be a non-empty string."
+msgstr "%(location)s.key باید رشته‌ای غیرخالی باشد."
+
+#: domains/business_content/contracts.py:71 domains/content/contracts.py:71
+#, python-format
+msgid "%(location)s.name must be a string."
+msgstr "%(location)s.name باید رشته باشد."
+
+#: domains/business_content/contracts.py:75 domains/content/contracts.py:75
+#, python-format
+msgid "%(location)s.version must be an integer."
+msgstr "%(location)s.version باید عدد صحیح باشد."
+
+#: domains/business_content/contracts.py:80 domains/content/contracts.py:80
+#, python-format
+msgid "Duplicate component key/version: %(key)s."
+msgstr "کلید/نسخه تکراری مولفه: %(key)s."
+
+#: domains/business_content/contracts.py:105
+#: domains/business_content/contracts.py:330 domains/content/contracts.py:105
+#: domains/content/contracts.py:330
+#, python-format
+msgid "%(location)s uses unsupported contract type %(type)s."
+msgstr "%(location)s نوع قرارداد پشتیبانی‌نشده %(type)s را استفاده می‌کند."
+
+#: domains/business_content/contracts.py:116 domains/content/contracts.py:116
+#, python-format
+msgid "%(location)s.%(field)s must be a boolean."
+msgstr "%(location)s.%(field)s باید یک مقدار بولی باشد."
+
+#: domains/business_content/contracts.py:122 domains/content/contracts.py:122
+#, python-format
+msgid "%(location)s.%(field)s must be an integer."
+msgstr "%(location)s.%(field)s باید عدد صحیح باشد."
+
+#: domains/business_content/contracts.py:128 domains/content/contracts.py:128
+#, python-format
+msgid "%(location)s.%(field)s must be a string."
+msgstr "%(location)s.%(field)s باید رشته باشد."
+
+#: domains/business_content/contracts.py:136 domains/content/contracts.py:136
+#, python-format
+msgid "%(location)s.%(field)s must be a positive integer."
+msgstr "%(location)s.%(field)s باید عدد صحیح مثبت باشد."
+
+#: domains/business_content/contracts.py:144 domains/content/contracts.py:144
+#, python-format
+msgid "%(location)s.enum must be an array of strings or integers."
+msgstr "%(location)s.enum باید آرایه‌ای از رشته‌ها یا اعداد صحیح باشد."
+
+#: domains/business_content/contracts.py:160 domains/content/contracts.py:160
+#, python-format
+msgid "%(location)s.cardinality must be one of %(options)s."
+msgstr "%(location)s.cardinality باید یکی از %(options)s باشد."
+
+#: domains/business_content/contracts.py:166 domains/content/contracts.py:166
+#, python-format
+msgid "%(location)s.data_source must be an object."
+msgstr "%(location)s.data_source باید یک شیء باشد."
+
+#: domains/business_content/contracts.py:170 domains/content/contracts.py:170
+#, python-format
+msgid "%(location)s.data_source.resource must be one of %(options)s."
+msgstr "%(location)s.data_source.resource باید یکی از %(options)s باشد."
+
+#: domains/business_content/contracts.py:178 domains/content/contracts.py:178
+#, python-format
+msgid "%(location)s.data_source.store must be 'id'."
+msgstr "%(location)s.data_source.store باید 'id' باشد."
+
+#: domains/business_content/contracts.py:182 domains/content/contracts.py:182
+#, python-format
+msgid "%(location)s.data_source.searchable must be a boolean."
+msgstr "%(location)s.data_source.searchable باید یک مقدار بولی باشد."
+
+#: domains/business_content/contracts.py:200 domains/content/contracts.py:200
+msgid "Draft content must be an object."
+msgstr "پیش‌نویس محتوا باید یک شیء باشد."
+
+#: domains/business_content/contracts.py:205 domains/content/contracts.py:205
+msgid ""
+"Draft content must contain only schema_version, contract_version, and "
+"components."
+msgstr "پیش‌نویس محتوا باید تنها شامل schema_version، contract_version و components باشد."
+
+#: domains/business_content/contracts.py:211 domains/content/contracts.py:211
+#, python-format
+msgid "schema_version must be %(version)s."
+msgstr "schema_version باید %(version)s باشد."
+
+#: domains/business_content/contracts.py:218 domains/content/contracts.py:218
+#, python-format
+msgid "contract_version must be %(version)s."
+msgstr "contract_version باید %(version)s باشد."
+
+#: domains/business_content/contracts.py:233 domains/content/contracts.py:233
+#, python-format
+msgid "%(location)s must contain only id, key, version, and props."
+msgstr "%(location)s باید تنها شامل id، key، version و props باشد."
+
+#: domains/business_content/contracts.py:238 domains/content/contracts.py:238
+#, python-format
+msgid "%(location)s.id must be a non-empty string."
+msgstr "%(location)s.id باید رشته‌ای غیرخالی باشد."
+
+#: domains/business_content/contracts.py:242 domains/content/contracts.py:242
+#, python-format
+msgid "Duplicate component id: %(id)s."
+msgstr "شناسه تکراری مولفه: %(id)s."
+
+#: domains/business_content/contracts.py:247 domains/content/contracts.py:247
+#, python-format
+msgid "%(location)s has an invalid key or version."
+msgstr "%(location)s کلید یا نسخه نامعتبری دارد."
+
+#: domains/business_content/contracts.py:252 domains/content/contracts.py:252
+#, python-format
+msgid "Unknown component key/version: %(key)s."
+msgstr "کلید/نسخه ناشناخته مولفه: %(key)s."
+
+#: domains/business_content/contracts.py:267 domains/content/contracts.py:267
+#, python-format
+msgid "%(location)s contains unknown properties: %(properties)s."
+msgstr "%(location)s شامل ویژگی‌های ناشناخته %(properties)s است."
+
+#: domains/business_content/contracts.py:273 domains/content/contracts.py:273
+#, python-format
+msgid "%(location)s is missing required properties: %(properties)s."
+msgstr "%(location)s فاقد ویژگی‌های الزامی %(properties)s است."
+
+#: domains/business_content/contracts.py:279 domains/content/contracts.py:279
+#, python-format
+msgid "%(location)s cannot be empty."
+msgstr "%(location)s نباید خالی باشد."
+
+#: domains/business_content/contracts.py:291 domains/content/contracts.py:291
+#, python-format
+msgid "%(location)s uses an unsupported model resource."
+msgstr "%(location)s منبع مدل پشتیبانی‌نشده‌ای دارد."
+
+#: domains/business_content/contracts.py:295 domains/content/contracts.py:295
+#, python-format
+msgid "%(location)s must store model IDs."
+msgstr "%(location)s باید شناسه مدل‌ها را ذخیره کند."
+
+#: domains/business_content/contracts.py:305 domains/content/contracts.py:305
+#, python-format
+msgid "%(location)s uses unsupported cardinality %(cardinality)s."
+msgstr "%(location)s تعدادپذیری پشتیبانی‌نشده %(cardinality)s را استفاده می‌کند."
+
+#: domains/business_content/contracts.py:336 domains/content/contracts.py:336
+#, python-format
+msgid "%(location)s must be a valid %(type)s."
+msgstr "%(location)s باید مقدار معتبری از نوع %(type)s باشد."
+
+#: domains/business_content/contracts.py:344 domains/content/contracts.py:344
+#, python-format
+msgid "%(location)s must contain at least %(count)s item(s)."
+msgstr "%(location)s باید دست‌کم %(count)s مورد داشته باشد."
+
+#: domains/business_content/contracts.py:349 domains/content/contracts.py:349
+#, python-format
+msgid "%(location)s must contain at most %(count)s item(s)."
+msgstr "%(location)s باید حداکثر %(count)s مورد داشته باشد."
+
+#: domains/business_content/contracts.py:354 domains/content/contracts.py:354
+#, python-format
+msgid "%(location)s must be one of %(options)s."
+msgstr "%(location)s باید یکی از %(options)s باشد."
+
+#: domains/business_content/serializers.py:33
+msgid "A content item with this slug already exists in this scope."
+msgstr "محتوایی با این اسلاگ از قبل در این محدوده وجود دارد."
+
+#: domains/business_content/views.py:101 domains/business_content/views.py:104
+#: domains/content/views.py:149 domains/content/views.py:177
+#: domains/content/views.py:302 domains/content/views.py:383
+#: domains/content/views.py:386
+msgid "Landing page not found."
+msgstr "صفحه فرود پیدا نشد."
+
+#: domains/business_content/views.py:146 domains/business_content/views.py:149
+#: domains/business_content/views.py:168 domains/business_content/views.py:171
+#: domains/content/views.py:210 domains/content/views.py:238
+#: domains/content/views.py:370 domains/content/views.py:426
+#: domains/content/views.py:429 domains/content/views.py:448
+#: domains/content/views.py:451
+msgid "Page not found."
+msgstr "صفحه پیدا نشد."
+
+#: domains/business_content/views.py:206 domains/content/views.py:486
+msgid "content contracts file not found"
+msgstr "فایل قرارداد محتوا پیدا نشد"
+
+#: domains/business_content/views.py:208
+msgid "Run sync_business_content_contracts to generate the file."
+msgstr "برای ساخت فایل، sync_business_content_contracts را اجرا کنید."
+
+#: domains/business_content/views.py:217 domains/content/views.py:497
+msgid "content contracts file is invalid"
+msgstr "فایل قرارداد محتوا نامعتبر است"
+
+#: domains/business_content/views.py:218 domains/content/views.py:498
+msgid "The contracts file could not be parsed."
+msgstr "فایل قرارداد قابل تجزیه نبود."
+
+#: domains/business_content/views.py:264
+msgid "Business profile not found."
+msgstr "پروفایل کسب‌وکار پیدا نشد."
 
 #: domains/business_payments/services.py:137
 #: domains/business_payments/services.py:180 domains/payments/services.py:111
@@ -163,14 +411,14 @@ msgstr "این کالا دیگر موجود نیست."
 
 #: domains/cart/services.py:365 domains/cart/services.py:443
 #: domains/cart/services.py:460
-#: domains/inventory/services/inventory_service.py:1074
-#: domains/inventory/services/inventory_service.py:1091
-#: domains/inventory/services/inventory_service.py:1109
-#: domains/inventory/services/inventory_service.py:1158
-#: domains/inventory/services/inventory_service.py:1206
-#: domains/inventory/services/inventory_service.py:1257
-#: domains/inventory/services/inventory_service.py:1308
-#: domains/inventory/services/inventory_service.py:1401
+#: domains/inventory/services/inventory_service.py:1135
+#: domains/inventory/services/inventory_service.py:1152
+#: domains/inventory/services/inventory_service.py:1170
+#: domains/inventory/services/inventory_service.py:1219
+#: domains/inventory/services/inventory_service.py:1267
+#: domains/inventory/services/inventory_service.py:1318
+#: domains/inventory/services/inventory_service.py:1369
+#: domains/inventory/services/inventory_service.py:1462
 msgid "Quantity must be greater than zero."
 msgstr "تعداد باید بزرگ‌تر از صفر باشد."
 
@@ -241,9 +489,7 @@ msgid "Category created."
 msgstr "دسته‌بندی ایجاد شد."
 
 #: domains/catalog/api/views.py:106 domains/catalog/api/views.py:200
-#: domains/catalog/api/views.py:265 domains/content/views.py:310
-#, fuzzy
-#| msgid "Address not found."
+#: domains/catalog/api/views.py:265 domains/content/views.py:326
 msgid "Category not found."
 msgstr "دسته‌بندی پیدا نشد."
 
@@ -273,9 +519,7 @@ msgstr "ویژگی‌های تنوع دسته‌بندی به‌روزرسانی
 msgid "Brand created."
 msgstr "برند ایجاد شد."
 
-#: domains/catalog/api/views.py:340 domains/content/views.py:322
-#, fuzzy
-#| msgid "Address not found."
+#: domains/catalog/api/views.py:340 domains/content/views.py:338
 msgid "Brand not found."
 msgstr "برند پیدا نشد."
 
@@ -353,10 +597,8 @@ msgstr "محصول ایجاد شد."
 #: domains/catalog/api/views.py:774 domains/catalog/api/views.py:873
 #: domains/catalog/api/views.py:882 domains/catalog/api/views.py:905
 #: domains/catalog/api/views.py:916 domains/catalog/api/views.py:941
-#: domains/content/views.py:298 domains/preorder/services.py:60
+#: domains/content/views.py:314 domains/preorder/services.py:60
 #: domains/wishlist/services.py:58
-#, fuzzy
-#| msgid "Address not found."
 msgid "Product not found."
 msgstr "محصول پیدا نشد."
 
@@ -549,28 +791,17 @@ msgstr "گزینه‌ای که در تنوع‌ها استفاده شده نمی
 msgid "The option name, SKU code, or generated variant SKU conflicts."
 msgstr "نام گزینه، کد SKU یا SKU تولیدشدهٔ تنوع در تداخل است."
 
-#: domains/content/views.py:144 domains/content/views.py:172
-#: domains/content/views.py:286 domains/content/views.py:367
-#: domains/content/views.py:370
-#, fuzzy
-#| msgid "Address not found."
-msgid "Landing page not found."
-msgstr "صفحه فرود پیدا نشد."
+#: domains/content/serializers.py:25
+msgid "A content item with this slug already exists."
+msgstr "محتوایی با این اسلاگ از قبل وجود دارد."
 
-#: domains/content/views.py:205 domains/content/views.py:233
-#: domains/content/views.py:354 domains/content/views.py:410
-#: domains/content/views.py:413 domains/content/views.py:432
-#: domains/content/views.py:435
-#, fuzzy
-#| msgid "Address not found."
-msgid "Page not found."
-msgstr "صفحه پیدا نشد."
-
-#: domains/content/views.py:332
-#, fuzzy
-#| msgid "Address not found."
+#: domains/content/views.py:348
 msgid "SEO resource not found."
 msgstr "منبع SEO پیدا نشد."
+
+#: domains/content/views.py:488
+msgid "Run sync_content_contracts to generate the file."
+msgstr "برای ساخت فایل، sync_content_contracts را اجرا کنید."
 
 #: domains/customer/admin_views.py:53 domains/customer/admin_views.py:83
 #, fuzzy
@@ -780,7 +1011,51 @@ msgstr "تنظیمات به‌روزرسانی شد."
 msgid "Password changed."
 msgstr "رمز عبور تغییر کرد."
 
-#: domains/inventory/services/inventory_pricing_service.py:78
+#: domains/inventory/services/inventory_attribute_service.py:117
+msgid "A business is required to create an attribute definition."
+msgstr ""
+
+#: domains/inventory/services/inventory_attribute_service.py:121
+msgid "This field cannot be blank."
+msgstr "این فیلد نمی‌تواند خالی باشد."
+
+#: domains/inventory/services/inventory_attribute_service.py:125
+msgid "Provide a code of letters and digits; the name contains none."
+msgstr ""
+
+#: domains/inventory/services/inventory_attribute_service.py:130
+msgid "Unsupported attribute type."
+msgstr "نوع ویژگی پشتیبانی نمی‌شود."
+
+#: domains/inventory/services/inventory_attribute_service.py:134
+#: domains/inventory/services/inventory_attribute_service.py:149
+msgid "An attribute with this code already exists."
+msgstr "ویژگی با این کد از قبل وجود دارد."
+
+#: domains/inventory/services/inventory_attribute_service.py:226
+msgid "An attribute code is required."
+msgstr "کد ویژگی الزامی است."
+
+#: domains/inventory/services/inventory_attribute_service.py:231
+#, python-format
+msgid "Attribute submitted twice: %(code)s."
+msgstr ""
+
+#: domains/inventory/services/inventory_attribute_service.py:238
+msgid "The serial_number attribute belongs to the serial number field."
+msgstr ""
+
+#: domains/inventory/services/inventory_attribute_service.py:245
+#, python-format
+msgid "Unknown attribute: %(code)s."
+msgstr ""
+
+#: domains/inventory/services/inventory_attribute_service.py:254
+#, python-format
+msgid "Invalid value for %(code)s."
+msgstr "مقدار نامعتبر برای %(code)s."
+
+#: domains/inventory/services/inventory_pricing_service.py:82
 msgid ""
 "Multiple business profiles exist, so the business that owns this pricing "
 "configuration must be identified."
@@ -788,25 +1063,25 @@ msgstr ""
 "چند پروفایل تجاری وجود دارد؛ بنابراین باید پروفایل مالک این تنظیمات "
 "قیمت‌گذاری مشخص شود."
 
-#: domains/inventory/services/inventory_pricing_service.py:97
-#: domains/inventory/services/inventory_pricing_service.py:420
+#: domains/inventory/services/inventory_pricing_service.py:112
+#: domains/inventory/services/inventory_pricing_service.py:435
 #: domains/inventory/services/inventory_reporting_service.py:173
-#: domains/marketplace/services.py:71
+#: domains/marketplace/services.py:79 domains/marketplace/services.py:106
 msgid "Unsupported pricing cost strategy."
 msgstr "استراتژی هزینهٔ قیمت‌گذاری پشتیبانی نمی‌شود."
 
-#: domains/inventory/services/inventory_pricing_service.py:104
-#: domains/marketplace/services.py:66
+#: domains/inventory/services/inventory_pricing_service.py:119
+#: domains/marketplace/services.py:101
 msgid "Expected profit percentage must be greater than or equal to zero."
 msgstr "درصد سود مورد انتظار باید بزرگ‌تر یا مساوی صفر باشد."
 
-#: domains/inventory/services/inventory_pricing_service.py:122
+#: domains/inventory/services/inventory_pricing_service.py:137
 msgid ""
 "No business profile exists, so the pricing configuration cannot be stored."
 msgstr ""
 "پروفایل تجاری وجود ندارد؛ به همین دلیل ذخیرهٔ تنظیمات قیمت‌گذاری ممکن نیست."
 
-#: domains/inventory/services/inventory_pricing_service.py:161
+#: domains/inventory/services/inventory_pricing_service.py:176
 msgid ""
 "No business offer exists for this variant. Save a price or a pricing "
 "strategy first."
@@ -814,7 +1089,7 @@ msgstr ""
 "برای این تنوع هیچ پیشنهادی وجود ندارد. پیش از ادامه، یک قیمت یا استراتژی "
 "قیمت‌گذاری ذخیره کنید."
 
-#: domains/inventory/services/inventory_pricing_service.py:174
+#: domains/inventory/services/inventory_pricing_service.py:189
 msgid ""
 "A configured pricing strategy and available received supply are required "
 "before applying a price."
@@ -822,313 +1097,313 @@ msgstr ""
 "پیش از اعمال قیمت، استراتژی قیمت‌گذاری تنظیم‌شده و تامین دریافت‌شدهٔ موجود لازم "
 "است."
 
-#: domains/inventory/services/inventory_pricing_service.py:186
+#: domains/inventory/services/inventory_pricing_service.py:201
 msgid "Price must be greater than or equal to zero."
 msgstr "قیمت باید بزرگ‌تر یا مساوی صفر باشد."
 
-#: domains/inventory/services/inventory_service.py:186
+#: domains/inventory/services/inventory_service.py:188
 msgid "Could not generate a unique warehouse code."
 msgstr "تولید کد یکتای انبار ممکن نشد."
 
-#: domains/inventory/services/inventory_service.py:198
+#: domains/inventory/services/inventory_service.py:200
 msgid "Switch another warehouse to default instead."
 msgstr "در عوض، انبار دیگری را پیش‌فرض کنید."
 
-#: domains/inventory/services/inventory_service.py:207
+#: domains/inventory/services/inventory_service.py:209
 msgid "The default warehouse cannot be changed while it contains stock."
 msgstr "تا زمانی که انبار پیش‌فرض موجودی دارد، قابل تغییر نیست."
 
-#: domains/inventory/services/inventory_service.py:221
+#: domains/inventory/services/inventory_service.py:223
 msgid ""
 "The default warehouse cannot be deleted. Switch another warehouse to default "
 "first."
 msgstr "انبار پیش‌فرض قابل حذف نیست. ابتدا انبار دیگری را پیش‌فرض کنید."
 
-#: domains/inventory/services/inventory_service.py:227
+#: domains/inventory/services/inventory_service.py:229
 msgid "This warehouse cannot be deleted while it contains stock."
 msgstr "تا زمانی که این انبار موجودی دارد، قابل حذف نیست."
 
-#: domains/inventory/services/inventory_service.py:278
+#: domains/inventory/services/inventory_service.py:280
 msgid "Inventory setup requires exactly one default warehouse."
 msgstr "راه‌اندازی انبار باید دقیقاً یک انبار پیش‌فرض داشته باشد."
 
-#: domains/inventory/services/inventory_service.py:304
+#: domains/inventory/services/inventory_service.py:306
 msgid "Define serialized units before converting stocked inventory."
 msgstr "پیش از تبدیل موجودی، اقلام سریالی را تعریف کنید."
 
-#: domains/inventory/services/inventory_service.py:318
+#: domains/inventory/services/inventory_service.py:320
 msgid "This field is required for normal inventory."
 msgstr "این فیلد برای موجودی عادی الزامی است."
 
-#: domains/inventory/services/inventory_service.py:331
+#: domains/inventory/services/inventory_service.py:333
 msgid "Inventory must satisfy 0 <= reserved <= sellable <= quantity."
 msgstr "موجودی باید از قاعدهٔ صفر ≤ رزرو شده ≤ قابل فروش ≤ تعداد پیروی کند."
 
-#: domains/inventory/services/inventory_service.py:357
+#: domains/inventory/services/inventory_service.py:359
 msgid "This field is required for serialized inventory."
 msgstr "این فیلد برای موجودی سریالی الزامی است."
 
-#: domains/inventory/services/inventory_service.py:381
-#: domains/inventory/services/inventory_service.py:831
+#: domains/inventory/services/inventory_service.py:389
+#: domains/inventory/services/inventory_service.py:892
 msgid "Inventory setup is missing the serial_number attribute definition."
 msgstr "تعریف ویژگی serial_number در راه‌اندازی موجودی وجود ندارد."
 
-#: domains/inventory/services/inventory_service.py:397
+#: domains/inventory/services/inventory_service.py:405
 msgid "Each serialized row can only appear once."
 msgstr "هر ردیف سریالی فقط یک بار مجاز است."
 
-#: domains/inventory/services/inventory_service.py:400
+#: domains/inventory/services/inventory_service.py:408
 msgid "One or more serialized row IDs do not belong to this variant."
 msgstr "یک یا چند شناسهٔ ردیف سریالی متعلق به این تنوع نیست."
 
-#: domains/inventory/services/inventory_service.py:414
+#: domains/inventory/services/inventory_service.py:422
 msgid "Reserved serialized rows cannot be deleted."
 msgstr "ردیف‌های سریالی رزروشده قابل حذف نیستند."
 
-#: domains/inventory/services/inventory_service.py:419
-#: domains/inventory/services/inventory_service.py:836
+#: domains/inventory/services/inventory_service.py:427
+#: domains/inventory/services/inventory_service.py:897
 msgid "Serial number cannot be blank."
 msgstr "شماره سریال نمی‌تواند خالی باشد."
 
-#: domains/inventory/services/inventory_service.py:423
-#: domains/inventory/services/inventory_service.py:441
-#: domains/inventory/services/inventory_service.py:507
-#: domains/inventory/services/inventory_service.py:841
-#: domains/inventory/services/inventory_service.py:879
+#: domains/inventory/services/inventory_service.py:431
+#: domains/inventory/services/inventory_service.py:449
+#: domains/inventory/services/inventory_service.py:562
+#: domains/inventory/services/inventory_service.py:902
+#: domains/inventory/services/inventory_service.py:940
 msgid "Serial numbers must be globally unique, ignoring case."
 msgstr "شماره‌های سریال باید بدون توجه به حروف یکتا باشند."
 
-#: domains/inventory/services/inventory_service.py:464
+#: domains/inventory/services/inventory_service.py:511
 msgid "Reserved serialized rows cannot be edited."
 msgstr "ردیف‌های سریالی رزروشده قابل ویرایش نیستند."
 
-#: domains/inventory/services/inventory_service.py:520
+#: domains/inventory/services/inventory_service.py:575
 msgid "Deactivate the marketplace offer before changing inventory type."
 msgstr "پیش از تغییر نوع موجودی، پیشنهاد بازارگاه را غیرفعال کنید."
 
-#: domains/inventory/services/inventory_service.py:574
+#: domains/inventory/services/inventory_service.py:629
 msgid "Receive supplies before converting serialized inventory to normal."
 msgstr "پیش از تبدیل موجودی سریالی به عادی، تامین دریافت کنید."
 
-#: domains/inventory/services/inventory_service.py:806
+#: domains/inventory/services/inventory_service.py:865
 msgid "A variant with stock cannot be deleted."
 msgstr "تنوعِ دارای موجودی قابل حذف نیست."
 
-#: domains/inventory/services/inventory_service.py:888
+#: domains/inventory/services/inventory_service.py:949
 #, python-format
 msgid "Cannot transition from \"%(current)s\" to \"%(target)s\"."
 msgstr "امکان تغییر از «%(current)s» به «%(target)s» نیست."
 
-#: domains/inventory/services/inventory_service.py:953
+#: domains/inventory/services/inventory_service.py:1014
 msgid "Serialized inventory is calculated from registered units."
 msgstr "موجودی سریالی از اقلام ثبت‌شده محاسبه می‌شود."
 
-#: domains/inventory/services/inventory_service.py:990
+#: domains/inventory/services/inventory_service.py:1051
 msgid ""
 "Received supply quantity cannot be lower than reserved or sellable stock."
 msgstr ""
 "تعداد تامین دریافت‌شده نمی‌تواند کمتر از موجودی رزروشده یا قابل فروش باشد."
 
-#: domains/inventory/services/inventory_service.py:1002
+#: domains/inventory/services/inventory_service.py:1063
 msgid ""
 "Inventory without received supplies still has reserved or sellable stock."
 msgstr "موجودی بدون تامین دریافت‌شده همچنان موجودی رزروشده یا قابل فروش دارد."
 
-#: domains/inventory/services/inventory_service.py:1051
-#: domains/inventory/services/inventory_service.py:1084
-#: domains/inventory/services/inventory_service.py:1102
-#: domains/inventory/services/inventory_service.py:1127
-#: domains/inventory/services/inventory_service.py:1175
-#: domains/inventory/services/inventory_service.py:1223
-#: domains/inventory/services/inventory_service.py:1277
-#: domains/inventory/services/inventory_service.py:1319
-#: domains/inventory/services/inventory_service.py:1349
+#: domains/inventory/services/inventory_service.py:1112
+#: domains/inventory/services/inventory_service.py:1145
+#: domains/inventory/services/inventory_service.py:1163
+#: domains/inventory/services/inventory_service.py:1188
+#: domains/inventory/services/inventory_service.py:1236
+#: domains/inventory/services/inventory_service.py:1284
+#: domains/inventory/services/inventory_service.py:1338
+#: domains/inventory/services/inventory_service.py:1380
+#: domains/inventory/services/inventory_service.py:1410
 #, fuzzy
 #| msgid "Address not found."
 msgid "Inventory not found."
 msgstr "موجودی پیدا نشد."
 
-#: domains/inventory/services/inventory_service.py:1056
+#: domains/inventory/services/inventory_service.py:1117
 msgid "Unit count is required for serialized inventory."
 msgstr "برای موجودی سریالی تعداد اقلام الزامی است."
 
-#: domains/inventory/services/inventory_service.py:1060
+#: domains/inventory/services/inventory_service.py:1121
 msgid "Unit count must be greater than zero."
 msgstr "تعداد اقلام باید بزرگ‌تر از صفر باشد."
 
-#: domains/inventory/services/inventory_service.py:1087
+#: domains/inventory/services/inventory_service.py:1148
 msgid "Use receive_stock for serialized inventory."
 msgstr "برای موجودی سریالی از receive_stock استفاده کنید."
 
-#: domains/inventory/services/inventory_service.py:1105
+#: domains/inventory/services/inventory_service.py:1166
 msgid "Use unit-level operations for serialized inventory."
 msgstr "برای موجودی سریالی از عملیات سطح قلم استفاده کنید."
 
-#: domains/inventory/services/inventory_service.py:1114
+#: domains/inventory/services/inventory_service.py:1175
 #, python-format
 msgid "Cannot decrease more than sellable. Available: %(available)s."
 msgstr "کاهش بیش از مقدار قابل فروش ممکن نیست. موجود: %(available)s."
 
-#: domains/inventory/services/inventory_service.py:1132
-#: domains/inventory/services/inventory_service.py:1180
-#: domains/inventory/services/inventory_service.py:1228
-#: domains/inventory/services/inventory_service.py:1282
-#: domains/inventory/services/inventory_service.py:1429
+#: domains/inventory/services/inventory_service.py:1193
+#: domains/inventory/services/inventory_service.py:1241
+#: domains/inventory/services/inventory_service.py:1289
+#: domains/inventory/services/inventory_service.py:1343
+#: domains/inventory/services/inventory_service.py:1490
 msgid "Unit IDs are required for serialized inventory."
 msgstr "برای موجودی سریالی شناسهٔ اقلام الزامی است."
 
-#: domains/inventory/services/inventory_service.py:1141
-#: domains/inventory/services/inventory_service.py:1189
-#: domains/inventory/services/inventory_service.py:1237
-#: domains/inventory/services/inventory_service.py:1291
-#: domains/inventory/services/inventory_service.py:1335
-#: domains/inventory/services/inventory_service.py:1365
-#: domains/inventory/services/inventory_service.py:1438
+#: domains/inventory/services/inventory_service.py:1202
+#: domains/inventory/services/inventory_service.py:1250
+#: domains/inventory/services/inventory_service.py:1298
+#: domains/inventory/services/inventory_service.py:1352
+#: domains/inventory/services/inventory_service.py:1396
+#: domains/inventory/services/inventory_service.py:1426
+#: domains/inventory/services/inventory_service.py:1499
 msgid "One or more unit IDs are invalid."
 msgstr "یک یا چند شناسهٔ قلم نامعتبر است."
 
-#: domains/inventory/services/inventory_service.py:1147
+#: domains/inventory/services/inventory_service.py:1208
 #, python-format
 msgid "Unit %(id)s is in state \"%(state)s\" and cannot be reserved."
 msgstr "قلم %(id)s در وضعیت «%(state)s» است و قابل رزرو نیست."
 
-#: domains/inventory/services/inventory_service.py:1163
+#: domains/inventory/services/inventory_service.py:1224
 #, python-format
 msgid "Cannot reserve more than available. Available: %(available)s."
 msgstr "رزرو بیش از مقدار موجود ممکن نیست. موجود: %(available)s."
 
-#: domains/inventory/services/inventory_service.py:1195
+#: domains/inventory/services/inventory_service.py:1256
 #, python-format
 msgid "Unit %(id)s is in state \"%(state)s\" and is not reserved."
 msgstr "قلم %(id)s در وضعیت «%(state)s» است و رزرو نشده است."
 
-#: domains/inventory/services/inventory_service.py:1211
+#: domains/inventory/services/inventory_service.py:1272
 #, python-format
 msgid "Cannot release more than reserved. Reserved: %(reserved)s."
 msgstr "آزادسازی بیش از مقدار رزروشده ممکن نیست. رزروشده: %(reserved)s."
 
-#: domains/inventory/services/inventory_service.py:1246
+#: domains/inventory/services/inventory_service.py:1307
 #, python-format
 msgid "Unit %(id)s is in state \"%(state)s\" and cannot be sold."
 msgstr "قلم %(id)s در وضعیت «%(state)s» است و قابل فروش نیست."
 
-#: domains/inventory/services/inventory_service.py:1262
+#: domains/inventory/services/inventory_service.py:1323
 #, python-format
 msgid "Cannot sell more than sellable. Sellable: %(sellable)s."
 msgstr "فروش بیش از مقدار قابل فروش ممکن نیست. قابل فروش: %(sellable)s."
 
-#: domains/inventory/services/inventory_service.py:1297
+#: domains/inventory/services/inventory_service.py:1358
 #, python-format
 msgid "Unit %(id)s is in state \"%(state)s\" and cannot be returned."
 msgstr "قلم %(id)s در وضعیت «%(state)s» است و قابل بازگشت نیست."
 
-#: domains/inventory/services/inventory_service.py:1322
+#: domains/inventory/services/inventory_service.py:1383
 msgid "Mark damaged is only available for serialized inventory."
 msgstr "علامت‌گذاری به عنوان آسیب‌دیده فقط برای موجودی سریالی در دسترس است."
 
-#: domains/inventory/services/inventory_service.py:1326
-#: domains/inventory/services/inventory_service.py:1356
+#: domains/inventory/services/inventory_service.py:1387
+#: domains/inventory/services/inventory_service.py:1417
 msgid "Unit IDs are required."
 msgstr "شناسهٔ اقلام الزامی است."
 
-#: domains/inventory/services/inventory_service.py:1352
+#: domains/inventory/services/inventory_service.py:1413
 msgid "Mark lost is only available for serialized inventory."
 msgstr "علامت‌گذاری به عنوان مفقود فقط برای موجودی سریالی در دسترس است."
 
-#: domains/inventory/services/inventory_service.py:1380
+#: domains/inventory/services/inventory_service.py:1441
 msgid "Source inventory not found."
 msgstr "موجودی مبدأ پیدا نشد."
 
-#: domains/inventory/services/inventory_service.py:1382
+#: domains/inventory/services/inventory_service.py:1443
 msgid "Destination inventory not found."
 msgstr "موجودی مقصد پیدا نشد."
 
-#: domains/inventory/services/inventory_service.py:1384
+#: domains/inventory/services/inventory_service.py:1445
 msgid "Source and destination cannot be the same."
 msgstr "مبدأ و مقصد نمی‌توانند یکسان باشند."
 
-#: domains/inventory/services/inventory_service.py:1387
+#: domains/inventory/services/inventory_service.py:1448
 msgid "Source and destination must hold the same variant."
 msgstr "مبدأ و مقصد باید یک تنوع یکسان داشته باشند."
 
-#: domains/inventory/services/inventory_service.py:1406
+#: domains/inventory/services/inventory_service.py:1467
 #, python-format
 msgid "Cannot transfer more than sellable. Available: %(available)s."
 msgstr "انتقال بیش از مقدار قابل فروش ممکن نیست. موجود: %(available)s."
 
-#: domains/inventory/services/inventory_service.py:1447
+#: domains/inventory/services/inventory_service.py:1508
 #, python-format
 msgid "Unit %(id)s is in state \"%(state)s\" and cannot be transferred."
 msgstr "قلم %(id)s در وضعیت «%(state)s» است و قابل انتقال نیست."
 
-#: domains/inventory/services/inventory_supply_service.py:165
+#: domains/inventory/services/inventory_supply_service.py:166
 msgid "Received supplies cannot change variant, warehouse, or quantity."
 msgstr "تامین دریافت‌شده قابل تغییر در تنوع، انبار یا تعداد نیست."
 
-#: domains/inventory/services/inventory_supply_service.py:180
+#: domains/inventory/services/inventory_supply_service.py:181
 msgid "Quantity cannot change because this supply has already been consumed."
 msgstr "تعداد قابل تغییر نیست زیرا این تامین قبلاً مصرف شده است."
 
-#: domains/inventory/services/inventory_supply_service.py:202
+#: domains/inventory/services/inventory_supply_service.py:203
 msgid "Received supplies cannot be deleted."
 msgstr "تامین دریافت‌شده قابل حذف نیست."
 
-#: domains/inventory/services/inventory_supply_service.py:206
+#: domains/inventory/services/inventory_supply_service.py:207
 msgid "Supply has already been consumed and cannot be deleted."
 msgstr "تامین قبلاً مصرف شده و قابل حذف نیست."
 
-#: domains/inventory/services/inventory_supply_service.py:222
+#: domains/inventory/services/inventory_supply_service.py:223
 msgid "This supply has already been received."
 msgstr "این تامین قبلاً دریافت شده است."
 
-#: domains/inventory/services/inventory_supply_service.py:232
+#: domains/inventory/services/inventory_supply_service.py:233
 msgid "Serial items are only accepted for serialized inventory."
 msgstr "اقلام سریالی فقط برای موجودی سریالی پذیرفته می‌شوند."
 
-#: domains/inventory/services/inventory_supply_service.py:296
+#: domains/inventory/services/inventory_supply_service.py:299
 msgid "This order item has already consumed its supply layers."
 msgstr "این قلم سفارش قبلاً لایه‌های تامین خود را مصرف کرده است."
 
-#: domains/inventory/services/inventory_supply_service.py:343
+#: domains/inventory/services/inventory_supply_service.py:346
 #, python-format
 msgid "Supply %(reference)s does not cover %(needed)s consumed units."
 msgstr "تامین %(reference)s پوشش %(needed)s قلم مصرف‌شده را نمی‌دهد."
 
-#: domains/inventory/services/inventory_supply_service.py:376
+#: domains/inventory/services/inventory_supply_service.py:379
 #, python-format
 msgid "Supplies do not cover %(needed)s units for this sale."
 msgstr "تامین‌ها پوشش %(needed)s قلم برای این فروش را نمی‌دهند."
 
-#: domains/inventory/services/inventory_supply_service.py:424
+#: domains/inventory/services/inventory_supply_service.py:427
 msgid "Reversal quantity must be greater than zero."
 msgstr "تعداد بازگشتی باید بزرگ‌تر از صفر باشد."
 
-#: domains/inventory/services/inventory_supply_service.py:429
+#: domains/inventory/services/inventory_supply_service.py:432
 #, python-format
 msgid "Only %(available)s consumed units are reversible."
 msgstr "فقط %(available)s قلم مصرف‌شده قابل بازگشت است."
 
-#: domains/inventory/services/inventory_supply_service.py:457
+#: domains/inventory/services/inventory_supply_service.py:460
 msgid "Unsupported supply cost type."
 msgstr "نوع هزینهٔ تامین پشتیبانی نمی‌شود."
 
-#: domains/inventory/services/inventory_supply_service.py:461
+#: domains/inventory/services/inventory_supply_service.py:464
 msgid "A valid amount is required."
 msgstr "مبلغ معتبر الزامی است."
 
-#: domains/inventory/services/inventory_supply_service.py:464
+#: domains/inventory/services/inventory_supply_service.py:467
 msgid "Amount must be greater than or equal to zero."
 msgstr "مبلغ باید بزرگ‌تر یا مساوی صفر باشد."
 
-#: domains/marketplace/services.py:53
+#: domains/marketplace/services.py:88
 msgid "Discount type and value must be provided together."
 msgstr "نوع و مقدار تخفیف باید همزمان وارد شوند."
 
-#: domains/marketplace/services.py:57
+#: domains/marketplace/services.py:92
 msgid "Percentage discount cannot exceed 100."
 msgstr "تخفیف درصدی نمی‌تواند بیشتر از ۱۰۰ باشد."
 
-#: domains/marketplace/services.py:61
+#: domains/marketplace/services.py:96
 msgid "Fixed discount cannot exceed the price."
 msgstr "تخفیف ثابت نمی‌تواند از قیمت بیشتر باشد."
 

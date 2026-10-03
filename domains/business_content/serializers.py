@@ -1,4 +1,5 @@
 from django.core.validators import validate_unicode_slug
+from django.utils.translation import gettext as _
 from rest_framework import serializers
 
 from .contracts import empty_draft_content, validate_draft_content
@@ -29,7 +30,7 @@ class BusinessSlugScopeMixin:
             matches = matches.exclude(pk=self.instance.pk)
         if matches.exists():
             raise serializers.ValidationError(
-                "A content item with this slug already exists in this scope."
+                _("A content item with this slug already exists in this scope.")
             )
         return slug
 
