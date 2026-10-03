@@ -19,6 +19,7 @@ from .views import (
     VendorPagePublish,
     VendorPageSEO,
     VendorProductOptionList,
+    VendorSuggestionPageList,
 )
 
 urlpatterns = [
@@ -56,4 +57,5 @@ urlpatterns = [
     path("vendor/options/products", VendorProductOptionList.as_view()),
     path("vendor/options/categories", VendorCategoryOptionList.as_view()),
     path("vendor/component-contracts", VendorComponentContractList.as_view()),
+    path("vendor/suggestions", VendorSuggestionPageList.as_view()),
 ]

@@ -3,7 +3,7 @@ from django.utils.translation import gettext as _
 from rest_framework import serializers
 
 from .contracts import empty_draft_content, validate_draft_content
-from .models import LandingPage, Page, SEORecord
+from .models import LandingPage, Page, SEORecord, SuggestionPage
 from .services import LandingPageContentResolver, SEOService
 
 
@@ -175,3 +175,16 @@ class SEORecordSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "resource_type", "resource_id", "created_at", "updated_at"]
+
+
+class SuggestionPageSerializer(serializers.ModelSerializer):
+    """Read-only projection of the pages the panel offers to create.
+
+    ``activate`` is a management flag the view filters on server-side, and
+    ``component_lists`` has no consumer yet, so neither is sent to the panels.
+    """
+
+    class Meta:
+        model = SuggestionPage
+        fields = ["id", "title", "descriptions", "required", "slug"]
+        read_only_fields = fields

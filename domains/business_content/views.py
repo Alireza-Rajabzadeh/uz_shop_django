@@ -14,7 +14,7 @@ from domains.vendor.auth import VendorJWTAuthentication
 
 from .cache import HOME_CACHE_KEY, landing_page_cache_key, page_cache_key
 from .contracts import CONTRACTS_FILE
-from .models import LandingPage, Page, SEORecord
+from .models import LandingPage, Page, SEORecord, SuggestionPage
 from .serializers import (
     LandingPageContentSerializer,
     LandingPageDetailSerializer,
@@ -23,6 +23,7 @@ from .serializers import (
     PageDetailSerializer,
     PageSerializer,
     SEORecordSerializer,
+    SuggestionPageSerializer,
 )
 from .services import (
     LandingPageContentResolver,
@@ -383,6 +384,21 @@ class VendorComponentContractList(VendorContentAPIView):
     def get(self, request):
         data, error = read_component_contracts()
         return error if error is not None else api_response(data=data)
+
+
+class VendorSuggestionPageList(VendorContentAPIView):
+    """The pages this vendor is offered when creating content.
+
+    Suggestions are shared reference data — every vendor sees the same list —
+    so unlike the authoring routes there is no business scope to apply. Only
+    `activate` decides visibility; the order is the seeded `id` order.
+    """
+
+    def get(self, request):
+        suggestions = SuggestionPage.objects.filter(activate=True)
+        return api_response(
+            data=SuggestionPageSerializer(suggestions, many=True).data
+        )
 
 
 class VendorLandingPageList(VendorContentList):
