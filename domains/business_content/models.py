@@ -81,6 +81,45 @@ class Page(models.Model):
         return self.title
 
 
+class SuggestionPage(models.Model):
+    """A page the panel offers to create on the vendor's behalf.
+
+    This is shared reference data, not business-owned content: every vendor
+    sees the same suggestions, so it deliberately has no `business` FK (that
+    rule applies to `Page`/`LandingPage`, which a vendor actually authors).
+    The *result* of acting on a suggestion is still a per-business `Page` —
+    the suggestion only describes what to offer.
+
+    `component_lists` holds the component vocabulary a suggestion may be built
+    from and starts empty until the rules for which components each suggestion
+    allows are agreed.
+    """
+
+    title = models.CharField(max_length=255)
+    descriptions = models.TextField(blank=True, default="")
+    required = models.BooleanField(default=False)
+    activate = models.BooleanField(default=True)
+    slug = models.SlugField(allow_unicode=True)
+    component_lists = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "business_content_suggestion_page"
+        ordering = ["id"]
+        constraints = [
+            # Suggestions are identified by their canonical slug, so the
+            # panel can match one against an existing page by slug alone.
+            models.UniqueConstraint(
+                fields=["slug"],
+                name="business_content_suggestion_page_slug_unique",
+            ),
+        ]
+
+    def __str__(self):
+        return self.title
+
+
 class SEORecord(models.Model):
     resource_type = models.CharField(max_length=64)
     resource_id = models.BigIntegerField()
