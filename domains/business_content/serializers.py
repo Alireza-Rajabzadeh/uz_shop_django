@@ -6,27 +6,35 @@ from .models import LandingPage, Page, SEORecord
 from .services import LandingPageContentResolver, SEOService
 
 
-class ContentSlugScopeMixin:
-    """Slugs are globally unique across platform content.
+class BusinessSlugScopeMixin:
+    """Slug uniqueness is scoped to the owning business.
 
-    The serializer keeps a duplicate a 400 instead of an IntegrityError. The
-    serializers declare ``slug`` and ``Meta.validators = []`` explicitly so DRF
-    does not build its own uniqueness validators from the model constraint —
-    keeping one source of truth for the rule.
+    The view always puts the caller's business in the serializer context, and
+    ``business`` is never accepted from the payload — it is assigned on
+    ``save()``. The DB constraint in the models backs this up, but a serializer
+    check keeps duplicates a 400 instead of an IntegrityError.
+
+    The serializers declare ``slug`` and ``Meta.validators = []`` explicitly so
+    DRF does not build its own uniqueness validators from that constraint:
+    they would validate across every business, because the authoring business
+    lives in the view, not in the payload.
     """
 
     def validate_slug(self, slug):
-        matches = self.Meta.model.objects.filter(slug=slug)
+        business = self.context.get("business")
+        if business is None:
+            return slug
+        matches = self.Meta.model.objects.filter(slug=slug, business=business)
         if self.instance is not None:
             matches = matches.exclude(pk=self.instance.pk)
         if matches.exists():
             raise serializers.ValidationError(
-                "A content item with this slug already exists."
+                "A content item with this slug already exists in this scope."
             )
         return slug
 
 
-class LandingPageSerializer(ContentSlugScopeMixin, serializers.ModelSerializer):
+class LandingPageSerializer(BusinessSlugScopeMixin, serializers.ModelSerializer):
     slug = serializers.SlugField(
         max_length=50,
         allow_unicode=True,
@@ -43,6 +51,7 @@ class LandingPageSerializer(ContentSlugScopeMixin, serializers.ModelSerializer):
         validators = []
         fields = [
             "id",
+            "business",
             "title",
             "slug",
             "draft_content",
@@ -53,7 +62,7 @@ class LandingPageSerializer(ContentSlugScopeMixin, serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        read_only_fields = ["id", "business", "created_at", "updated_at"]
 
 
 class LandingPageContentSerializer(serializers.ModelSerializer):
@@ -89,7 +98,7 @@ class LandingPageDetailSerializer(LandingPageSerializer):
         return LandingPageContentResolver.for_authoring().resolve(page.draft_content)
 
 
-class PageSerializer(ContentSlugScopeMixin, serializers.ModelSerializer):
+class PageSerializer(BusinessSlugScopeMixin, serializers.ModelSerializer):
     slug = serializers.SlugField(
         max_length=50,
         allow_unicode=True,
@@ -106,6 +115,7 @@ class PageSerializer(ContentSlugScopeMixin, serializers.ModelSerializer):
         validators = []
         fields = [
             "id",
+            "business",
             "title",
             "slug",
             "draft_content",
@@ -116,7 +126,7 @@ class PageSerializer(ContentSlugScopeMixin, serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        read_only_fields = ["id", "business", "created_at", "updated_at"]
 
 
 class PageContentSerializer(serializers.ModelSerializer):

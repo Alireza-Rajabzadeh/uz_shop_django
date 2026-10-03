@@ -40,6 +40,7 @@ urlpatterns = [
         include("domains.business_payments.urls"),
     ),
     path("api/content/", include("domains.content.urls")),
+    path("api/business-content/", include("domains.business_content.urls")),
     path("api/wishlist", WishlistListCreate.as_view()),
     path("api/wishlist/", include("domains.wishlist.urls")),
     path("api/preorder", PreOrderListCreate.as_view()),

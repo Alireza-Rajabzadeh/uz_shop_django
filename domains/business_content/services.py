@@ -2,19 +2,28 @@ from copy import deepcopy
 
 from django.utils import timezone
 
-from domains.catalog.models import Brand, Category
+from domains.business.models import BusinessProfile
 from domains.catalog.services import CategoryService, ProductService, StorefrontProductService
 
 from .contracts import load_content_contracts
 from .models import LandingPage, Page, SEORecord
 
 
-class SEOService:
-    PUBLIC_RESOURCE_MODELS = {
-        "brand": Brand,
-        "category": Category,
-    }
+def public_business_id():
+    """Owner used by the unauthenticated delivery routes.
 
+    `BusinessProfile` is a singleton in practice, so the shared storefront has
+    exactly one business to read. When none exists yet there is no owner to
+    resolve, and the returned ``None`` simply matches nothing, which the views
+    already translate into a 404.
+    """
+    return BusinessProfile.objects.values_list("id", flat=True).first()
+
+
+class SEOService:
+    #: Only the two page-shaped resources live in this domain. Catalog
+    #: resources (product/category/brand) keep their SEO records in
+    #: `domains.content`, which owns the public `seo/<type>/<slug>` route.
     @staticmethod
     def get_for(resource_type, resource_id):
         try:
@@ -34,42 +43,12 @@ class SEOService:
             "metadata": record.metadata,
         }
 
-    @classmethod
-    def get_public_resource(cls, resource_type, slug):
-        model = cls.PUBLIC_RESOURCE_MODELS.get(resource_type)
-        if model is None:
-            return None
-        resource = model.objects.filter(slug=slug).first()
-        if resource is None:
-            return None
-        if resource_type == "category" and not cls._category_is_active(resource):
-            return None
-        return {
-            "resource": {
-                "id": resource.id,
-                "slug": resource.slug,
-                "name": resource.name,
-            },
-            "seo": cls.get_for(resource_type, resource.id),
-        }
-
-    @staticmethod
-    def _category_is_active(category):
-        seen = set()
-        current = category
-        while current and current.id not in seen:
-            seen.add(current.id)
-            if current.status.name.casefold() != "active":
-                return False
-            current = current.parent
-        return current is None
-
 
 class PageService:
     HOME_SLUG = "home"
 
     def get_by_slug(self, slug):
-        return Page.objects.get(slug=slug)
+        return Page.objects.get(slug=slug, business_id=public_business_id())
 
     def get_home_page(self):
         return self.get_by_slug(self.HOME_SLUG)
@@ -87,7 +66,7 @@ class PageService:
 
 class LandingPageService:
     def get_by_slug(self, slug):
-        return LandingPage.objects.get(slug=slug)
+        return LandingPage.objects.get(slug=slug, business_id=public_business_id())
 
     def delete_page(self, instance):
         instance.delete()

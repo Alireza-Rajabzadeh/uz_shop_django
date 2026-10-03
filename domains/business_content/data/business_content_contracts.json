@@ -1,0 +1,382 @@
+{
+  "contract_version": 4,
+  "components": [
+    {
+      "key": "hero_slider",
+      "name": "Hero Banner Slider",
+      "version": 1,
+      "description": "A prominent wide banner slider designed for the first section of a page.",
+      "props": {
+        "slides": {
+          "type": "array",
+          "required": true,
+          "min_items": 1,
+          "max_items": 8,
+          "description": "Hero banners. Place this component first for the strongest visual impact.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "image": {
+                "type": "image",
+                "required": true,
+                "ratio": "8:3",
+                "width": 1920,
+                "height": 720,
+                "enforce_dimensions": true,
+                "description": "Banner image. Must be 1920 x 720 pixels (8:3)."
+              },
+              "title": {
+                "type": "string",
+                "required": true,
+                "description": "Main banner heading."
+              },
+              "subtitle": {
+                "type": "string",
+                "description": "Short supporting text."
+              },
+              "link": {
+                "type": "link",
+                "description": "Optional destination URL."
+              },
+              "buttonLabel": {
+                "type": "string",
+                "default": "مشاهده",
+                "description": "Call-to-action label."
+              }
+            }
+          }
+        },
+        "autoplay": {
+          "type": "boolean",
+          "default": true,
+          "description": "Advance slides automatically."
+        },
+        "autoplayDelay": {
+          "type": "number",
+          "default": 6000,
+          "description": "Delay in milliseconds (3000-15000)."
+        }
+      }
+    },
+    {
+      "key": "product_slider",
+      "name": "Product Slider",
+      "version": 1,
+      "description": "Displays a horizontal slider of products.",
+      "props": {
+        "title": {
+          "type": "string",
+          "description": "Optional slider heading text."
+        },
+        "sub_title": {
+          "type": "string",
+          "description": "Secondary heading text."
+        },
+        "showAllLink": {
+          "type": "link",
+          "description": "Link shown in the 'view all' button."
+        },
+        "variant": {
+          "type": "string",
+          "enum": [
+            "default",
+            "primary",
+            "accent",
+            "dark"
+          ],
+          "default": "default",
+          "description": "Visual variant of the slider section."
+        },
+        "items": {
+          "type": "model",
+          "cardinality": "many",
+          "required": true,
+          "min_items": 1,
+          "description": "Products selected for this slider. Landing content stores product IDs.",
+          "data_source": {
+            "resource": "products",
+            "store": "id",
+            "searchable": true
+          }
+        },
+        "backgroundColor": {
+          "type": "color",
+          "description": "Optional slider background color override."
+        },
+        "timer": {
+          "type": "string",
+          "description": "Countdown target date (ISO 8601)."
+        }
+      }
+    },
+    {
+      "key": "promotional_product_slider",
+      "name": "Product Slider With Promotion",
+      "version": 1,
+      "description": "A product slider with a fixed promotional image at its starting edge.",
+      "props": {
+        "title": {
+          "type": "string",
+          "description": "Optional slider heading text."
+        },
+        "sub_title": {
+          "type": "string",
+          "description": "Secondary heading text."
+        },
+        "showAllLink": {
+          "type": "link",
+          "description": "Link shown in the 'view all' button."
+        },
+        "variant": {
+          "type": "string",
+          "enum": ["default", "primary", "accent", "dark"],
+          "default": "default",
+          "description": "Visual variant of the slider section."
+        },
+        "items": {
+          "type": "model",
+          "cardinality": "many",
+          "required": true,
+          "min_items": 1,
+          "description": "Products selected for this slider. Landing content stores product IDs.",
+          "data_source": {
+            "resource": "products",
+            "store": "id",
+            "searchable": true
+          }
+        },
+        "leadingImage": {
+          "type": "image",
+          "required": true,
+          "ratio": "3:4",
+          "width": 600,
+          "height": 800,
+          "description": "Promotional image fixed at the starting edge while products scroll beneath it."
+        },
+        "leadingImageLink": {
+          "type": "link",
+          "description": "Optional destination for the promotional image."
+        },
+        "backgroundColor": {
+          "type": "color",
+          "description": "Optional slider background color override."
+        },
+        "timer": {
+          "type": "string",
+          "description": "Countdown target date (ISO 8601)."
+        }
+      }
+    },
+    {
+      "key": "small_banner",
+      "name": "Small Banner",
+      "version": 1,
+      "description": "Displays a row of small linked banner cards.",
+      "props": {
+        "title": {
+          "type": "string",
+          "description": "Section heading text."
+        },
+        "items": {
+          "type": "array",
+          "required": true,
+          "min_items": 1,
+          "description": "Banner entries with link, image, and title.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "link": {
+                "type": "link",
+                "required": true,
+                "description": "Destination URL when the banner is clicked."
+              },
+              "image": {
+                "type": "image",
+                "ratio": "4:3",
+                "width": 640,
+                "height": 480,
+                "description": "Banner background image. Recommended ratio 4:3."
+              },
+              "bgColor": {
+                "type": "string",
+                "description": "Fallback background color used when no image is set."
+              },
+              "title": {
+                "type": "string",
+                "required": true,
+                "description": "Banner headline."
+              },
+              "subtitle": {
+                "type": "string",
+                "description": "Banner supporting text."
+              }
+            }
+          }
+        },
+        "max": {
+          "type": "number",
+          "description": "Maximum number of banners to render."
+        }
+      }
+    },
+    {
+      "key": "category_grid",
+      "name": "Category Grid",
+      "version": 1,
+      "description": "Displays a horizontally scrollable grid of category shortcuts.",
+      "props": {
+        "title": {
+          "type": "string",
+          "description": "Section heading text."
+        },
+        "categories": {
+          "type": "model",
+          "cardinality": "many",
+          "required": true,
+          "min_items": 1,
+          "description": "Categories selected for this grid. Landing content stores category IDs.",
+          "data_source": {
+            "resource": "categories",
+            "store": "id",
+            "searchable": true
+          }
+        },
+        "max": {
+          "type": "number",
+          "description": "Maximum number of categories to render."
+        }
+      }
+    },
+    {
+      "key": "rich_text",
+      "name": "Rich Text",
+      "version": 1,
+      "description": "Displays a section of rich text content.",
+      "props": {
+        "content": {
+          "type": "rich_text",
+          "required": true,
+          "description": "Rich text (Markdown) content to display."
+        }
+      }
+    },
+    {
+      "key": "link_list",
+      "name": "Link List",
+      "version": 1,
+      "description": "Displays an optional title and a list of linked entries.",
+      "props": {
+        "title": {
+          "type": "string",
+          "description": "Optional section heading text."
+        },
+        "links": {
+          "type": "array",
+          "required": true,
+          "min_items": 1,
+          "description": "Link entries with a label and destination path.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string",
+                "required": true,
+                "description": "Link label."
+              },
+              "link": {
+                "type": "link",
+                "required": true,
+                "description": "Internal path, HTTP(S) URL, email, or telephone destination."
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "key": "business_contact",
+      "name": "Business Contact",
+      "version": 1,
+      "description": "Displays public business contact details. Empty phone_keys preserves backend ordering; explicit keys use the selected key order.",
+      "props": {
+        "phone_keys": {
+          "type": "array",
+          "default": [],
+          "description": "Optional ordered public phone keys.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "show_email": {
+          "type": "boolean",
+          "default": true
+        },
+        "show_address": {
+          "type": "boolean",
+          "default": true
+        },
+        "show_working_hours": {
+          "type": "boolean",
+          "default": false
+        },
+        "show_availability": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    {
+      "key": "social_links",
+      "name": "Social Links",
+      "version": 1,
+      "description": "Displays public social links. Empty social_keys preserves backend ordering; explicit keys use the selected key order.",
+      "props": {
+        "social_keys": {
+          "type": "array",
+          "default": [],
+          "description": "Optional ordered public social-link keys.",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "key": "picture",
+      "name": "Picture",
+      "version": 1,
+      "description": "Displays a single image with optional caption and link.",
+      "props": {
+        "image": {
+          "type": "image",
+          "required": true,
+          "description": "The image to display."
+        },
+        "altText": {
+          "type": "string",
+          "required": true,
+          "description": "Alternative text for accessibility."
+        },
+        "link": {
+          "type": "link",
+          "description": "Optional destination URL. Wraps the image in a link."
+        },
+        "caption": {
+          "type": "string",
+          "description": "Optional caption text below the image."
+        },
+        "objectFit": {
+          "type": "string",
+          "enum": ["cover", "contain"],
+          "default": "cover",
+          "description": "How the image fills its container."
+        },
+        "openInNewTab": {
+          "type": "boolean",
+          "default": false,
+          "description": "Open link in a new browser tab."
+        }
+      }
+    }
+  ]
+}

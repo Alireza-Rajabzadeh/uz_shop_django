@@ -7,6 +7,13 @@ class LandingPage(models.Model):
         PUBLISHED = "published", "Published"
         ARCHIVED = "archived", "Archived"
 
+    #: Every row belongs to a business. There is deliberately no shared/admin
+    #: scope here: platform-owned content lives in `domains.content`.
+    business = models.ForeignKey(
+        "business.BusinessProfile",
+        on_delete=models.CASCADE,
+        related_name="business_content_landing_pages",
+    )
     title = models.CharField(max_length=255)
     slug = models.SlugField(allow_unicode=True)
     draft_content = models.JSONField(default=dict, blank=True)
@@ -20,15 +27,14 @@ class LandingPage(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "content_landing_page"
+        db_table = "business_content_landing_page"
         ordering = ["-updated_at"]
         constraints = [
-            # Platform-owned content only: every row belongs to the shared
-            # storefront, so slugs are globally unique. Business-owned pages
-            # live in `domains.business_content`.
+            # `business` is required, so one scope constraint is enough: slugs
+            # only have to be unique inside the owning business.
             models.UniqueConstraint(
-                fields=["slug"],
-                name="content_landing_page_slug_unique",
+                fields=["business", "slug"],
+                name="business_content_landing_page_business_slug_unique",
             ),
         ]
 
@@ -42,6 +48,13 @@ class Page(models.Model):
         PUBLISHED = "published", "Published"
         ARCHIVED = "archived", "Archived"
 
+    #: Required owner. The platform `home` page is not duplicated here; a
+    #: business home only exists once the business creates it.
+    business = models.ForeignKey(
+        "business.BusinessProfile",
+        on_delete=models.CASCADE,
+        related_name="business_content_pages",
+    )
     title = models.CharField(max_length=255)
     slug = models.SlugField(allow_unicode=True)
     draft_content = models.JSONField(default=dict, blank=True)
@@ -55,13 +68,12 @@ class Page(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "content_page"
+        db_table = "business_content_page"
         ordering = ["-updated_at"]
         constraints = [
-            # Includes the platform `home` page.
             models.UniqueConstraint(
-                fields=["slug"],
-                name="content_page_slug_unique",
+                fields=["business", "slug"],
+                name="business_content_page_business_slug_unique",
             ),
         ]
 
@@ -83,12 +95,12 @@ class SEORecord(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "content_seo_record"
+        db_table = "business_content_seo_record"
         ordering = ["id"]
         constraints = [
             models.UniqueConstraint(
                 fields=["resource_type", "resource_id"],
-                name="content_seo_resource_unique",
+                name="business_content_seo_resource_unique",
             )
         ]
 

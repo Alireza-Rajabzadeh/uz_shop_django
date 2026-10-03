@@ -5,8 +5,8 @@ from .models import LandingPage, Page, SEORecord
 
 @admin.register(LandingPage)
 class LandingPageAdmin(admin.ModelAdmin):
-    list_display = ["id", "title", "slug", "status", "published_at", "updated_at"]
-    list_filter = ["status"]
+    list_display = ["id", "title", "slug", "business", "status", "published_at", "updated_at"]
+    list_filter = ["status", "business"]
     search_fields = ["title", "slug"]
     prepopulated_fields = {"slug": ["title"]}
     readonly_fields = ["created_at", "updated_at"]
@@ -14,8 +14,8 @@ class LandingPageAdmin(admin.ModelAdmin):
 
 @admin.register(Page)
 class PageAdmin(admin.ModelAdmin):
-    list_display = ["id", "title", "slug", "status", "published_at", "updated_at"]
-    list_filter = ["status"]
+    list_display = ["id", "title", "slug", "business", "status", "published_at", "updated_at"]
+    list_filter = ["status", "business"]
     search_fields = ["title", "slug"]
     prepopulated_fields = {"slug": ["title"]}
     readonly_fields = ["created_at", "updated_at"]

@@ -3,17 +3,15 @@ import json
 from django.utils.translation import gettext as _
 from rest_framework.exceptions import NotFound
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated
+from rest_framework.permissions import AllowAny, BasePermission
 from rest_framework.views import APIView
 
 from core.permissions import AdminModelPermissions, CustomActionPermission
 from core.responses import api_response
 from core.services import CacheService
-from domains.business.models import BusinessProfile
 from domains.catalog.models import Brand, Category, Product
 from domains.catalog.services import CategoryService, ProductService
 from domains.users.auth import AdminJWTAuthentication
-from domains.vendor.auth import VendorJWTAuthentication
 
 from .contracts import CONTRACTS_FILE
 from .cache import HOME_CACHE_KEY, landing_page_cache_key, page_cache_key
@@ -408,9 +406,7 @@ class PublicLandingPage(LandingPageBySlug):
         if cached is not None:
             return api_response(data=cached)
         response = super().get(request, slug)
-        page = LandingPage.objects.only("cache_ttl").get(
-            slug=slug, business__isnull=True
-        )
+        page = LandingPage.objects.only("cache_ttl").get(slug=slug)
         if page.cache_ttl > 0:
             CacheService().put_public(key, response.data["data"], ttl=page.cache_ttl)
         return response
@@ -475,7 +471,7 @@ class PublicPage(PageBySlug):
         if cached is not None:
             return api_response(data=cached)
         response = super().get(request, slug)
-        page = Page.objects.only("cache_ttl").get(slug=slug, business__isnull=True)
+        page = Page.objects.only("cache_ttl").get(slug=slug)
         if page.cache_ttl > 0:
             CacheService().put_public(key, response.data["data"], ttl=page.cache_ttl)
         return response
@@ -483,7 +479,7 @@ class PublicPage(PageBySlug):
 
 def read_component_contracts():
     """Return ``(payload, None)`` or ``(None, error_response)`` for the
-    synced contracts file, shared by the admin and vendor contract views."""
+    synced contracts file backing the admin contract view."""
     if not CONTRACTS_FILE.exists():
         return None, api_response(
             success=False,
@@ -558,242 +554,3 @@ class AdminCategoryOptionList(AdminContentOptionList):
         return CategoryService().content_selector_options(search)
 
     serialize_option = staticmethod(serialize_category_option)
-
-
-# ─────────────────────── Vendor content management ───────────────────────
-# Vendor-authenticated authoring scoped to the caller's business. Rows with
-# `business IS NULL` are the shared/admin storefront content, so a vendor
-# never sees or touches them through these endpoints, and public slug routes
-# never serve business rows.
-
-
-class VendorContentAPIView(APIView):
-    authentication_classes = [VendorJWTAuthentication]
-    permission_classes = [IsAuthenticated]
-
-    model = None
-    serializer_class = None
-    detail_serializer = None
-    service_class = None
-    not_found_message = ""
-    ordering_fields = {"id", "title", "slug", "status", "created_at", "updated_at"}
-
-    @staticmethod
-    def _get_business(request):
-        business = BusinessProfile.objects.filter(vendor=request.user).first()
-        if business is None:
-            raise NotFound(_("Business profile not found."))
-        return business
-
-    def get_object(self, request, resource_id):
-        business = self._get_business(request)
-        instance = self.model.objects.filter(
-            id=resource_id, business=business
-        ).first()
-        if instance is None:
-            raise NotFound(_(self.not_found_message))
-        return business, instance
-
-
-class VendorContentList(VendorContentAPIView):
-    def get(self, request):
-        business = self._get_business(request)
-        ordering = request.query_params.get("ordering", "-updated_at")
-        field = ordering.removeprefix("-")
-        if field not in self.ordering_fields:
-            ordering = "-updated_at"
-        queryset = self.model.objects.filter(business=business).order_by(ordering)
-        data = paginate_content(queryset, request, self, self.serializer_class)
-        return api_response(data=data)
-
-    def post(self, request):
-        business = self._get_business(request)
-        serializer = self.serializer_class(
-            data=request.data, context={"business": business}
-        )
-        serializer.is_valid(raise_exception=True)
-        instance = serializer.save(business=business)
-        return api_response(
-            data=self.detail_serializer(instance).data, status_code=201
-        )
-
-
-class VendorContentDetail(VendorContentAPIView):
-    def get(self, request, resource_id):
-        _, instance = self.get_object(request, resource_id)
-        return api_response(data=self.detail_serializer(instance).data)
-
-    def patch(self, request, resource_id):
-        business, instance = self.get_object(request, resource_id)
-        serializer = self.serializer_class(
-            instance, data=request.data, partial=True, context={"business": business}
-        )
-        serializer.is_valid(raise_exception=True)
-        instance = serializer.save()
-        return api_response(data=self.detail_serializer(instance).data)
-
-    def delete(self, request, resource_id):
-        _, instance = self.get_object(request, resource_id)
-        self.service_class().delete_page(instance)
-        return api_response(data=None)
-
-
-class VendorContentPublish(VendorContentAPIView):
-    def post(self, request, resource_id):
-        _, instance = self.get_object(request, resource_id)
-        self.service_class().publish_page(instance)
-        return api_response(data=self.detail_serializer(instance).data)
-
-
-class VendorContentPreview(VendorContentAPIView):
-    content_serializer = None
-    allowed_statuses = ()
-
-    def get(self, request, resource_id):
-        _, instance = self.get_object(request, resource_id)
-        if instance.status not in self.allowed_statuses:
-            raise NotFound(_(self.not_found_message))
-        instance.selected_content = LandingPageContentResolver().resolve(
-            instance.draft_content
-        )
-        return api_response(data=self.content_serializer(instance).data)
-
-
-class VendorResourceSEOView(ResourceSEOView):
-    authentication_classes = [VendorJWTAuthentication]
-    permission_classes = [IsAuthenticated]
-
-    model = None
-    not_found_message = ""
-
-    def resolve_resource(self, request, resource_id):
-        business = VendorContentAPIView._get_business(request)
-        resource = (
-            self.model.objects.filter(id=resource_id, business=business).first()
-        )
-        if resource is None:
-            raise NotFound(_(self.not_found_message))
-        return resource
-
-
-class VendorContentOptionList(VendorContentAPIView):
-    def serialize_option(self, item):
-        raise NotImplementedError
-
-    def get_queryset(self, business, search):
-        raise NotImplementedError
-
-    def get(self, request):
-        business = self._get_business(request)
-        search = request.query_params.get("search", "").strip()
-        queryset = self.get_queryset(business, search)
-        data = paginate_content(queryset, request, self)
-        data["results"] = [self.serialize_option(item) for item in data["results"]]
-        return api_response(data=data)
-
-
-class VendorComponentContractList(VendorContentAPIView):
-    """The editor-facing contract vocabulary.
-
-    Vendors author against the same synced contracts file the admin editor
-    uses, so ``contract_version`` and component definitions always match what
-    ``validate_draft_content`` accepts. The panel-local registry is only the
-    rendering half.
-    """
-
-    def get(self, request):
-        data, error = read_component_contracts()
-        return error if error is not None else api_response(data=data)
-
-
-class VendorLandingPageList(VendorContentList):
-    model = LandingPage
-    serializer_class = LandingPageSerializer
-    detail_serializer = LandingPageDetailSerializer
-
-
-class VendorLandingPageDetail(VendorContentDetail):
-    model = LandingPage
-    serializer_class = LandingPageSerializer
-    detail_serializer = LandingPageDetailSerializer
-    service_class = LandingPageService
-    not_found_message = "Landing page not found."
-
-
-class VendorLandingPagePublish(VendorContentPublish):
-    model = LandingPage
-    detail_serializer = LandingPageDetailSerializer
-    service_class = LandingPageService
-    not_found_message = "Landing page not found."
-
-
-class VendorLandingPagePreview(VendorContentPreview):
-    model = LandingPage
-    content_serializer = LandingPageContentSerializer
-    allowed_statuses = (LandingPage.Status.DRAFT, LandingPage.Status.PUBLISHED)
-    not_found_message = "Landing page not found."
-
-
-class VendorLandingPageSEO(VendorResourceSEOView):
-    resource_type = "landing_page"
-    model = LandingPage
-    not_found_message = "Landing page not found."
-
-
-class VendorPageList(VendorContentList):
-    model = Page
-    serializer_class = PageSerializer
-    detail_serializer = PageDetailSerializer
-
-
-class VendorPageDetail(VendorContentDetail):
-    model = Page
-    serializer_class = PageSerializer
-    detail_serializer = PageDetailSerializer
-    service_class = PageService
-    not_found_message = "Page not found."
-
-
-class VendorPagePublish(VendorContentPublish):
-    model = Page
-    detail_serializer = PageDetailSerializer
-    service_class = PageService
-    not_found_message = "Page not found."
-
-
-class VendorPagePreview(VendorContentPreview):
-    model = Page
-    content_serializer = PageContentSerializer
-    allowed_statuses = (Page.Status.DRAFT, Page.Status.PUBLISHED)
-    not_found_message = "Page not found."
-
-
-class VendorPageSEO(VendorResourceSEOView):
-    resource_type = "page"
-    model = Page
-    not_found_message = "Page not found."
-
-
-class VendorProductOptionList(VendorContentOptionList):
-    serialize_option = staticmethod(serialize_product_option)
-
-    def get_queryset(self, business, search):
-        # Same scope as every other vendor product route: the products that
-        # sit in the business's registered categories.
-        category_ids = business.categories.values_list("category_id", flat=True)
-        return (
-            ProductService()
-            .content_selector_options(search)
-            .filter(categories__id__in=category_ids)
-            .distinct()
-        )
-
-
-class VendorCategoryOptionList(VendorContentOptionList):
-    serialize_option = staticmethod(serialize_category_option)
-
-    def get_queryset(self, business, search):
-        category_ids = business.categories.values_list("category_id", flat=True)
-        return CategoryService().content_selector_options(search).filter(
-            id__in=category_ids
-        )
