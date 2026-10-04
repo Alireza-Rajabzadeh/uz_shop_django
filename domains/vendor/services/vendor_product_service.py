@@ -16,11 +16,6 @@ class VendorProductService:
         "admin_rejected",
     })
 
-    VENDOR_CREATABLE_STATUSES = frozenset({
-        "wait_for_admin_confirmation",
-        "admin_rejected",
-    })
-
     @staticmethod
     def can_vendor_edit(product, vendor):
         if product.created_by_vendor_id != vendor.pk:
@@ -60,6 +55,134 @@ class VendorProductService:
             default=Value(False),
             output_field=BooleanField(),
         )
+
+    # ─────────────────────── Variants ───────────────────────
+
+    VARIANT_PENDING_STATUS = "wait_for_admin_confirmation"
+
+    # The two levels of the variant rules. Level one is the product: variants
+    # are only added or managed while the product itself is activated. Level
+    # two is the variant: its creator may still shape a row waiting for review,
+    # an active row is open, and nothing else is.
+    PRODUCT_VARIANT_STATUS = "active"
+    VARIANT_ACTIVE_STATUS = "active"
+    VARIANT_DETAIL_STATUSES = frozenset({VARIANT_PENDING_STATUS, VARIANT_ACTIVE_STATUS})
+    VARIANT_COMMERCIAL_STATUSES = frozenset({VARIANT_ACTIVE_STATUS})
+
+    @staticmethod
+    def is_variant_awaiting_confirmation(variant):
+        """True while the variant is still queued for admin review.
+
+        Status, not `confirmed_by`, is the gate: existing rows predate the
+        confirmation column and are already live.
+        """
+        return bool(variant.status_id) and (
+            variant.status.name.lower()
+            == VendorProductService.VARIANT_PENDING_STATUS
+        )
+
+    @staticmethod
+    def can_vendor_edit_variant(variant, vendor):
+        """Whether this vendor may reshape the variant (its selections).
+
+        Only the creator may edit, and only while the variant still waits for
+        admin confirmation. Once confirmed the definition is locked; the vendor
+        then manages price and stock instead.
+        """
+        if variant.created_by_vendor_id != vendor.pk:
+            return False
+        if variant.creator_model != "vendor.vendor":
+            return False
+        return VendorProductService.is_variant_awaiting_confirmation(variant)
+
+    @staticmethod
+    def can_vendor_read_variant(variant, vendor):
+        """Whether `vendor` may see this variant at all.
+
+        Only a pending row is hidden. Until an admin confirms it the draft
+        belongs to whoever created it, so another vendor must not see it — or
+        reach it through any id — while it waits. Everything else is shared
+        catalog and stays readable by every vendor selling the product.
+        """
+        if not VendorProductService.is_variant_awaiting_confirmation(variant):
+            return True
+        return (
+            variant.created_by_vendor_id == vendor.pk
+            and variant.creator_model == "vendor.vendor"
+        )
+
+    @staticmethod
+    def visible_variants(queryset, vendor):
+        """Restrict a variant queryset to the rows `vendor` may read.
+
+        Queryset form of `can_vendor_read_variant` for list endpoints; the two
+        express one rule and must stay in step.
+        """
+        pending = Q(status__name__iexact=VendorProductService.VARIANT_PENDING_STATUS)
+        mine = Q(created_by_vendor=vendor, creator_model="vendor.vendor")
+        return queryset.filter(~pending | mine)
+
+    @staticmethod
+    def _status_name(row):
+        """Lower-cased status name of a product or variant, `""` when unset."""
+        return row.status.name.lower() if row.status_id else ""
+
+    @staticmethod
+    def assert_product_can_manage_variants(product):
+        """Level one: variants may only be added or managed on an active product.
+
+        Drafts, products waiting for review, rejected and disabled products are
+        all closed for variant writes, so this runs before any payload is read.
+        """
+        if (
+            VendorProductService._status_name(product)
+            != VendorProductService.PRODUCT_VARIANT_STATUS
+        ):
+            raise PermissionDenied(
+                "This product must be active before its variants can be added or managed."
+            )
+
+    @staticmethod
+    def can_manage_variant_detail(variant):
+        """Level two for the definition: its own pending draft, or active."""
+        return (
+            VendorProductService._status_name(variant)
+            in VendorProductService.VARIANT_DETAIL_STATUSES
+        )
+
+    @staticmethod
+    def assert_variant_detail_manageable(variant):
+        """Gate for `PATCH /vendor/variants/<id>`.
+
+        Both levels are checked before the payload: the product has to be
+        active, and the variant has to be either its creator's pending draft or
+        an active row. `inactive` and half-pending rows are closed.
+        """
+        VendorProductService.assert_product_can_manage_variants(variant.product)
+        if not VendorProductService.can_manage_variant_detail(variant):
+            raise PermissionDenied(
+                "This variant cannot be edited while it is not active "
+                "or waiting for admin confirmation."
+            )
+
+    @staticmethod
+    def assert_variant_manageable(variant):
+        """Block commercial writes until an admin confirms the variant.
+
+        Pricing, stock, supplies and marketplace listing all sit downstream of
+        a reviewed, active definition, so they wait with it. The read endpoints
+        stay open: the vendor still needs to see their pending variant.
+        """
+        VendorProductService.assert_product_can_manage_variants(variant.product)
+        status_name = VendorProductService._status_name(variant)
+        if status_name == VendorProductService.VARIANT_PENDING_STATUS:
+            raise PermissionDenied(
+                "This variant is waiting for admin confirmation."
+            )
+        if status_name not in VendorProductService.VARIANT_COMMERCIAL_STATUSES:
+            raise PermissionDenied(
+                "This variant must be active before it can be managed."
+            )
 
     @staticmethod
     def find_similar_products(name, category_ids=None, limit=10, threshold=65):
@@ -140,6 +263,27 @@ class VendorProductService:
         return product
 
     @staticmethod
+    def create_vendor_variant(vendor, product, **data):
+        """Create a variant owned by the vendor and queued for review.
+
+        Ownership plus the pending status are what make the variant editable
+        by its creator and everything else blocked, so both are stamped here
+        rather than left for the view to remember.
+        """
+        from domains.catalog.models import ProductVariantStatus
+
+        wait_status = ProductVariantStatus.objects.get(
+            name__iexact=VendorProductService.VARIANT_PENDING_STATUS
+        )
+        variant = product_service.add_variant_to_product(
+            product, status_id=wait_status.pk, **data
+        )
+        variant.created_by_vendor = vendor
+        variant.creator_model = "vendor.vendor"
+        variant.save(update_fields=["created_by_vendor", "creator_model"])
+        return variant
+
+    @staticmethod
     def update_vendor_product(product, vendor, **data):
         if not VendorProductService.can_vendor_edit(product, vendor):
             raise PermissionDenied("You do not have permission to edit this product.")
@@ -166,6 +310,9 @@ class VendorProductService:
         return product
 
     @staticmethod
-    def can_add_variant(product):
-        status_name = product.status.name.lower() if product.status_id else ""
-        return status_name not in VendorProductService.VENDOR_CREATABLE_STATUSES
+    def can_manage_variants(product):
+        """Level one for creation: only an activated product takes variants."""
+        return (
+            VendorProductService._status_name(product)
+            == VendorProductService.PRODUCT_VARIANT_STATUS
+        )

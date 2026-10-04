@@ -136,16 +136,16 @@ class VendorProductSecurityTests(TestCase):
 
     def test_cannot_add_variant_while_pending(self):
         product = self._make_product(vendor=self.vendor, creator_model="vendor.vendor")
-        self.assertFalse(VendorProductService.can_add_variant(product))
+        self.assertFalse(VendorProductService.can_manage_variants(product))
 
     def test_cannot_add_variant_while_rejected(self):
         product = self._make_product(
             status=self.rejected_status, vendor=self.vendor, creator_model="vendor.vendor"
         )
-        self.assertFalse(VendorProductService.can_add_variant(product))
+        self.assertFalse(VendorProductService.can_manage_variants(product))
 
-    def test_can_add_variant_when_active(self):
+    def test_can_manage_variants_when_active(self):
         product = self._make_product(
             status=self.active_status, vendor=self.vendor, creator_model="vendor.vendor"
         )
-        self.assertTrue(VendorProductService.can_add_variant(product))
+        self.assertTrue(VendorProductService.can_manage_variants(product))

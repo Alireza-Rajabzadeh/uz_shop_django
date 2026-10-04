@@ -63,15 +63,26 @@ def _get_vendor_product(product_id, category_ids):
     return get_object_or_404(Product, id=product_id, categories__id__in=category_ids)
 
 
-def _get_vendor_variant(variant_id, category_ids):
-    """Resolve a variant the requesting vendor is allowed to manage."""
+def _get_vendor_variant(variant_id, category_ids, vendor):
+    """Resolve a variant the requesting vendor is allowed to see and manage."""
     from rest_framework.exceptions import NotFound
 
-    variant = get_object_or_404(ProductVariants, id=variant_id)
+    # `status` is load-bearing for the review gate, so it rides along instead
+    # of costing a query per request.
+    variant = get_object_or_404(
+        ProductVariants.objects.select_related(
+            "product", "product__status", "status"
+        ),
+        id=variant_id,
+    )
     product_ids = set(
         Product.objects.filter(categories__id__in=category_ids).values_list("id", flat=True)
     )
     if variant.product_id not in product_ids:
+        raise NotFound("Variant not found.")
+    # Another vendor's unconfirmed draft is not this vendor's to read, so it
+    # reports as missing rather than forbidden.
+    if not vendor_product_service.can_vendor_read_variant(variant, vendor):
         raise NotFound("Variant not found.")
     return variant
 
@@ -165,7 +176,9 @@ class VendorProductDetailView(APIView):
         if not category_ids:
             return api_response(False, "Business profile not found.", status_code=404)
         product = _get_vendor_product(id, category_ids)
-        serialized = VendorProductDetailSerializer(product).data
+        serialized = VendorProductDetailSerializer(
+            product, context={"vendor": request.user}
+        ).data
         serialized["editable"] = vendor_product_service.can_vendor_edit(product, request.user)
         serialized["created_by_me"] = product.created_by_vendor_id == request.user.pk
         return api_response(data=serialized)
@@ -519,33 +532,71 @@ class VendorProductVariantListCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, product_id):
-        _, category_ids = _get_business_category_ids(request.user)
+        business, category_ids = _get_business_category_ids(request.user)
         if not category_ids:
             return api_response(data=[])
         product = _get_vendor_product(product_id, category_ids)
-        variants = product_service.list_product_variants(
-            product, search=request.query_params.get("search", "").strip() or None
+        variants = list(
+            vendor_product_service.visible_variants(
+                product_service.list_product_variants(
+                    product,
+                    search=request.query_params.get("search", "").strip() or None,
+                ),
+                request.user,
+            )
         )
-        return api_response(
-            data=ProductVariantSerializer(variants, many=True).data
-        )
+        rows = ProductVariantSerializer(variants, many=True).data
+        # Pricing lives on BusinessOffer and stock lives on the business's own
+        # Inventory rows, so neither can come from the shared catalog
+        # serializer: one offer query, then one stock lookup per row. The
+        # edit gate is attached here too, so the panel hides the button from
+        # the same value the PATCH below enforces.
+        offers = {
+            offer.variant_id: offer
+            for offer in BusinessOffer.objects.filter(
+                business=business, variant__in=variants
+            )
+        }
+        for row, variant in zip(rows, variants):
+            row["editable"] = vendor_product_service.can_vendor_edit_variant(
+                variant, request.user
+            )
+            offer = offers.get(variant.id)
+            row["price"] = str(offer.price) if offer and offer.price is not None else None
+            row["discount_type"] = offer.discount_type if offer else None
+            row["discount_value"] = (
+                str(offer.discount_value)
+                if offer and offer.discount_value is not None
+                else None
+            )
+            # Overwrites the unscoped counts the serializer already computed.
+            row.update(inventory_service.get_stock_snapshot(variant, business=business))
+        return api_response(data=rows)
 
     def post(self, request, product_id):
         _, category_ids = _get_business_category_ids(request.user)
         if not category_ids:
             return api_response(False, "Business profile not found.", status_code=404)
         product = _get_vendor_product(product_id, category_ids)
-        if not vendor_product_service.can_add_variant(product):
-            raise PermissionDenied("Variants cannot be added until the product is confirmed by an admin.")
+        # Level one runs before the payload: no variant is added to a product
+        # that is not activated.
+        if not vendor_product_service.can_manage_variants(product):
+            raise PermissionDenied(
+                "This product must be active before its variants can be "
+                "added or managed."
+            )
         serializer = ProductVariantWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
-            variant = product_service.add_variant_to_product(
-                product, **serializer.validated_data
+            variant = vendor_product_service.create_vendor_variant(
+                request.user, product, **serializer.validated_data
             )
         except ProductService.ValidationError as exc:
             raise ValidationError(exc.errors) from exc
         result = ProductVariantSerializer(variant).data
+        result["editable"] = vendor_product_service.can_vendor_edit_variant(
+            variant, request.user
+        )
         return api_response(True, "Variant added.", result, status_code=201)
 
 
@@ -573,6 +624,9 @@ class VendorProductVariantFormOptionsView(APIView):
                 "name": product.name,
                 "category": (lambda c: c.id if c else None)(product.categories.order_by("id").first()),
                 "category_name": (lambda c: c.name if c else None)(product.categories.order_by("id").first()),
+                # Level one: the panel disables add and edit while the product
+                # itself is not activated, so the button never hides a 403.
+                "can_manage_variants": vendor_product_service.can_manage_variants(product),
             },
             # Inventory type options (normal / serialized) for the stock type
             # selector. Cost strategies belong to pricing and are served by
@@ -602,8 +656,8 @@ class VendorProductVariantDetailView(APIView):
         "expected_profit_percentage",
     )
 
-    def _get_vendor_variant(self, variant_id, category_ids):
-        return _get_vendor_variant(variant_id, category_ids)
+    def _get_vendor_variant(self, variant_id, category_ids, vendor):
+        return _get_vendor_variant(variant_id, category_ids, vendor)
 
     def _sanitize_offer_payload(self, request_data):
         # price/discount may be explicitly cleared with a blank value; the two
@@ -679,7 +733,7 @@ class VendorProductVariantDetailView(APIView):
         _, category_ids = _get_business_category_ids(request.user)
         if not category_ids:
             return api_response(False, "Business profile not found.", status_code=404)
-        variant = self._get_vendor_variant(variant_id, category_ids)
+        variant = self._get_vendor_variant(variant_id, category_ids, request.user)
         variant_data = ProductVariantSerializer(variant).data
 
         business = BusinessProfile.objects.filter(vendor=request.user).first()
@@ -706,6 +760,12 @@ class VendorProductVariantDetailView(APIView):
 
         return api_response(data={
             **variant_data,
+            "editable": vendor_product_service.can_vendor_edit_variant(
+                variant, request.user
+            ),
+            "awaiting_confirmation": (
+                vendor_product_service.is_variant_awaiting_confirmation(variant)
+            ),
             "product": {
                 "id": variant.product_id,
                 "name": variant.product.name,
@@ -730,10 +790,29 @@ class VendorProductVariantDetailView(APIView):
         _, category_ids = _get_business_category_ids(request.user)
         if not category_ids:
             return api_response(False, "Business profile not found.", status_code=404)
-        variant = self._get_vendor_variant(variant_id, category_ids)
+        variant = self._get_vendor_variant(variant_id, category_ids, request.user)
+        # Both levels are checked before the business lookup and before the
+        # payload: an active product, and a variant that is either its
+        # creator's pending draft or an active row.
+        vendor_product_service.assert_variant_detail_manageable(variant)
         business = BusinessProfile.objects.filter(vendor=request.user).first()
         if not business:
             return api_response(False, "Business profile not found.", status_code=404)
+
+        if vendor_product_service.is_variant_awaiting_confirmation(variant):
+            # Selections stay writable while the variant waits: that is the
+            # definition its creator is still shaping. Price and stock are
+            # exactly what admin review withholds, so a payload carrying
+            # either is refused rather than silently dropped.
+            blocked = [
+                key
+                for key in (*self.OFFER_FIELDS, "inventory", "serial_items")
+                if key in request.data
+            ]
+            if blocked:
+                raise PermissionDenied(
+                    "This variant is waiting for admin confirmation."
+                )
 
         offer_payload = self._sanitize_offer_payload(request.data)
         # Offer keys are stripped unconditionally: a blank strategy value that
@@ -764,6 +843,9 @@ class VendorProductVariantDetailView(APIView):
             business, variant, offer_payload, source=SOURCE_VENDOR
         )
         result = ProductVariantSerializer(variant).data
+        result["editable"] = vendor_product_service.can_vendor_edit_variant(
+            variant, request.user
+        )
         return api_response(data=result)
 
 
@@ -782,7 +864,11 @@ class VendorVariantMarketplaceStatusView(APIView):
         _, category_ids = _get_business_category_ids(request.user)
         if not category_ids:
             return api_response(False, "Business profile not found.", status_code=404)
-        variant = _get_vendor_variant(variant_id, category_ids)
+        variant = _get_vendor_variant(variant_id, category_ids, request.user)
+        # Listing a variant on the marketplace is downstream of review: the
+        # offer must not go live while the definition it prices is unapproved,
+        # and only an activated product sells at all.
+        vendor_product_service.assert_variant_manageable(variant)
         business = BusinessProfile.objects.filter(vendor=request.user).first()
         if not business:
             return api_response(False, "Business profile not found.", status_code=404)

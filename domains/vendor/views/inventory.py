@@ -39,6 +39,7 @@ from domains.marketplace.models import BusinessOffer
 from domains.marketplace.models.offer_price_history import SOURCE_VENDOR
 from domains.marketplace.services import MarketplacePricingService
 from domains.vendor.auth import VendorJWTAuthentication
+from domains.vendor.services.vendor_product_service import VendorProductService
 from domains.vendor.views.products import _get_business_category_ids
 
 
@@ -60,7 +61,12 @@ class VendorInventoryAPIView(APIView):
         return business
 
     def _get_vendor_variant(self, variant_id, business):
-        variant = get_object_or_404(ProductVariants, id=variant_id)
+        # `product__status` rides along because every write on this variant
+        # checks that the product is active first.
+        variant = get_object_or_404(
+            ProductVariants.objects.select_related("product", "product__status", "status"),
+            id=variant_id,
+        )
         from domains.catalog.models import Product
         product_ids = set(
             Product.objects.filter(
@@ -68,6 +74,12 @@ class VendorInventoryAPIView(APIView):
             ).values_list("id", flat=True)
         )
         if variant.product_id not in product_ids:
+            from rest_framework.exceptions import NotFound
+            raise NotFound("Variant not found.")
+        # `_get_business` resolved this business from the requester, so
+        # `business.vendor` is the caller. Another vendor's unconfirmed draft
+        # is not readable through these endpoints either.
+        if not VendorProductService.can_vendor_read_variant(variant, business.vendor):
             from rest_framework.exceptions import NotFound
             raise NotFound("Variant not found.")
         return variant
@@ -85,6 +97,7 @@ class VendorVariantInventoryRefreshView(VendorInventoryAPIView):
     def post(self, request, variant_id):
         business = self._get_business(request)
         variant = self._get_vendor_variant(variant_id, business)
+        VendorProductService.assert_variant_manageable(variant)
         try:
             inventory_service.refresh_variant_inventory(
                 variant=variant,
@@ -113,6 +126,7 @@ class VendorVariantPricingView(VendorInventoryAPIView):
     def patch(self, request, variant_id):
         business = self._get_business(request)
         variant = self._get_vendor_variant(variant_id, business)
+        VendorProductService.assert_variant_manageable(variant)
         serializer = VariantPricingWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
@@ -219,6 +233,7 @@ class VendorVariantSupplyListView(VendorInventoryAPIView):
     def post(self, request, variant_id):
         business = self._get_business(request)
         variant = self._get_vendor_variant(variant_id, business)
+        VendorProductService.assert_variant_manageable(variant)
         data = request.data.copy()
         data["variant_id"] = variant.id
         from rest_framework.parsers import JSONParser
@@ -257,6 +272,7 @@ class VendorSupplyDetailView(VendorInventoryAPIView):
     def patch(self, request, supply_id):
         business = self._get_business(request)
         supply = self._get_supply(supply_id, business)
+        VendorProductService.assert_variant_manageable(supply.variant)
         serializer = SupplyWriteSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         try:
@@ -271,6 +287,7 @@ class VendorSupplyDetailView(VendorInventoryAPIView):
     def delete(self, request, supply_id):
         business = self._get_business(request)
         supply = self._get_supply(supply_id, business)
+        VendorProductService.assert_variant_manageable(supply.variant)
         try:
             supply_service.delete_supply(supply)
         except InventorySupplyService.ValidationError as exc:
@@ -289,6 +306,7 @@ class VendorSupplyReceiveView(VendorInventoryAPIView):
         if supply.business_id != business.id:
             from rest_framework.exceptions import NotFound
             raise NotFound("Supply not found.")
+        VendorProductService.assert_variant_manageable(supply.variant)
         serializer = SupplyReceiveSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serial_items = serializer.validated_data.get("serial_items")

@@ -687,8 +687,11 @@ class InventoryService:
             for item in InventoryType.objects.all()
         ]
 
-    def get_summary(self, variant, business=None):
-        inv_type = self._detect_inventory_type(variant, business=business)
+    def get_summary(self, variant, business=None, inv_type=None):
+        # Callers that already resolved the type pass it in: detection is two
+        # queries, and a list would otherwise pay for it twice per row.
+        if inv_type is None:
+            inv_type = self._detect_inventory_type(variant, business=business)
         if inv_type == "normal":
             inventories = Inventory.objects.filter(variant=variant)
             if business is not None:
@@ -714,6 +717,23 @@ class InventoryService:
             "total_item_count": total,
             "sellable_item_count": sellable,
             "available_item_count": sellable,
+        }
+
+    def get_stock_snapshot(self, variant, business=None):
+        """Stock counts plus the strategy row, in one pass.
+
+        Lists need both, and the strategy row is what ``get_summary`` spends
+        its detection queries on anyway, so resolving it first and handing it
+        back keeps a row at the same query cost as a bare summary. The
+        strategy columns are keyed for API rows: callers merge the result into
+        a serialized variant.
+        """
+        inventory_type = self._get_inventory_type(variant, business=business)
+        return {
+            "inventory_strategy": inventory_type.id,
+            "inventory_strategy_code": inventory_type.code,
+            "inventory_strategy_name": inventory_type.fa_name or inventory_type.name,
+            **self.get_summary(variant, business=business, inv_type=inventory_type.code),
         }
 
     def get_variant_details(self, variant, business=None):

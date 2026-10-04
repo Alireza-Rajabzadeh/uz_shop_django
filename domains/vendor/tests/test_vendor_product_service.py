@@ -65,6 +65,11 @@ class VendorProductServiceTests(TestCase):
         self.inactive_status, _ = ProductStatus.objects.get_or_create(
             name="inactive"
         )
+        # Variants are only manageable while active, so the fixtures below need
+        # a real status row rather than a NULL one.
+        self.active_variant_status, _ = ProductVariantStatus.objects.get_or_create(
+            name="active"
+        )
 
     def _make_product(self, status=None, vendor=None, creator_model=""):
         if status is None:
@@ -233,27 +238,27 @@ class VendorProductServiceTests(TestCase):
         product = self._make_product(status=self.wait_status)
         self.assertFalse(VendorProductService.can_vendor_edit(product, self.vendor))
 
-    # ─────────────────────── can_add_variant ───────────────────────
+    # ─────────────────────── can_manage_variants ───────────────────────
 
     def test_cannot_add_variant_when_wait_for_admin_confirmation(self):
         product = self._make_product(status=self.wait_status)
-        self.assertFalse(VendorProductService.can_add_variant(product))
+        self.assertFalse(VendorProductService.can_manage_variants(product))
 
     def test_cannot_add_variant_when_admin_rejected(self):
         product = self._make_product(status=self.rejected_status)
-        self.assertFalse(VendorProductService.can_add_variant(product))
+        self.assertFalse(VendorProductService.can_manage_variants(product))
 
-    def test_can_add_variant_when_active(self):
+    def test_can_manage_variants_when_active(self):
         product = self._make_product(status=self.active_status)
-        self.assertTrue(VendorProductService.can_add_variant(product))
+        self.assertTrue(VendorProductService.can_manage_variants(product))
 
-    def test_can_add_variant_when_pending(self):
+    def test_cannot_add_variant_when_pending(self):
         product = self._make_product(status=self.pending_status)
-        self.assertTrue(VendorProductService.can_add_variant(product))
+        self.assertFalse(VendorProductService.can_manage_variants(product))
 
-    def test_can_add_variant_when_inactive(self):
+    def test_cannot_add_variant_when_inactive(self):
         product = self._make_product(status=self.inactive_status)
-        self.assertTrue(VendorProductService.can_add_variant(product))
+        self.assertFalse(VendorProductService.can_manage_variants(product))
 
     # ─────────────────────── find_similar_products ───────────────────────
 
@@ -285,6 +290,7 @@ class VendorProductServiceTests(TestCase):
         product.categories.add(self.category)
         variant = ProductVariants.objects.create(
             product=product,
+            status=self.active_variant_status,
             sku="SKU-OFFER-1",
             combination_key="1:1",
         )
@@ -340,6 +346,7 @@ class VendorProductServiceTests(TestCase):
         product.categories.add(self.category)
         variant = ProductVariants.objects.create(
             product=product,
+            status=self.active_variant_status,
             sku="SKU-GATE-1",
             combination_key="1:1",
         )

@@ -1012,10 +1012,18 @@ class VariantDetailStatus(APIView):
         status_id = request.data.get("status_id")
         if status_id is None:
             raise ValidationError({"status_id": _("This field is required.")})
+        was_pending = variant.status_id is not None and (
+            variant.status.name.lower() == "wait_for_admin_confirmation"
+        )
         try:
             variant = product_service.update_variant(variant, status_id=status_id)
         except ProductService.ValidationError as exc:
             raise ValidationError(exc.errors) from exc
+        if was_pending and variant.status.name.lower() != "wait_for_admin_confirmation":
+            # Leaving the review queue is the confirmation itself, so the
+            # admin who moved it is what the variant remembers.
+            variant.confirmed_by = request.user
+            variant.save(update_fields=["confirmed_by"])
         result = ProductVariantSerializer(variant).data
         return api_response(True, _("Variant status updated."), result)
 

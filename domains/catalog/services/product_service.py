@@ -39,7 +39,35 @@ class ProductService(BaseService):
         return self._create(**data)
 
     def update_product(self, instance, **data):
-        return self._update(instance, **data)
+        with transaction.atomic():
+            product = self._update(instance, **data)
+            self._disable_variants_when_product_disabled(product)
+        return product
+
+    def _disable_variants_when_product_disabled(self, product):
+        """Disabling a product disables every variant it sells.
+
+        Only the `inactive` transition cascades: sending a product back for
+        review must not silently drop its variants, and a variant still waiting
+        for admin confirmation keeps its review state — it cannot be sold while
+        it waits, so nothing is lost by leaving it queued.
+        """
+        if not product.status_id or product.status.name.lower() != "inactive":
+            return 0
+        inactive_status = ProductVariantStatus.objects.filter(
+            name__iexact="inactive"
+        ).first()
+        if inactive_status is None:
+            return 0
+        in_review = ProductVariantStatus.objects.filter(
+            name__iexact="wait_for_admin_confirmation"
+        ).values_list("id", flat=True)
+        return (
+            ProductVariants.objects.filter(product=product)
+            .exclude(status_id__in=in_review)
+            .exclude(status_id=inactive_status.id)
+            .update(status=inactive_status)
+        )
 
     def delete_product(self, instance):
         self._delete(instance)
@@ -531,7 +559,7 @@ class ProductService(BaseService):
 
     def _variant_queryset(self):
         queryset = ProductVariants.objects.select_related(
-            "product"
+            "product", "status"
         ).prefetch_related(
             "selections__attribute", "selections__option",
         )
@@ -546,7 +574,7 @@ class ProductService(BaseService):
 
     def get_variant(self, id):
         return get_object_or_404(
-            ProductVariants.objects.select_related("product").prefetch_related(
+            ProductVariants.objects.select_related("product", "status").prefetch_related(
                 "selections__attribute", "selections__option",
             ),
             id=id,

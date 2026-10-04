@@ -8,6 +8,7 @@ from domains.catalog.models import (
     Product,
     ProductStatus,
     ProductVariantSelection,
+    ProductVariantStatus,
     ProductVariants,
     VariantAttribute,
     VariantOption,
@@ -162,3 +163,52 @@ class ProductVariantWorkflowTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(ProductVariants.objects.filter(id=variant.id).exists())
         self.assertFalse(ProductVariantSelection.objects.filter(id=selection_id).exists())
+
+    # ─────────────────────── disabling a product disables its variants ───────────────────────
+
+    def _variant_statuses(self):
+        active, _ = ProductVariantStatus.objects.get_or_create(name="active")
+        inactive, _ = ProductVariantStatus.objects.get_or_create(name="inactive")
+        review, _ = ProductVariantStatus.objects.get_or_create(
+            name="wait_for_admin_confirmation"
+        )
+        return active, inactive, review
+
+    def _make_variant(self, sku, status):
+        return ProductVariants.objects.create(
+            product=self.product, status=status, sku=sku, combination_key=sku.lower()
+        )
+
+    def test_disabling_a_product_disables_its_sellable_variants(self):
+        active, _, review = self._variant_statuses()
+        sellable = self._make_variant("DIS-1", active)
+        queued = self._make_variant("DIS-2", review)
+        inactive = ProductStatus.objects.get_or_create(name="inactive")[0]
+
+        response = self.client.patch(
+            f"/api/catalog/products/{self.product.id}",
+            {"status": inactive.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        sellable.refresh_from_db()
+        queued.refresh_from_db()
+        self.assertEqual(sellable.status.name, "inactive")
+        # A queued definition keeps its review state; it is not sellable yet.
+        self.assertEqual(queued.status.name, "wait_for_admin_confirmation")
+
+    def test_sending_a_product_back_for_review_keeps_its_variants_active(self):
+        active, _, _ = self._variant_statuses()
+        sellable = self._make_variant("REV-1", active)
+        review = ProductStatus.objects.get_or_create(name="wait_for_admin_confirmation")[0]
+
+        response = self.client.patch(
+            f"/api/catalog/products/{self.product.id}",
+            {"status": review.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        sellable.refresh_from_db()
+        self.assertEqual(sellable.status.name, "active")
