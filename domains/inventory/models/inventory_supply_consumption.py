@@ -30,6 +30,26 @@ class InventorySupplyConsumption(models.Model):
                 fields=["order_item", "supply"],
                 name="inventory_supply_consumption_order_supply_unique",
             ),
+            models.UniqueConstraint(
+                fields=["marketplace_order_item", "supply"],
+                name="inventory_supply_consumption_mkt_supply_unique",
+            ),
+            # A consumption row belongs to exactly one sale. Exactly one is
+            # required rather than at most one so a row can never describe
+            # cost without saying what it was attributed to.
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        order_item__isnull=False,
+                        marketplace_order_item__isnull=True,
+                    )
+                    | models.Q(
+                        order_item__isnull=True,
+                        marketplace_order_item__isnull=False,
+                    )
+                ),
+                name="inventory_supply_consumption_one_target",
+            ),
         ]
 
     supply = models.ForeignKey(
@@ -40,6 +60,15 @@ class InventorySupplyConsumption(models.Model):
     order_item = models.ForeignKey(
         "order.OrderItem",
         on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="supply_consumptions",
+    )
+    marketplace_order_item = models.ForeignKey(
+        "marketplace.MarketplaceOrderItem",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
         related_name="supply_consumptions",
     )
     quantity = models.PositiveIntegerField()
@@ -53,4 +82,5 @@ class InventorySupplyConsumption(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.order_item_id} <- {self.supply_id} x{self.quantity}"
+        target = self.order_item_id or self.marketplace_order_item_id
+        return f"{target} <- {self.supply_id} x{self.quantity}"

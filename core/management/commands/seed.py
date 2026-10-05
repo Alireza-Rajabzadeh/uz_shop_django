@@ -12,6 +12,7 @@ from core.management.seeders.inventory_attribute_definitions import (
 from core.management.seeders.product_statuses import ProductStatusSeeder
 from core.management.seeders.product_variant_statuses import ProductVariantStatusSeeder
 from core.management.seeders.order import OrderSeeder
+from core.management.seeders.marketplace_order import MarketplaceOrderSeeder
 from core.management.seeders.payments import PaymentsSeeder
 from core.management.seeders.customers import CustomerSeeder
 from core.management.seeders.location import LocationSeeder
@@ -41,6 +42,7 @@ class Command(BaseCommand):
             MarketplaceSeeder(),
             CustomerSeeder(),
             OrderSeeder(),
+            MarketplaceOrderSeeder(),
             PaymentsSeeder(),
             SocialMediaSeeder(),
         ]
