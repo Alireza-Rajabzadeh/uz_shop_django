@@ -14,14 +14,12 @@ from django.db.models import Prefetch
 from django.utils.translation import gettext as _
 
 from domains.catalog.models import ProductFile, ProductVariants
-from domains.catalog.services import VariantService
 from domains.inventory.services import InventoryService
 
 TWO_PLACES = Decimal("0.01")
 ZERO = Decimal("0")
 
 _inventory_service = InventoryService()
-_variant_service = VariantService()
 
 
 def storefront_media():
@@ -100,9 +98,15 @@ def _read_offer_price(variant):
     differences and then rounds, so the two renderings below each keep their
     own arithmetic. They still agree on where the number comes from.
     """
+    # Imported here rather than at module load: this module is pulled in by
+    # the cart service, which is pulled in by the marketplace cart service,
+    # which must not be able to re-enter domains.catalog.services while that
+    # package is still importing.
+    from domains.catalog.services import VariantService
+
     offer = getattr(variant, "_business_offer", None)
     unit_price = getattr(offer, "price", None) or ZERO
-    effective_price = _variant_service.calculate_discounted_price(variant, offer)
+    effective_price = VariantService().calculate_discounted_price(variant, offer)
     return offer, unit_price, effective_price
 
 

@@ -5,8 +5,8 @@ from django.utils.translation import gettext as _
 
 from domains.inventory.enums.VariantCostStrategyEnum import VariantCostStrategyEnum
 
-from .models import BusinessOffer, OfferPriceHistory, PricingStrategy
-from .models.offer_price_history import SOURCE_ADMIN
+from ..models import BusinessOffer, OfferPriceHistory, PricingStrategy
+from ..models.offer_price_history import SOURCE_ADMIN
 
 # The enum is the vocabulary: it validates incoming codes, seeds the
 # PricingStrategy table, and drives the cost-basis formulas. The table only

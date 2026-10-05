@@ -19,21 +19,32 @@ from .pricing import (
 )
 
 
-class CartService:
+class BaseCartService:
+    """Cart rules shared by the shop cart and the marketplace cart.
+
+    Only the tables differ between the two flows, so the behaviour lives here
+    once and each flow supplies its own ``cart_model`` / ``item_model`` plus
+    any offer scoping it needs. A subclass must not reimplement a rule; it
+    declares which rows it works on.
+    """
+
     class ValidationError(Exception):
         def __init__(self, errors):
             self.errors = errors
             super().__init__(str(errors))
 
+    cart_model = None
+    item_model = None
+
     inventory_service = InventoryService()
     shipment_service = ShipmentCalculationService()
 
-    @staticmethod
-    def get_or_create_cart(customer):
-        return Cart.objects.get_or_create(customer=customer)[0]
+    @classmethod
+    def get_or_create_cart(cls, customer):
+        return cls.cart_model.objects.get_or_create(customer=customer)[0]
 
     def list_admin(self, **filters):
-        queryset = Cart.objects.select_related("customer").annotate(
+        queryset = self.cart_model.objects.select_related("customer").annotate(
             items_count=Count("items")
         )
         search = (filters.get("search") or "").strip()
@@ -75,8 +86,8 @@ class CartService:
 
     def cart_payload_admin(self, cart_id):
         try:
-            cart = Cart.objects.select_related("customer").get(id=cart_id)
-        except Cart.DoesNotExist as exc:
+            cart = self.cart_model.objects.select_related("customer").get(id=cart_id)
+        except self.cart_model.DoesNotExist as exc:
             raise self.ValidationError({"cart": [_("Cart not found.")]}) from exc
         payload = self.describe_existing(cart)
         payload["customer"] = self._admin_cart_row(cart)["customer"]
@@ -116,8 +127,17 @@ class CartService:
     def _attach_variants(self, items):
         variant_ids = [item.variant_id for item in items]
         variants = load_variants(variant_ids)
-        attach_offers(variants.values())
+        self._attach_offers(variants.values())
         return [(item, variants.get(item.variant_id)) for item in items]
+
+    def _attach_offers(self, variants):
+        """Scope the offers a cart line is priced from.
+
+        A flow that already knows which business it is shopping overrides
+        this; the shop flow prices from every active offer because the
+        business is a singleton.
+        """
+        attach_offers(variants)
 
     def _product_thumbnail(self, product):
         media = getattr(product, "storefront_media", None)
@@ -305,7 +325,7 @@ class CartService:
         except ProductVariants.DoesNotExist as exc:
             raise self.ValidationError({"variant_id": [_("Variant not found.")]}) from exc
         cart = self.get_or_create_cart(customer)
-        item, _created = CartItem.objects.get_or_create(
+        item, _created = self.item_model.objects.get_or_create(
             cart=cart, variant=variant, defaults={"quantity": quantity}
         )
         if not _created:
@@ -363,7 +383,7 @@ class CartService:
                     "suggested_action": "wishlist",
                 })
                 continue
-            item, created = CartItem.objects.get_or_create(
+            item, created = self.item_model.objects.get_or_create(
                 cart=cart, variant=variant, defaults={"quantity": quantity}
             )
             if not created:
@@ -405,7 +425,7 @@ class CartService:
             "product", "product__status"
         ).prefetch_related("selections__attribute", "selections__option")
         variant = self.inventory_service.annotate_variant_summaries(queryset)[0]
-        attach_offers([variant])
+        self._attach_offers([variant])
         return self._variant_payload(variant, quantity, cap_quantity=True)
 
     def validate_items(self, items):
@@ -416,7 +436,7 @@ class CartService:
 
     @transaction.atomic
     def clear(self, customer):
-        CartItem.objects.filter(cart__customer=customer).delete()
+        self.item_model.objects.filter(cart__customer=customer).delete()
 
     def merge(self, customer, items):
         """Merge a guest cart into the customer's persisted cart.
@@ -467,10 +487,18 @@ class CartService:
 
     def _get_item(self, customer, item_id):
         try:
-            return CartItem.objects.select_related("variant", "variant__product").get(
-                id=item_id, cart__customer=customer
-            )
-        except CartItem.DoesNotExist as exc:
+            return self.item_model.objects.select_related(
+                "variant", "variant__product"
+            ).get(id=item_id, cart__customer=customer)
+        except self.item_model.DoesNotExist as exc:
             raise self.ValidationError({
                 "item": [_("Cart item not found.")]
             }) from exc
+
+
+class CartService(BaseCartService):
+    """The shop cart: one basket per customer, priced by the singleton
+    business's active offers."""
+
+    cart_model = Cart
+    item_model = CartItem
