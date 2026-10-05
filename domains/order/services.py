@@ -1,24 +1,13 @@
 from datetime import timedelta
-from decimal import Decimal
 
-from django.conf import settings
 from django.db import transaction
 from django.db.models import Count, Q as models_Q, Sum
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
-from domains.cart.pricing import (
-    attach_offers,
-    line_snapshot,
-    summary_map,
-    validate_item,
-)
+from domains.cart.checkout import BaseCheckoutService, CheckoutError
 from domains.cart.services import CartService
-from domains.catalog.models import ProductFile
-from domains.files.services import FileService
 from domains.payments.services import PaymentService
-from domains.shipment.services import ShipmentCalculationService
-from domains.inventory.services import InventoryService
 from domains.location.models import City, Country, State
 
 from .models import (
@@ -34,22 +23,28 @@ from .models import (
 )
 
 
-class OrderService:
-    class ValidationError(Exception):
-        def __init__(self, errors):
-            self.errors = errors
-            super().__init__(str(errors))
+class OrderService(BaseCheckoutService):
+    """The shop flow: reads, actions and returns, plus checkout onto the shop tables."""
+
+    ValidationError = CheckoutError
 
     class NotFoundError(Exception):
         pass
 
-    STATUS_PAYMENT_PENDING = "payment_pending"
+    # The rows this flow writes. The shared checkout sequence lives in
+    # domains.cart.checkout and is driven by these, so the marketplace flow
+    # cannot drift from this one.
+    order_model = Order
+    item_model = OrderItem
+    reservation_model = OrderItemReservation
+    status_model = OrderStatus
+
     STATUS_PAID = "paid"
     STATUS_PAYMENT_FAILED = "payment_failed"
     STATUS_CANCELLED = "cancelled"
     STATUS_PAYMENT_EXPIRED = "payment_expired"
     IN_PROGRESS_STATUSES = (
-        STATUS_PAYMENT_PENDING,
+        "payment_pending",
         "payment_processing",
         STATUS_PAID,
         "confirmed",
@@ -62,187 +57,19 @@ class OrderService:
         "delivery_delayed",
     )
 
-    two_places = Decimal("0.01")
-    shipment_service = ShipmentCalculationService()
-    # Single source of truth for moving stock; this service only decides when.
-    inventory_service = InventoryService()
-
-    # ───────────────────────── shared helpers ─────────────────────────
-
-    def _status(self, name):
-        return OrderStatus.objects.filter(name=name).first()
-
-    def _variant_info_snapshot(self, variant):
-        return {
-            "variant_id": variant.id,
-            "sku": variant.sku,
-            "product_id": variant.product_id,
-            "product_name": variant.product.name,
-            "product_slug": variant.product.slug,
-            "product_image": self._product_thumbnails(
-                [variant.product_id]
-            ).get(variant.product_id),
-            "combination_key": variant.combination_key,
-            "selections": [
-                {
-                    "attribute_id": selection.attribute_id,
-                    "attribute": selection.attribute.name,
-                    "option_id": selection.option_id,
-                    "option": selection.option.name,
-                }
-                for selection in variant.selections.all()
-            ],
-        }
-
-    def _product_thumbnails(self, product_ids):
-        ids = {pid for pid in product_ids if pid is not None}
-        cache = getattr(self, "_thumbnail_urls", {})
-        missing = sorted(ids - cache.keys())
-        if missing:
-            preferred = {}
-            fallback = {}
-            rows = (
-                ProductFile.objects.filter(
-                    product_id__in=missing,
-                    role__in=[ProductFile.Role.THUMBNAIL, ProductFile.Role.GALLERY],
-                )
-                .select_related("file")
-                .order_by("product_id", "position", "id")
-            )
-            file_service = FileService()
-            for row in rows:
-                if row.role == ProductFile.Role.THUMBNAIL:
-                    preferred.setdefault(row.product_id, row)
-                else:
-                    fallback.setdefault(row.product_id, row)
-            for product_id in missing:
-                row = preferred.get(product_id) or fallback.get(product_id)
-                url = None
-                if row is not None:
-                    try:
-                        url = file_service.url(row.file)
-                    except FileService.Error:
-                        url = None
-                cache[product_id] = url
-            self._thumbnail_urls = cache
-        return cache
-
     @staticmethod
     def cart_service():
         return CartService()
 
-    # ───────────────────────── checkout ─────────────────────────
+    def _has_payment_channel(self):
+        return PaymentService.has_available_channel()
 
-    @transaction.atomic
-    def checkout_from_cart(self, customer):
-        cart = self.cart_service().get_or_create_cart(customer)
-        if not cart.address_info:
-            raise self.ValidationError({
-                "address": [_("Set a delivery address before checkout.")]
-            })
-        if not PaymentService.has_available_channel():
-            raise self.ValidationError({
-                "payment": [_("No active payment channel is available.")]
-            })
-        items = list(
-            cart.items.select_related(
-                "variant",
-                "variant__product",
-                "variant__product__status",
-            )
-            .prefetch_related(
-                "variant__selections__attribute", "variant__selections__option"
-            )
-            .order_by("id")
-        )
-        if not items:
-            raise self.ValidationError({"cart": [_("The cart is empty.")]})
-
-        attach_offers([item.variant for item in items])
-
-        summary = summary_map([item.variant for item in items])
-        validation_errors = []
-        for item in items:
-            ok, message = validate_item(item, summary)
-            if not ok:
-                validation_errors.append(message)
-        if validation_errors:
-            raise self.ValidationError({"items": validation_errors})
-
-        status = self._status(self.STATUS_PAYMENT_PENDING)
-        order = Order.objects.create(
-            customer=customer,
-            status=status,
-            address_info=cart.address_info,
-            subtotal=Decimal("0.00"),
-            discount_amount=Decimal("0.00"),
-            shipping_original_amount=Decimal("0.00"),
-            shipping_amount=Decimal("0.00"),
-            total_amount=Decimal("0.00"),
-        )
-        subtotal = Decimal("0.00")
-        discount_total = Decimal("0.00")
-        for item in items:
-            variant = item.variant
-            line = line_snapshot(variant, item.quantity)
-            reservations = self._reserve_line(variant, item.quantity)
-            order_item = OrderItem.objects.create(
-                order=order,
-                variant=variant,
-                sku=variant.sku,
-                quantity=item.quantity,
-                unit_price=line["unit_price"],
-                discount_type=line["discount_type"],
-                discount_value=line["discount_value"],
-                discount_amount=line["line_discount"],
-                final_price=line["line_total"],
-                variant_info=self._variant_info_snapshot(variant),
-            )
-            for entry in reservations:
-                OrderItemReservation.objects.create(
-                    order_item=order_item,
-                    inventory_type=entry.inventory_type,
-                    inventory_id=entry.inventory_id,
-                    quantity=entry.quantity,
-                    linked_inventory=entry.inventory,
-                    linked_unit=entry.unit,
-                )
-            subtotal += line["unit_price"] * item.quantity
-            discount_total += line["line_discount"]
-
-        order.subtotal = subtotal.quantize(self.two_places)
-        order.discount_amount = discount_total.quantize(self.two_places)
-        shipment = self.shipment_service.calculate(order)
-        order.shipping_original_amount = shipment.original_price
-        order.shipping_amount = shipment.final_price
-        order.total_amount = (
-            subtotal - discount_total + shipment.final_price
-        ).quantize(self.two_places)
-        order.reservation_expires_at = timezone.now() + timedelta(
-            minutes=settings.ORDER_RESERVATION_MINUTES
-        )
-        order.save(update_fields=[
-            "subtotal",
-            "discount_amount",
-            "shipping_original_amount",
-            "shipping_amount",
-            "total_amount",
-            "reservation_expires_at",
-        ])
-        for item in items:
-            item.delete()
-        return order
-
-    def _reserve_line(self, variant, quantity):
-        """Hold stock for one order line through the shared inventory service.
-
-        The inventory service owns the reservation algorithm; this only maps
-        its failure shape onto the contract this service exposes to views.
-        """
-        try:
-            return self.inventory_service.reserve_variant_stock(variant, quantity)
-        except InventoryService.ValidationError as exc:
-            raise self.ValidationError(exc.errors) from exc
+    def _reservation_extra_fields(self, entry):
+        """The shop hold table keeps the inventory labels the shared service drops."""
+        return {
+            "inventory_type": entry.inventory_type,
+            "inventory_id": entry.inventory_id,
+        }
 
     # ───────────────────────── reads / expiry ─────────────────────────
 
