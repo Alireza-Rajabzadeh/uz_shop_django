@@ -1,7 +1,7 @@
 from decimal import Decimal
 from unittest.mock import patch
 
-from django.test import TestCase
+from rest_framework.test import APITestCase
 
 from core.management.seeders.marketplace_order import MarketplaceOrderSeeder
 from domains.business.models import BusinessProfile
@@ -40,8 +40,12 @@ from domains.order.models import Order
 from domains.vendor.models import Vendor, VendorStatus
 
 
-class MarketplaceCheckoutFixture(TestCase):
-    """Shared marketplace-checkout world: one customer, one seller, one warehouse."""
+class MarketplaceCheckoutFixture(APITestCase):
+    """Shared marketplace-checkout world: one customer, one seller, one warehouse.
+
+    ``APITestCase`` so subclasses can drive the HTTP surface with DRF's
+    client; the service-level tests below are unaffected by that.
+    """
 
     def setUp(self):
         MarketplaceOrderSeeder().run()

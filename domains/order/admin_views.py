@@ -15,12 +15,19 @@ from domains.order.services import OrderService, ReturnRequestService
 from domains.users.auth import AdminJWTAuthentication
 
 
-order_service = OrderService()
-
-
 class AdminAPIView(APIView):
     authentication_classes = [AdminJWTAuthentication]
     permission_classes = [AdminModelPermissions]
+    # The flow this endpoint reads. A subclass for another flow swaps these
+    # and sets ``model`` to a table of that flow for the permission check.
+    order_service_class = OrderService
+    return_service_class = ReturnRequestService
+
+    @property
+    def returns_permission(self):
+        """The model permission that lets this admin see return requests."""
+        meta = self.return_service_class.request_model._meta
+        return f"{meta.app_label}.view_{meta.model_name}"
 
 
 class AdminOrderList(AdminAPIView):
@@ -29,10 +36,10 @@ class AdminOrderList(AdminAPIView):
     def get(self, request):
         query = AdminOrderListQuerySerializer(data=request.query_params.dict())
         query.is_valid(raise_exception=True)
-        can_view_returns = request.user.has_perm("order.view_returnrequest")
+        can_view_returns = request.user.has_perm(self.returns_permission)
         if query.validated_data["has_active_returns"] and not can_view_returns:
             raise PermissionDenied(_("You do not have permission to view return requests."))
-        orders = order_service.list_orders_admin(
+        orders = self.order_service_class().list_orders_admin(
             include_returns=can_view_returns,
             **query.validated_data,
         )
@@ -49,7 +56,7 @@ class AdminOrderGeography(AdminAPIView):
     def get(self, request):
         query = AdminOrderListQuerySerializer(data=request.query_params.dict())
         query.is_valid(raise_exception=True)
-        return api_response(data=order_service.open_order_geography(**query.validated_data))
+        return api_response(data=self.order_service_class().open_order_geography(**query.validated_data))
 
 
 class AdminOrderDetail(AdminAPIView):
@@ -57,11 +64,11 @@ class AdminOrderDetail(AdminAPIView):
 
     def get(self, request, order_id):
         try:
-            payload = order_service.get_order_admin(
+            payload = self.order_service_class().get_order_admin(
                 order_id,
-                include_returns=request.user.has_perm("order.view_returnrequest"),
+                include_returns=request.user.has_perm(self.returns_permission),
             )
-        except OrderService.NotFoundError as exc:
+        except self.order_service_class.NotFoundError as exc:
             raise NotFound(_("Order not found.")) from exc
         return api_response(True, "", payload)
 
@@ -70,10 +77,14 @@ class AdminOrderStatusList(AdminAPIView):
     # Statuses are supporting options for the admin order filters, so viewing
     # orders is sufficient to populate this endpoint.
     model = OrderStatus
+    status_model = OrderStatus
+    status_serializer = AdminOrderStatusSerializer
 
     def get(self, request):
-        statuses = OrderStatus.objects.order_by("id")
-        return api_response(True, "", AdminOrderStatusSerializer(statuses, many=True).data)
+        statuses = self.status_model.objects.order_by("id")
+        return api_response(
+            True, "", self.status_serializer(statuses, many=True).data
+        )
 
 
 class AdminOrderActionPermissions(AdminModelPermissions):
@@ -91,8 +102,8 @@ class AdminOrderActions(AdminAPIView):
 
     def get(self, request, order_id):
         try:
-            actions = order_service.available_actions(order_id, actor="admin")
-        except OrderService.NotFoundError as exc:
+            actions = self.order_service_class().available_actions(order_id, actor="admin")
+        except self.order_service_class.NotFoundError as exc:
             raise NotFound(_("Order not found.")) from exc
         return api_response(data={"actions": actions})
 
@@ -103,16 +114,16 @@ class AdminOrderExecuteAction(AdminAPIView):
 
     def post(self, request, order_id, action_code):
         try:
-            order = order_service.execute_action(
+            order = self.order_service_class().execute_action(
                 order_id, action_code, actor="admin", admin=request.user
             )
-        except OrderService.NotFoundError as exc:
+        except self.order_service_class.NotFoundError as exc:
             raise NotFound(_("Order not found.")) from exc
-        except OrderService.ValidationError as exc:
+        except self.order_service_class.ValidationError as exc:
             raise ValidationError(exc.errors) from exc
-        return api_response(data=order_service.get_order_admin(
+        return api_response(data=self.order_service_class().get_order_admin(
             order.id,
-            include_returns=request.user.has_perm("order.view_returnrequest"),
+            include_returns=request.user.has_perm(self.returns_permission),
         ))
 
 
@@ -125,14 +136,14 @@ class AdminReturnAction(AdminAPIView):
         serializer.is_valid(raise_exception=True)
         kwargs = serializer.validated_data
         try:
-            ReturnRequestService().execute_admin_action(
+            self.return_service_class().execute_admin_action(
                 order_id, return_request_id, action_code, **kwargs
             )
-        except ReturnRequestService.NotFoundError as exc:
+        except self.return_service_class.NotFoundError as exc:
             raise NotFound(_("Return request not found.")) from exc
-        except ReturnRequestService.ValidationError as exc:
+        except self.return_service_class.ValidationError as exc:
             raise ValidationError(exc.errors) from exc
-        return api_response(data=order_service.get_order_admin(
+        return api_response(data=self.order_service_class().get_order_admin(
             order_id,
-            include_returns=request.user.has_perm("order.view_returnrequest"),
+            include_returns=request.user.has_perm(self.returns_permission),
         ))

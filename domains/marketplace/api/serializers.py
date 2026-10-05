@@ -1,6 +1,22 @@
 from rest_framework import serializers
 
-from ..models import BusinessOffer, OfferPriceHistory, PricingStrategy
+from domains.order.serializers import (
+    AdminOrderStatusSerializer,
+    ReturnRequestCreateSerializer,
+    ReturnRequestEvidenceSerializer,
+    ReturnRequestItemSerializer,
+    ReturnRequestSerializer,
+)
+
+from ..models import (
+    BusinessOffer,
+    MarketplaceOrderStatus,
+    MarketplaceReturnRequest,
+    MarketplaceReturnRequestEvidence,
+    MarketplaceReturnRequestItem,
+    OfferPriceHistory,
+    PricingStrategy,
+)
 from ..services import MarketplacePricingService
 
 
@@ -79,3 +95,43 @@ class OfferPriceHistorySerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = fields
+
+
+# ───────────────────────── returns ─────────────────────────
+# The shape of a return request is identical on either flow, so the shop's
+# serializers are subclassed purely to name the marketplace tables rather
+# than restated.
+
+
+class MarketplaceReturnRequestItemSerializer(ReturnRequestItemSerializer):
+    class Meta(ReturnRequestItemSerializer.Meta):
+        model = MarketplaceReturnRequestItem
+
+
+class MarketplaceReturnRequestEvidenceSerializer(ReturnRequestEvidenceSerializer):
+    class Meta(ReturnRequestEvidenceSerializer.Meta):
+        model = MarketplaceReturnRequestEvidence
+
+
+class MarketplaceReturnRequestSerializer(ReturnRequestSerializer):
+    items = MarketplaceReturnRequestItemSerializer(many=True, read_only=True)
+    evidence = MarketplaceReturnRequestEvidenceSerializer(many=True, read_only=True)
+
+    class Meta(ReturnRequestSerializer.Meta):
+        model = MarketplaceReturnRequest
+
+
+class MarketplaceReturnRequestCreateSerializer(ReturnRequestCreateSerializer):
+    # Restated only so the choices come from this flow's model; the values
+    # themselves are the same two refund destinations either way.
+    refund_destination_type = serializers.ChoiceField(
+        choices=MarketplaceReturnRequest.RefundDestinationType.choices
+    )
+
+
+# ───────────────────────── admin order filters ─────────────────────────
+
+
+class AdminMarketplaceOrderStatusSerializer(AdminOrderStatusSerializer):
+    class Meta(AdminOrderStatusSerializer.Meta):
+        model = MarketplaceOrderStatus
