@@ -1,5 +1,6 @@
 import uuid
 from datetime import timedelta
+from typing import NamedTuple
 
 from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
@@ -43,6 +44,22 @@ _VALID_TRANSITIONS = {
         InventoryUnitStateEnum.IN_STOCK.value,
     },
 }
+
+
+class ReservationEntry(NamedTuple):
+    """What a checkout must persist for one held piece of stock.
+
+    Field order matches the legacy shop reservation tuple, so callers can
+    unpack it directly. ``inventory_type`` / ``inventory_id`` exist only to
+    fill the shop table's historical generic columns; ``inventory`` and
+    ``unit`` are the rows the inventory service actually acts on.
+    """
+
+    inventory_type: str
+    inventory_id: int
+    quantity: int
+    inventory: Inventory
+    unit: InventoryUnit | None
 
 
 class InventoryService:
@@ -1200,6 +1217,131 @@ class InventoryService:
         inventory.quantity -= quantity
         inventory.save(update_fields=["quantity", "sellable"])
         return inventory
+
+    # ─────────────── order-level holds (shop + marketplace) ───────────────
+    # Both the shop checkout and the marketplace checkout reserve, release and
+    # consume stock through the three methods below. The reservation rows each
+    # flow persists are its audit trail; the algorithm that actually moves
+    # inventory lives here and nowhere else.
+
+    @transaction.atomic
+    def reserve_variant_stock(self, variant, quantity, *, business=None):
+        """Hold ``quantity`` sellable units of ``variant`` for an order line.
+
+        Returns the entries the caller must persist as reservation rows: one
+        aggregate entry for normal stock, one entry per selected unit for
+        serialized stock. The caller owns the row shape, not the selection.
+        """
+        if quantity <= 0:
+            raise self.ValidationError({
+                "quantity": [_('Quantity must be greater than zero.')]
+            })
+        inventory = self._locked_inventory(variant, business=business)
+        if inventory is None:
+            raise self.ValidationError({
+                "inventory": [_('No inventory is configured for this item.')]
+            })
+        if self._is_serialized_inventory(inventory):
+            return self._reserve_units(inventory, variant, quantity)
+        if quantity > inventory.available:
+            raise self.ValidationError({
+                "items": [
+                    _('Item %(sku)s does not have enough stock.')
+                    % {"sku": variant.sku}
+                ]
+            })
+        inventory.reserved += quantity
+        inventory.save(update_fields=["reserved"])
+        return [ReservationEntry("inventory", inventory.id, quantity, inventory, None)]
+
+    @transaction.atomic
+    def release_reserved_stock(self, reservations):
+        """Return held stock to the sellable pool.
+
+        ``reservations`` may be rows from either flow's reservation table; they
+        only need ``linked_inventory_id``, ``linked_unit_id`` and ``quantity``,
+        which both shapes share.
+        """
+        synced = set()
+        for reservation in reservations:
+            if reservation.linked_inventory_id is None:
+                continue
+            if reservation.linked_unit_id is not None:
+                InventoryUnit.objects.filter(
+                    id=reservation.linked_unit_id,
+                    state=InventoryUnitStateEnum.RESERVED.value,
+                ).update(state=InventoryUnitStateEnum.IN_STOCK.value)
+                synced.add(reservation.linked_inventory_id)
+            else:
+                Inventory.objects.filter(
+                    id=reservation.linked_inventory_id,
+                ).update(reserved=F("reserved") - reservation.quantity)
+        self._resync_inventories(synced)
+
+    @transaction.atomic
+    def consume_reserved_stock(self, reservations):
+        """Convert held stock into a sale.
+
+        Deliberately does not touch supply cost layers: COGS attribution is
+        ``InventorySupplyService``'s concern and stays with the order item.
+        """
+        synced = set()
+        for reservation in reservations:
+            if reservation.linked_inventory_id is None:
+                continue
+            if reservation.linked_unit_id is not None:
+                InventoryUnit.objects.filter(
+                    id=reservation.linked_unit_id,
+                ).update(state=InventoryUnitStateEnum.SOLD.value)
+                synced.add(reservation.linked_inventory_id)
+            else:
+                Inventory.objects.filter(
+                    id=reservation.linked_inventory_id,
+                ).update(
+                    reserved=F("reserved") - reservation.quantity,
+                    sellable=F("sellable") - reservation.quantity,
+                    quantity=F("quantity") - reservation.quantity,
+                )
+        self._resync_inventories(synced)
+
+    def _resync_inventories(self, inventory_ids):
+        for inventory in Inventory.objects.filter(id__in=inventory_ids):
+            self._sync_inventory_summary(inventory)
+
+    @staticmethod
+    def _locked_inventory(variant, *, business=None):
+        # ``first()`` orders by primary key, so concurrent checkouts of the
+        # same variant always lock the same row in the same order.
+        queryset = Inventory.objects.select_for_update().filter(variant=variant)
+        if business is not None:
+            queryset = queryset.filter(business=business)
+        return queryset.order_by("id").first()
+
+    def _reserve_units(self, inventory, variant, quantity):
+        units = list(
+            InventoryUnit.objects.select_for_update()
+            .filter(
+                inventory=inventory,
+                state=InventoryUnitStateEnum.IN_STOCK.value,
+            )
+            .order_by("id")[:quantity]
+        )
+        if len(units) < quantity:
+            raise self.ValidationError({
+                "items": [
+                    _('Item %(sku)s does not have enough stock.')
+                    % {"sku": variant.sku}
+                ]
+            })
+        entries = []
+        for unit in units:
+            unit.state = InventoryUnitStateEnum.RESERVED.value
+            unit.save(update_fields=["state"])
+            entries.append(
+                ReservationEntry("inventory_unit", unit.id, 1, inventory, unit)
+            )
+        self._sync_inventory_summary(inventory)
+        return entries
 
     @transaction.atomic
     def reserve_stock(self, inventory_id, *, quantity=None, unit_ids=None):

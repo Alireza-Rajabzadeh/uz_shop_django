@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Count, F, Q as models_Q, Sum
+from django.db.models import Count, Q as models_Q, Sum
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
@@ -12,11 +12,7 @@ from domains.catalog.models import ProductFile, ProductVariants
 from domains.files.services import FileService
 from domains.payments.services import PaymentService
 from domains.shipment.services import ShipmentCalculationService
-from domains.inventory.enums.InventoryUnitStateEnum import InventoryUnitStateEnum
-from domains.inventory.models import (
-    Inventory,
-    InventoryUnit,
-)
+from domains.inventory.services import InventoryService
 from domains.location.models import City, Country, State
 
 from .models import (
@@ -62,6 +58,8 @@ class OrderService:
 
     two_places = Decimal("0.01")
     shipment_service = ShipmentCalculationService()
+    # Single source of truth for moving stock; this service only decides when.
+    inventory_service = InventoryService()
 
     # ───────────────────────── shared helpers ─────────────────────────
 
@@ -95,7 +93,6 @@ class OrderService:
             "unit_discount": unit_discount,
             "line_discount": (unit_discount * quantity).quantize(self.two_places),
             "line_total": (effective * quantity).quantize(self.two_places),
-            "reservations": [],
         }
 
     def _variant_info_snapshot(self, variant):
@@ -233,7 +230,7 @@ class OrderService:
         for item in items:
             variant = item.variant
             line = self._line_snapshot(variant, item.quantity)
-            self._reserve_return_item(variant, item.quantity, line["reservations"])
+            reservations = self._reserve_line(variant, item.quantity)
             order_item = OrderItem.objects.create(
                 order=order,
                 variant=variant,
@@ -246,14 +243,14 @@ class OrderService:
                 final_price=line["line_total"],
                 variant_info=self._variant_info_snapshot(variant),
             )
-            for (inventory_type, inventory_id, quantity, linked_inv, linked_unit) in line["reservations"]:
+            for entry in reservations:
                 OrderItemReservation.objects.create(
                     order_item=order_item,
-                    inventory_type=inventory_type,
-                    inventory_id=inventory_id,
-                    quantity=quantity,
-                    linked_inventory=linked_inv,
-                    linked_unit=linked_unit,
+                    inventory_type=entry.inventory_type,
+                    inventory_id=entry.inventory_id,
+                    quantity=entry.quantity,
+                    linked_inventory=entry.inventory,
+                    linked_unit=entry.unit,
                 )
             subtotal += line["unit_price"] * item.quantity
             discount_total += line["line_discount"]
@@ -281,84 +278,16 @@ class OrderService:
             item.delete()
         return order
 
-    @staticmethod
-    def _detect_variant_inventory_type(variant):
-        if Inventory.objects.filter(variant=variant).exists():
-            has_units = InventoryUnit.objects.filter(inventory__variant=variant).exists()
-            return "serialized_new" if has_units else "normal_new"
-        return "normal_new"
+    def _reserve_line(self, variant, quantity):
+        """Hold stock for one order line through the shared inventory service.
 
-    def _reserve_return_item(self, variant, quantity, reservations):
-        inv_type = self._detect_variant_inventory_type(variant)
-        if inv_type == "normal_new":
-            self._reserve_new_normal(variant, quantity, reservations)
-        else:
-            self._reserve_new_serialized(variant, quantity, reservations)
-
-    def _reserve_new_normal(self, variant, quantity, reservations):
-        inventory = (
-            Inventory.objects.select_for_update()
-            .filter(variant=variant)
-            .first()
-        )
-        if inventory is None:
-            raise self.ValidationError({
-                "inventory": [_ ("No inventory is configured for this item.")]
-            })
-        if inventory.available < quantity:
-            raise self.ValidationError({
-                "items": [
-                    _ ("Item %(sku)s does not have enough stock.")
-                    % {"sku": variant.sku}
-                ]
-            })
-        inventory.reserved += quantity
-        inventory.save(update_fields=["reserved"])
-        reservations.append(("inventory", inventory.id, quantity, inventory, None))
-
-    def _reserve_new_serialized(self, variant, quantity, reservations):
-        inventory = Inventory.objects.select_for_update().filter(
-            variant=variant
-        ).first()
-        if inventory is None:
-            raise self.ValidationError({
-                "inventory": [_ ("No inventory is configured for this item.")]
-            })
-        units = list(
-            InventoryUnit.objects.select_for_update()
-            .filter(
-                inventory=inventory,
-                state=InventoryUnitStateEnum.IN_STOCK.value,
-            )
-            .order_by("id")[:quantity]
-        )
-        if len(units) < quantity:
-            raise self.ValidationError({
-                "items": [
-                    _ ("Item %(sku)s does not have enough stock.")
-                    % {"sku": variant.sku}
-                ]
-            })
-        for unit in units:
-            unit.state = InventoryUnitStateEnum.RESERVED.value
-            unit.save(update_fields=["state"])
-            reservations.append(("inventory_unit", unit.id, 1, inventory, unit))
-        self._sync_new_inventory(inventory)
-
-    @staticmethod
-    def _sync_new_inventory(inventory):
-        inventory.quantity = InventoryUnit.objects.filter(
-            inventory=inventory
-        ).count()
-        inventory.sellable = InventoryUnit.objects.filter(
-            inventory=inventory,
-            state=InventoryUnitStateEnum.IN_STOCK.value,
-        ).count()
-        inventory.reserved = InventoryUnit.objects.filter(
-            inventory=inventory,
-            state=InventoryUnitStateEnum.RESERVED.value,
-        ).count()
-        inventory.save(update_fields=["quantity", "sellable", "reserved"])
+        The inventory service owns the reservation algorithm; this only maps
+        its failure shape onto the contract this service exposes to views.
+        """
+        try:
+            return self.inventory_service.reserve_variant_stock(variant, quantity)
+        except InventoryService.ValidationError as exc:
+            raise self.ValidationError(exc.errors) from exc
 
     # ───────────────────────── reads / expiry ─────────────────────────
 
@@ -769,25 +698,9 @@ class OrderService:
 
     def release_reservations(self, order):
         """Return an order's reserved stock back to the sellable pool."""
-        from domains.inventory.enums.InventoryUnitStateEnum import InventoryUnitStateEnum
-        for order_item in order.items.prefetch_related("reservations"):
-            for reservation in order_item.reservations.all():
-                if reservation.linked_inventory_id is not None:
-                    if reservation.linked_unit_id is not None:
-                        InventoryUnit.objects.filter(
-                            id=reservation.linked_unit_id,
-                            state=InventoryUnitStateEnum.RESERVED.value,
-                        ).update(state=InventoryUnitStateEnum.IN_STOCK.value)
-                        if reservation.linked_inventory_id:
-                            inv = Inventory.objects.filter(
-                                id=reservation.linked_inventory_id
-                            ).first()
-                            if inv:
-                                self._sync_new_inventory(inv)
-                    else:
-                        Inventory.objects.filter(
-                            id=reservation.linked_inventory_id,
-                        ).update(reserved=F("reserved") - reservation.quantity)
+        self.inventory_service.release_reserved_stock(
+            self._reservation_rows(order)
+        )
 
     def consume_reservations(self, order):
         """Convert an order's reserved stock into a sale."""
@@ -795,31 +708,17 @@ class OrderService:
 
         supply_service = InventorySupplyService()
         for order_item in order.items.prefetch_related("reservations"):
-            for reservation in order_item.reservations.all():
-                if reservation.linked_inventory_id is not None:
-                    if reservation.linked_unit_id is not None:
-                        InventoryUnit.objects.filter(
-                            id=reservation.linked_unit_id,
-                        ).update(state=InventoryUnitStateEnum.SOLD.value)
-                    else:
-                        Inventory.objects.filter(
-                            id=reservation.linked_inventory_id,
-                        ).update(
-                            reserved=F("reserved") - reservation.quantity,
-                            sellable=F("sellable") - reservation.quantity,
-                            quantity=F("quantity") - reservation.quantity,
-                        )
-            # Sync new inventory summary after unit state changes
-            if any(r.linked_unit_id for r in order_item.reservations.all()):
-                inv = next(
-                    (r.linked_inventory for r in order_item.reservations.all()
-                     if r.linked_inventory_id is not None),
-                    None,
-                )
-                if inv:
-                    self._sync_new_inventory(inv)
+            reservations = list(order_item.reservations.all())
+            self.inventory_service.consume_reserved_stock(reservations)
             # Finalized sale: consume FIFO cost layers for COGS tracking.
             supply_service.consume_order_item(order_item)
+
+    @staticmethod
+    def _reservation_rows(order):
+        rows = []
+        for order_item in order.items.prefetch_related("reservations"):
+            rows.extend(order_item.reservations.all())
+        return rows
 
     @staticmethod
     def reverse_order_supply_consumption(order):

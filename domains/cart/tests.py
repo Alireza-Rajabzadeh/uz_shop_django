@@ -128,11 +128,15 @@ class CartAPITests(APITestCase):
             vendor_code="VEN-CART-001",
             status=vendor_status,
         )
-        self.business = BusinessProfile.objects.create(
+        # inventory.0022 seeds the singleton profile with id=1 in every test
+        # database, so this must attach to it rather than insert a new row.
+        self.business, _ = BusinessProfile.objects.get_or_create(
             id=1,
-            vendor=vendor,
-            business_name="Cart Business",
-            display_name="Cart Business",
+            defaults={
+                "vendor": vendor,
+                "business_name": "Cart Business",
+                "display_name": "Cart Business",
+            },
         )
 
     def make_product(self, status):
