@@ -39,7 +39,27 @@ class BusinessPaymentService:
     class NotFoundError(Exception):
         pass
 
+    # Which tables this service's payment rows live in. The shop flow is the
+    # default; a flow for a different order type names its own tables and
+    # nothing else in this service changes.
+    order_model = Order
+    order_status_model = OrderStatus
+    payment_model = BusinessPayment
+    payment_document_model = BusinessPaymentDocument
+    history_model = OrderHistory
+    action_model = OrderAction
+
     MANUAL_METHODS = ("card_to_card", "deposit_to_account")
+
+    def order_service(self):
+        """The order service that expires, releases and consumes holds.
+
+        Resolved at call time: importing the shop order service here would
+        drag this module into the marketplace's import graph.
+        """
+        from domains.order.services import OrderService
+
+        return OrderService()
 
     @staticmethod
     def _status(name):
@@ -147,9 +167,9 @@ class BusinessPaymentService:
 
     @transaction.atomic
     def _expire_stale_order(self, business, customer, order_id):
-        order = Order.objects.select_for_update().select_related("status").filter(
-            id=order_id, customer=customer
-        ).first()
+        order = self.order_model.objects.select_for_update().select_related(
+            "status"
+        ).filter(id=order_id, customer=customer).first()
         if (
             order is None
             or order.status.name != "payment_pending"
@@ -158,9 +178,7 @@ class BusinessPaymentService:
         ):
             return False
 
-        from domains.order.services import OrderService
-
-        OrderService().expire_orders([order])
+        self.order_service().expire_orders([order])
         return True
 
     @transaction.atomic
@@ -168,9 +186,9 @@ class BusinessPaymentService:
         self, business, customer, order_id, *, payment_method_code,
         payment_channel_id, ref_number, resource_account_number, documents,
     ):
-        order = Order.objects.select_for_update().select_related("status").filter(
-            id=order_id, customer=customer
-        ).first()
+        order = self.order_model.objects.select_for_update().select_related(
+            "status"
+        ).filter(id=order_id, customer=customer).first()
         if order is None:
             raise self.NotFoundError("Order not found.")
         if order.status.name == "paid":
@@ -219,7 +237,7 @@ class BusinessPaymentService:
             raise self.ValidationError(
                 {"documents": [_("No more than 10 payment documents are allowed.")]}
             )
-        payment = BusinessPayment.objects.create(
+        payment = self.payment_model.objects.create(
             business=business, order=order, payment_method=method,
             payment_channel=channel, amount=order.total_amount,
             status=self._status("pending"),
@@ -239,8 +257,8 @@ class BusinessPaymentService:
                 )
             except FileService.Error as exc:
                 raise self.ValidationError({"documents": [str(exc)]}) from exc
-            BusinessPaymentDocument.objects.create(payment=payment, file=file)
-        order.status = OrderStatus.objects.get(name="payment_processing")
+            self.payment_document_model.objects.create(payment=payment, file=file)
+        order.status = self.order_status_model.objects.get(name="payment_processing")
         order.reservation_expires_at = None
         order.save(update_fields=["status", "reservation_expires_at"])
         self._record_payment_history(
@@ -248,10 +266,9 @@ class BusinessPaymentService:
         )
         return order
 
-    @staticmethod
-    def _record_payment_history(order, action_code, description, user=None):
-        action = OrderAction.objects.get(code=action_code)
-        OrderHistory.objects.create(
+    def _record_payment_history(self, order, action_code, description, user=None):
+        action = self.action_model.objects.get(code=action_code)
+        self.history_model.objects.create(
             order=order,
             action=action,
             user_id=user.pk if user is not None else None,
@@ -263,12 +280,12 @@ class BusinessPaymentService:
 
     @transaction.atomic
     def review_payment(self, business, payment_id, *, approve, admin=None):
-        payment = BusinessPayment.objects.select_for_update().select_related(
+        payment = self.payment_model.objects.select_for_update().select_related(
             "order__status", "status"
         ).filter(id=payment_id, business=business).first()
         if payment is None:
             raise self.NotFoundError("Payment not found.")
-        order = Order.objects.select_for_update().get(id=payment.order_id)
+        order = self.order_model.objects.select_for_update().get(id=payment.order_id)
         if (
             payment.status.name != "pending"
             or order.status.name != "payment_processing"
@@ -278,14 +295,14 @@ class BusinessPaymentService:
             )
         if approve:
             payment.status = self._status("successful")
-            order.status = OrderStatus.objects.get(name="paid")
+            order.status = self.order_status_model.objects.get(name="paid")
             order.save(update_fields=["status"])
             self._consume_order_reservations(order)
             action_code = "approve_payment"
             description = "Payment approved."
         else:
             payment.status = self._status("failed")
-            order.status = OrderStatus.objects.get(name="payment_failed")
+            order.status = self.order_status_model.objects.get(name="payment_failed")
             order.save(update_fields=["status"])
             self._release_order_reservations(order)
             action_code = "reject_payment"
@@ -294,17 +311,11 @@ class BusinessPaymentService:
         self._record_payment_history(order, action_code, description, user=admin)
         return order
 
-    @staticmethod
-    def _consume_order_reservations(order):
-        from domains.order.services import OrderService
+    def _consume_order_reservations(self, order):
+        self.order_service().consume_reservations(order)
 
-        OrderService().consume_reservations(order)
-
-    @staticmethod
-    def _release_order_reservations(order):
-        from domains.order.services import OrderService
-
-        OrderService().release_reservations(order)
+    def _release_order_reservations(self, order):
+        self.order_service().release_reservations(order)
 
     METHOD_ORDERING_FIELDS = {
         "code", "name", "fa_name", "is_active", "supported_channel_count",
@@ -539,7 +550,7 @@ class BusinessPaymentService:
     def list_payments(
         self, business, *, search="", status=None, ordering="-created_at"
     ):
-        queryset = BusinessPayment.objects.filter(
+        queryset = self.payment_model.objects.filter(
             business=business
         ).select_related("payment_method", "payment_channel", "order", "status")
         if search:
@@ -559,10 +570,10 @@ class BusinessPaymentService:
 
     def get_payment(self, business, payment_id):
         try:
-            return BusinessPayment.objects.select_related(
+            return self.payment_model.objects.select_related(
                 "payment_method", "payment_channel", "order", "status"
             ).get(id=payment_id, business=business)
-        except BusinessPayment.DoesNotExist as exc:
+        except self.payment_model.DoesNotExist as exc:
             raise self.NotFoundError("Payment not found.") from exc
 
     def payment_payload(self, payment):
@@ -601,7 +612,7 @@ class BusinessPaymentService:
 
     def list_documents(self, business, payment_id):
         payment = self.get_payment(business, payment_id)
-        return BusinessPaymentDocument.objects.filter(
+        return self.payment_document_model.objects.filter(
             payment=payment
         ).select_related("file__status").order_by("id")
 
