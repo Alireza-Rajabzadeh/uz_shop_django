@@ -160,9 +160,12 @@ class CheckoutFixture(TestCase):
         return variant, offer, inventory
 
     def filled_cart(self, variant, quantity=1):
-        cart = Cart.objects.create(
-            customer=self.customer, address_info={"city_name": "Ci"}
+        # A customer owns at most one basket, so a fixture that fills twice
+        # refills the same one instead of fighting the unique constraint.
+        cart, _ = Cart.objects.get_or_create(
+            customer=self.customer, defaults={"address_info": {"city_name": "Ci"}}
         )
+        cart.items.all().delete()
         cart.items.create(variant=variant, quantity=quantity)
         return cart
 

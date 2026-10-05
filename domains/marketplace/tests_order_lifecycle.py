@@ -5,6 +5,7 @@ from django.utils import timezone
 from domains.inventory.models import InventorySupply, InventorySupplyConsumption
 from domains.marketplace.models import (
     MarketplaceOrder,
+    MarketplaceOrderAction,
     MarketplaceOrderHistory,
     MarketplaceOrderStatus,
 )
@@ -132,7 +133,7 @@ class MarketplaceOrderLifecycleTests(MarketplaceCheckoutFixture):
 
     # ───────────────────────── returns ─────────────────────────
 
-    def test_returns_are_not_offered_while_the_flow_has_none(self):
+    def test_request_return_is_offered_only_once_the_window_is_open(self):
         order = MarketplaceOrder.objects.create(
             customer=self.customer,
             business=self.business,
@@ -145,16 +146,43 @@ class MarketplaceOrderLifecycleTests(MarketplaceCheckoutFixture):
             total_amount="100.00",
         )
 
-        actions = self.service.available_actions(
-            order.id, actor="customer", customer=self.customer
+        # Status 300 carries only request_return, and the delivery stamp that
+        # opens the three-day window is missing, so nobody is shown an action
+        # they cannot complete.
+        self.assertEqual(self._customer_actions(order), [])
+
+        MarketplaceOrderHistory.objects.create(
+            order=order,
+            action=MarketplaceOrderAction.objects.get(code="deliver"),
+            description="Delivered",
         )
 
-        # Status 300 carries only request_return, and this flow has no returns
-        # service yet, so nobody is shown an action they cannot complete.
-        self.assertEqual(actions, [])
+        self.assertEqual(self._customer_actions(order), ["request_return"])
+
+    def test_the_action_endpoint_never_creates_a_return_itself(self):
+        order = MarketplaceOrder.objects.create(
+            customer=self.customer,
+            business=self.business,
+            status=MarketplaceOrderStatus.objects.get(id=300),
+            address_info={"city_name": "MkCi"},
+            subtotal="100.00",
+            discount_amount="0.00",
+            shipping_original_amount="200000.00",
+            shipping_amount="0.00",
+            total_amount="100.00",
+        )
 
         with self.assertRaises(self.service.ValidationError) as ctx:
             self.service.execute_action(
                 order.id, "request_return", actor="customer", customer=self.customer
             )
+
         self.assertEqual(list(ctx.exception.errors), ["action"])
+
+    def _customer_actions(self, order):
+        return [
+            action["code"]
+            for action in self.service.available_actions(
+                order.id, actor="customer", customer=self.customer
+            )
+        ]

@@ -12,6 +12,7 @@ from ..models import (
     MarketplaceOrderStatusAction,
 )
 from .cart_service import MarketplaceCartService
+from .return_service import MarketplaceReturnRequestService
 
 
 class MarketplaceOrderService(BaseOrderService):
@@ -41,6 +42,9 @@ class MarketplaceOrderService(BaseOrderService):
     @staticmethod
     def cart_service():
         return MarketplaceCartService()
+
+    def return_service(self):
+        return MarketplaceReturnRequestService
 
     def _has_payment_channel(self):
         return BusinessPaymentService.has_available_channel()

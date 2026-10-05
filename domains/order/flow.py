@@ -293,3 +293,18 @@ class BaseOrderService(BaseCheckoutService):
                 or self._return_eligible(order)
             )
         ]
+
+
+def file_url(file):
+    """A URL for a stored file, or ``None`` when the provider refuses.
+
+    Every flow's payloads link files the same way, and a dead link is worse
+    than an absent one, so a provider failure is reported as "no URL" rather
+    than raised at the reader.
+    """
+    from domains.files.services import FileService
+
+    try:
+        return FileService().url(file)
+    except FileService.Error:
+        return None
