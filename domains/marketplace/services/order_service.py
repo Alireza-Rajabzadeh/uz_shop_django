@@ -1,18 +1,20 @@
 from django.utils.translation import gettext as _
 
 from domains.business_payments.services import BusinessPaymentService
-from domains.cart.checkout import BaseCheckoutService, CheckoutError
+from domains.order.flow import BaseOrderService
 
 from ..models import (
     MarketplaceOrder,
+    MarketplaceOrderHistory,
     MarketplaceOrderItem,
     MarketplaceOrderItemReservation,
     MarketplaceOrderStatus,
+    MarketplaceOrderStatusAction,
 )
 from .cart_service import MarketplaceCartService
 
 
-class MarketplaceOrderService(BaseCheckoutService):
+class MarketplaceOrderService(BaseOrderService):
     """The marketplace flow, writing the marketplace tables.
 
     How an order is created is inherited wholesale; only the tables and the
@@ -29,12 +31,12 @@ class MarketplaceOrderService(BaseCheckoutService):
     leaves an order behind.
     """
 
-    ValidationError = CheckoutError
-
     order_model = MarketplaceOrder
     item_model = MarketplaceOrderItem
     reservation_model = MarketplaceOrderItemReservation
     status_model = MarketplaceOrderStatus
+    status_action_model = MarketplaceOrderStatusAction
+    history_model = MarketplaceOrderHistory
 
     @staticmethod
     def cart_service():
