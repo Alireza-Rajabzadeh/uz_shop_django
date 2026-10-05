@@ -18,6 +18,7 @@ from domains.inventory.models import (
 from domains.inventory.services.inventory_attribute_service import InventoryAttributeService
 from domains.inventory.services.inventory_cost_service import InventoryCostService
 from domains.inventory.services.inventory_service import InventoryService
+from domains.marketplace.models import MarketplaceOrderItem
 from domains.order.models import OrderItem
 
 
@@ -284,18 +285,38 @@ class InventorySupplyService:
             inventory.sellable += len(units)
             inventory.save(update_fields=["quantity", "sellable"])
 
+    @staticmethod
+    def _target_field(order_item):
+        """The consumption column a line belongs to.
+
+        ``InventorySupplyConsumption`` holds exactly two order-line
+        references — the shop's and the marketplace's — and the database
+        requires exactly one of them. Deriving which one from the line's own
+        class means no caller restates a choice the schema already made, and
+        no caller can state the wrong one.
+        """
+        if isinstance(order_item, OrderItem):
+            return "order_item"
+        if isinstance(order_item, MarketplaceOrderItem):
+            return "marketplace_order_item"
+        raise ValueError(
+            f"{type(order_item).__name__} is not an order line this service can consume."
+        )
+
     @transaction.atomic
     def consume_order_item(self, order_item):
         # Consume supply cost layers for a finalized sale. Called from
         # OrderService.consume_reservations (payment approval), never during
         # cart/reservation/pending stages. Idempotent per order item.
+        # Shop lines and marketplace lines take this same path; only the
+        # column their consumption row records differs.
         order_item = (
-            OrderItem.objects.select_for_update()
+            type(order_item).objects.select_for_update()
             .get(pk=order_item.pk)
         )
         if order_item.supply_consumptions.exists():
             raise self.ValidationError({
-                "order_item": [
+                self._target_field(order_item): [
                     _('This order item has already consumed its supply layers.')
                 ]
             })
@@ -395,7 +416,7 @@ class InventorySupplyService:
         landed_unit_cost = self.cost_service.get_landed_unit_cost(supply)
         return InventorySupplyConsumption.objects.create(
             supply=supply,
-            order_item=order_item,
+            **{self._target_field(order_item): order_item},
             quantity=quantity,
             unit_cost=landed_unit_cost.quantize(Decimal("0.01")),
         )
@@ -408,7 +429,7 @@ class InventorySupplyService:
         #
         # Partial reversals consume the reversible pool in a deterministic
         # order: most recently consumed layer first (created_at DESC, id DESC).
-        order_item = OrderItem.objects.select_for_update().get(pk=order_item.pk)
+        order_item = type(order_item).objects.select_for_update().get(pk=order_item.pk)
         records = list(
             order_item.supply_consumptions.select_for_update()
             .select_related("supply")
