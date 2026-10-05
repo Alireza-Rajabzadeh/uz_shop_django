@@ -1,17 +1,22 @@
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import Count, Prefetch, Q
+from django.db.models import Count, Q
 from django.utils.translation import gettext as _
 
 from domains.catalog.models import ProductFile, ProductVariants
-from domains.catalog.services import VariantService
 from domains.files.services import FileService
 from domains.inventory.services import InventoryService
 from domains.shipment.services import ShipmentCalculationService
 
 from .address import AddressInfoService
 from .models import Cart, CartItem
+from .pricing import (
+    attach_offers,
+    availability,
+    load_variants,
+    variant_pricing,
+)
 
 
 class CartService:
@@ -21,7 +26,6 @@ class CartService:
             super().__init__(str(errors))
 
     inventory_service = InventoryService()
-    variant_service = VariantService()
     shipment_service = ShipmentCalculationService()
 
     @staticmethod
@@ -110,41 +114,9 @@ class CartService:
         }
 
     def _attach_variants(self, items):
-        from domains.marketplace.models import BusinessOffer
         variant_ids = [item.variant_id for item in items]
-        storefront_media = ProductFile.objects.filter(
-            file__file_type="image",
-            file__status__name="available",
-            file__deleted_at__isnull=True,
-        ).select_related("file").order_by("-is_primary", "position", "id")
-        queryset = (
-            ProductVariants.objects.filter(pk__in=variant_ids)
-            .select_related(
-                "product", "product__status", "product__brand"
-            )
-            .prefetch_related(
-                "selections__attribute",
-                "selections__option",
-                Prefetch(
-                    "product__product_files",
-                    queryset=storefront_media,
-                    to_attr="storefront_media",
-                ),
-            )
-        )
-        variants = {
-            row.id: row
-            for row in self.inventory_service.annotate_variant_summaries(queryset)
-        }
-        offers = BusinessOffer.objects.filter(
-            variant_id__in=variant_ids, is_active=True
-        )
-        offer_map = {}
-        for offer in offers:
-            offer_map.setdefault(offer.variant_id, []).append(offer)
-        for variant in variants.values():
-            variant._business_offers = offer_map.get(variant.id, [])
-            variant._business_offer = variant._business_offers[0] if variant._business_offers else None
+        variants = load_variants(variant_ids)
+        attach_offers(variants.values())
         return [(item, variants.get(item.variant_id)) for item in items]
 
     def _product_thumbnail(self, product):
@@ -173,22 +145,12 @@ class CartService:
         product = variant.product
         product_status = product.status.name.casefold()
         enough_stock = variant.available_item_count >= item.quantity
-
-        if product_status == "active" and enough_stock:
-            status, action, valid, reason = "available", "none", True, ""
-        elif product_status == "active":
-            status, action, valid = "out_of_stock", "move_to_wishlist", False
-            reason = _("Requested quantity exceeds available stock.")
-        elif product_status == "preorder":
-            status, action, valid, reason = "pre_orderable", "move_to_preorder", False, (
-                "This product is now only available for pre-order."
-            )
-        else:
-            status, action, valid = "variant_unavailable", "remove", False
-            reason = "This item is no longer available for purchase."
+        status, action, valid, reason = availability(
+            product_status, enough_stock=enough_stock
+        )
 
         two_places = Decimal("0.01")
-        pricing = self._variant_pricing(variant)
+        pricing = variant_pricing(variant)
         effective_price = Decimal(pricing["effective_price"])
         unit_discount = Decimal(pricing["unit_discount_amount"])
         return {
@@ -223,21 +185,8 @@ class CartService:
 
     @staticmethod
     def _variant_pricing(variant):
-        offer = getattr(variant, "_business_offer", None)
-        unit_price = getattr(offer, "price", None) or Decimal("0")
-        effective_price = VariantService().calculate_discounted_price(variant, offer)
-        unit_discount = max(unit_price - effective_price, Decimal("0"))
-        two_places = Decimal("0.01")
-        return {
-            "unit_price": str(unit_price),
-            "discount_type": getattr(offer, "discount_type", None),
-            "discount_value": (
-                str(offer.discount_value)
-                if offer and offer.discount_value is not None else None
-            ),
-            "effective_price": str(effective_price.quantize(two_places)),
-            "unit_discount_amount": str(unit_discount.quantize(two_places)),
-        }
+        # Kept as a seam for subclasses that render their own payloads.
+        return variant_pricing(variant)
 
     def _variant_payload(self, variant, quantity, *, cap_quantity=False):
         product = variant.product
@@ -250,24 +199,12 @@ class CartService:
             quantity = available
             quantity_capped = True
         enough_stock = available >= quantity
-
-        if product_status == "active" and enough_stock:
-            status, action, valid = "available", "none", True
-            reason = (
-                _("Requested quantity exceeds available stock; reduced to {count}.").format(
-                    count=quantity
-                )
-                if quantity_capped else ""
-            )
-        elif product_status == "active":
-            status, action, valid = "out_of_stock", "move_to_wishlist", False
-            reason = _("Requested quantity exceeds available stock.")
-        elif product_status == "preorder":
-            status, action, valid = "pre_orderable", "move_to_preorder", False
-            reason = _("This product is now only available for pre-order.")
-        else:
-            status, action, valid = "variant_unavailable", "remove", False
-            reason = _("This item is no longer available for purchase.")
+        status, action, valid, reason = availability(
+            product_status,
+            enough_stock=enough_stock,
+            quantity_capped=quantity_capped,
+            quantity=quantity,
+        )
 
         return {
             "variant_id": variant.id,
@@ -280,7 +217,7 @@ class CartService:
             "product_status": product.status.name,
             "sku": variant.sku,
             "combination_key": variant.combination_key,
-            **self._variant_pricing(variant),
+            **variant_pricing(variant),
             "available": available,
             "selections": [
                 {
@@ -468,15 +405,8 @@ class CartService:
             "product", "product__status"
         ).prefetch_related("selections__attribute", "selections__option")
         variant = self.inventory_service.annotate_variant_summaries(queryset)[0]
-        self._attach_single_offer(variant)
+        attach_offers([variant])
         return self._variant_payload(variant, quantity, cap_quantity=True)
-
-    def _attach_single_offer(self, variant):
-        from domains.marketplace.models import BusinessOffer
-        offer = BusinessOffer.objects.filter(
-            variant=variant, is_active=True
-        ).select_related("business").first()
-        variant._business_offer = offer
 
     def validate_items(self, items):
         return [

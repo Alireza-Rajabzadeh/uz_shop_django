@@ -7,8 +7,14 @@ from django.db.models import Count, Q as models_Q, Sum
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
+from domains.cart.pricing import (
+    attach_offers,
+    line_snapshot,
+    summary_map,
+    validate_item,
+)
 from domains.cart.services import CartService
-from domains.catalog.models import ProductFile, ProductVariants
+from domains.catalog.models import ProductFile
 from domains.files.services import FileService
 from domains.payments.services import PaymentService
 from domains.shipment.services import ShipmentCalculationService
@@ -65,35 +71,6 @@ class OrderService:
 
     def _status(self, name):
         return OrderStatus.objects.filter(name=name).first()
-
-    def _attach_offers(self, variants):
-        from domains.marketplace.models import BusinessOffer
-        variant_ids = [v.id for v in variants]
-        offers = BusinessOffer.objects.filter(
-            variant_id__in=variant_ids, is_active=True
-        ).select_related("business")
-        offer_map = {}
-        for offer in offers:
-            offer_map.setdefault(offer.variant_id, []).append(offer)
-        for variant in variants:
-            variant._business_offers = offer_map.get(variant.id, [])
-            variant._business_offer = variant._business_offers[0] if variant._business_offers else None
-
-    def _line_snapshot(self, variant, quantity):
-        offer = getattr(variant, "_business_offer", None)
-        price = (getattr(offer, "price", None) or Decimal("0")).quantize(self.two_places)
-        effective = self.cart_service().variant_service.calculate_discounted_price(
-            variant, offer
-        ).quantize(self.two_places)
-        unit_discount = max(price - effective, Decimal("0")).quantize(self.two_places)
-        return {
-            "unit_price": price,
-            "discount_type": getattr(offer, "discount_type", None),
-            "discount_value": getattr(offer, "discount_value", None),
-            "unit_discount": unit_discount,
-            "line_discount": (unit_discount * quantity).quantize(self.two_places),
-            "line_total": (effective * quantity).quantize(self.two_places),
-        }
 
     def _variant_info_snapshot(self, variant):
         return {
@@ -154,29 +131,6 @@ class OrderService:
     def cart_service():
         return CartService()
 
-    def _summary_map(self, variants):
-        ids = [v.id for v in variants if v is not None]
-        rows = ProductVariants.objects.filter(id__in=ids)
-        rows = self.cart_service().inventory_service.annotate_variant_summaries(rows)
-        return {row.id: row for row in rows}
-
-    def _validate_item(self, item, summary):
-        variant = item.variant
-        if variant is None:
-            return False, _("Item is no longer available.")
-        product_status = variant.product.status.name.casefold()
-        if product_status != "active":
-            return False, _("Item %(sku)s is not available for purchase.") % {
-                "sku": variant.sku
-            }
-        summary_row = summary.get(variant.id)
-        available = summary_row.available_item_count if summary_row else 0
-        if available < item.quantity:
-            return False, _("Item %(sku)s does not have enough stock.") % {
-                "sku": variant.sku
-            }
-        return True, ""
-
     # ───────────────────────── checkout ─────────────────────────
 
     @transaction.atomic
@@ -194,6 +148,7 @@ class OrderService:
             cart.items.select_related(
                 "variant",
                 "variant__product",
+                "variant__product__status",
             )
             .prefetch_related(
                 "variant__selections__attribute", "variant__selections__option"
@@ -203,12 +158,12 @@ class OrderService:
         if not items:
             raise self.ValidationError({"cart": [_("The cart is empty.")]})
 
-        self._attach_offers([item.variant for item in items])
+        attach_offers([item.variant for item in items])
 
-        summary = self._summary_map([item.variant for item in items])
+        summary = summary_map([item.variant for item in items])
         validation_errors = []
         for item in items:
-            ok, message = self._validate_item(item, summary)
+            ok, message = validate_item(item, summary)
             if not ok:
                 validation_errors.append(message)
         if validation_errors:
@@ -229,7 +184,7 @@ class OrderService:
         discount_total = Decimal("0.00")
         for item in items:
             variant = item.variant
-            line = self._line_snapshot(variant, item.quantity)
+            line = line_snapshot(variant, item.quantity)
             reservations = self._reserve_line(variant, item.quantity)
             order_item = OrderItem.objects.create(
                 order=order,
