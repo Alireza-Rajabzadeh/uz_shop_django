@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: uz_shop_django\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-03 14:17+0000\n"
+"POT-Creation-Date: 2026-10-05 14:18+0000\n"
 "PO-Revision-Date: 2026-07-23 12:11+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -60,134 +60,132 @@ msgid "contract_version must be an integer."
 msgstr "contract_version must be an integer."
 
 #: domains/business_content/contracts.py:53
-#: domains/business_content/contracts.py:254 domains/content/contracts.py:53
-#: domains/content/contracts.py:254
+#: domains/business_content/contracts.py:253 domains/content/contracts.py:53
+#: domains/content/contracts.py:253
 msgid "components must be an array."
 msgstr "components must be an array."
 
 #: domains/business_content/contracts.py:60
-#: domains/business_content/contracts.py:123
-#: domains/business_content/contracts.py:132
-#: domains/business_content/contracts.py:326 domains/content/contracts.py:60
-#: domains/content/contracts.py:123 domains/content/contracts.py:132
-#: domains/content/contracts.py:294
+#: domains/business_content/contracts.py:122
+#: domains/business_content/contracts.py:131
+#: domains/business_content/contracts.py:325 domains/content/contracts.py:60
+#: domains/content/contracts.py:122 domains/content/contracts.py:131
+#: domains/content/contracts.py:293
 #, python-format
 msgid "%(location)s must be an object."
 msgstr "%(location)s must be an object."
 
 #: domains/business_content/contracts.py:65 domains/content/contracts.py:65
 #, python-format
-#| msgid ""
-#| "%(location)s must contain only key, name, version, description, and props."
 msgid ""
 "%(location)s must contain only key, name, version, description, "
 "allowedContexts, and props."
 msgstr ""
-"%(location)s must contain only key, name, version, description, allowedContexts, "
-"and props."
+"%(location)s must contain only key, name, version, description, "
+"allowedContexts, and props."
 
-#: domains/business_content/contracts.py:74 domains/content/contracts.py:74
+#: domains/business_content/contracts.py:73 domains/content/contracts.py:73
 #, python-format
 msgid "%(location)s.key must be a non-empty string."
 msgstr "%(location)s.key must be a non-empty string."
 
-#: domains/business_content/contracts.py:78 domains/content/contracts.py:78
+#: domains/business_content/contracts.py:77 domains/content/contracts.py:77
 #, python-format
 msgid "%(location)s.name must be a string."
 msgstr "%(location)s.name must be a string."
 
-#: domains/business_content/contracts.py:82 domains/content/contracts.py:82
+#: domains/business_content/contracts.py:81 domains/content/contracts.py:81
 #, python-format
 msgid "%(location)s.version must be an integer."
 msgstr "%(location)s.version must be an integer."
 
-#: domains/business_content/contracts.py:87 domains/content/contracts.py:87
+#: domains/business_content/contracts.py:86 domains/content/contracts.py:86
 #, python-format
 msgid "Duplicate component key/version: %(key)s."
 msgstr "Duplicate component key/version: %(key)s."
 
-#: domains/business_content/contracts.py:102 domains/content/contracts.py:102
+#: domains/business_content/contracts.py:101 domains/content/contracts.py:101
 #, python-format
 msgid "%(location)s must be a non-empty array."
 msgstr "%(location)s must be a non-empty array."
 
-#: domains/business_content/contracts.py:106 domains/content/contracts.py:106
+#: domains/business_content/contracts.py:105 domains/content/contracts.py:105
 #, python-format
 msgid "%(location)s must contain only context names."
 msgstr "%(location)s must contain only context names."
 
-#: domains/business_content/contracts.py:110 domains/content/contracts.py:110
+#: domains/business_content/contracts.py:109 domains/content/contracts.py:109
 #, python-format
 msgid "%(location)s must not repeat a context."
 msgstr "%(location)s must not repeat a context."
 
-#: domains/business_content/contracts.py:115 domains/content/contracts.py:115
+#: domains/business_content/contracts.py:114 domains/content/contracts.py:114
 #, python-format
 msgid "%(location)s contains unsupported contexts: %(contexts)s."
 msgstr "%(location)s contains unsupported contexts: %(contexts)s."
 
-#: domains/business_content/contracts.py:137
-#: domains/business_content/contracts.py:394 domains/content/contracts.py:137
-#: domains/content/contracts.py:362
+#: domains/business_content/contracts.py:136
+#: domains/business_content/contracts.py:393 domains/content/contracts.py:136
+#: domains/content/contracts.py:361
 #, python-format
 msgid "%(location)s uses unsupported contract type %(type)s."
 msgstr "%(location)s uses unsupported contract type %(type)s."
 
-#: domains/business_content/contracts.py:148 domains/content/contracts.py:148
+#: domains/business_content/contracts.py:147 domains/content/contracts.py:147
 #, python-format
 msgid "%(location)s.%(field)s must be a boolean."
 msgstr "%(location)s.%(field)s must be a boolean."
 
-#: domains/business_content/contracts.py:154 domains/content/contracts.py:154
+#: domains/business_content/contracts.py:153 domains/content/contracts.py:153
 #, python-format
 msgid "%(location)s.%(field)s must be an integer."
 msgstr "%(location)s.%(field)s must be an integer."
 
-#: domains/business_content/contracts.py:160 domains/content/contracts.py:160
+#: domains/business_content/contracts.py:159 domains/content/contracts.py:159
 #, python-format
 msgid "%(location)s.%(field)s must be a string."
 msgstr "%(location)s.%(field)s must be a string."
 
-#: domains/business_content/contracts.py:168 domains/content/contracts.py:168
+#: domains/business_content/contracts.py:167 domains/content/contracts.py:167
 #, python-format
 msgid "%(location)s.%(field)s must be a positive integer."
 msgstr "%(location)s.%(field)s must be a positive integer."
 
-#: domains/business_content/contracts.py:176 domains/content/contracts.py:176
+#: domains/business_content/contracts.py:175 domains/content/contracts.py:175
 #, python-format
 msgid "%(location)s.enum must be an array of strings or integers."
 msgstr "%(location)s.enum must be an array of strings or integers."
 
-#: domains/business_content/contracts.py:192 domains/content/contracts.py:192
+#: domains/business_content/contracts.py:191 domains/content/contracts.py:191
 #, python-format
 msgid "%(location)s.cardinality must be one of %(options)s."
 msgstr "%(location)s.cardinality must be one of %(options)s."
 
-#: domains/business_content/contracts.py:198 domains/content/contracts.py:198
+#: domains/business_content/contracts.py:197 domains/content/contracts.py:197
 #, python-format
 msgid "%(location)s.data_source must be an object."
 msgstr "%(location)s.data_source must be an object."
 
-#: domains/business_content/contracts.py:202 domains/content/contracts.py:202
+#: domains/business_content/contracts.py:201 domains/content/contracts.py:201
 #, python-format
 msgid "%(location)s.data_source.resource must be one of %(options)s."
 msgstr "%(location)s.data_source.resource must be one of %(options)s."
 
-#: domains/business_content/contracts.py:210 domains/content/contracts.py:210
+#: domains/business_content/contracts.py:209 domains/content/contracts.py:209
 #, python-format
 msgid "%(location)s.data_source.store must be 'id'."
 msgstr "%(location)s.data_source.store must be 'id'."
 
-#: domains/business_content/contracts.py:214 domains/content/contracts.py:214
+#: domains/business_content/contracts.py:213 domains/content/contracts.py:213
 #, python-format
 msgid "%(location)s.data_source.searchable must be a boolean."
 msgstr "%(location)s.data_source.searchable must be a boolean."
 
-#: domains/business_content/contracts.py:232 domains/content/contracts.py:232
+#: domains/business_content/contracts.py:231 domains/content/contracts.py:231
 msgid "Draft content must be an object."
 msgstr "Draft content must be an object."
 
-#: domains/business_content/contracts.py:237 domains/content/contracts.py:237
+#: domains/business_content/contracts.py:236 domains/content/contracts.py:236
 msgid ""
 "Draft content must contain only schema_version, contract_version, and "
 "components."
@@ -195,92 +193,92 @@ msgstr ""
 "Draft content must contain only schema_version, contract_version, and "
 "components."
 
-#: domains/business_content/contracts.py:243 domains/content/contracts.py:243
+#: domains/business_content/contracts.py:242 domains/content/contracts.py:242
 #, python-format
 msgid "schema_version must be %(version)s."
 msgstr "schema_version must be %(version)s."
 
-#: domains/business_content/contracts.py:250 domains/content/contracts.py:250
+#: domains/business_content/contracts.py:249 domains/content/contracts.py:249
 #, python-format
 msgid "contract_version must be %(version)s."
 msgstr "contract_version must be %(version)s."
 
-#: domains/business_content/contracts.py:265 domains/content/contracts.py:265
+#: domains/business_content/contracts.py:264 domains/content/contracts.py:264
 #, python-format
 msgid "%(location)s must contain only id, key, version, and props."
 msgstr "%(location)s must contain only id, key, version, and props."
 
-#: domains/business_content/contracts.py:270 domains/content/contracts.py:270
+#: domains/business_content/contracts.py:269 domains/content/contracts.py:269
 #, python-format
 msgid "%(location)s.id must be a non-empty string."
 msgstr "%(location)s.id must be a non-empty string."
 
-#: domains/business_content/contracts.py:274 domains/content/contracts.py:274
+#: domains/business_content/contracts.py:273 domains/content/contracts.py:273
 #, python-format
 msgid "Duplicate component id: %(id)s."
 msgstr "Duplicate component id: %(id)s."
 
-#: domains/business_content/contracts.py:279 domains/content/contracts.py:279
+#: domains/business_content/contracts.py:278 domains/content/contracts.py:278
 #, python-format
 msgid "%(location)s has an invalid key or version."
 msgstr "%(location)s has an invalid key or version."
 
-#: domains/business_content/contracts.py:284 domains/content/contracts.py:284
+#: domains/business_content/contracts.py:283 domains/content/contracts.py:283
 #, python-format
 msgid "Unknown component key/version: %(key)s."
 msgstr "Unknown component key/version: %(key)s."
 
-#: domains/business_content/contracts.py:317
+#: domains/business_content/contracts.py:316
 #, python-format
 msgid "components[%(index)s] is not available for this type of page."
 msgstr "components[%(index)s] is not available for this type of page."
 
-#: domains/business_content/contracts.py:331 domains/content/contracts.py:299
+#: domains/business_content/contracts.py:330 domains/content/contracts.py:298
 #, python-format
 msgid "%(location)s contains unknown properties: %(properties)s."
 msgstr "%(location)s contains unknown properties: %(properties)s."
 
-#: domains/business_content/contracts.py:337 domains/content/contracts.py:305
+#: domains/business_content/contracts.py:336 domains/content/contracts.py:304
 #, python-format
 msgid "%(location)s is missing required properties: %(properties)s."
 msgstr "%(location)s is missing required properties: %(properties)s."
 
-#: domains/business_content/contracts.py:343 domains/content/contracts.py:311
+#: domains/business_content/contracts.py:342 domains/content/contracts.py:310
 #, python-format
 msgid "%(location)s cannot be empty."
 msgstr "%(location)s cannot be empty."
 
-#: domains/business_content/contracts.py:355 domains/content/contracts.py:323
+#: domains/business_content/contracts.py:354 domains/content/contracts.py:322
 #, python-format
 msgid "%(location)s uses an unsupported model resource."
 msgstr "%(location)s uses an unsupported model resource."
 
-#: domains/business_content/contracts.py:359 domains/content/contracts.py:327
+#: domains/business_content/contracts.py:358 domains/content/contracts.py:326
 #, python-format
 msgid "%(location)s must store model IDs."
 msgstr "%(location)s must store model IDs."
 
-#: domains/business_content/contracts.py:369 domains/content/contracts.py:337
+#: domains/business_content/contracts.py:368 domains/content/contracts.py:336
 #, python-format
 msgid "%(location)s uses unsupported cardinality %(cardinality)s."
 msgstr "%(location)s uses unsupported cardinality %(cardinality)s."
 
-#: domains/business_content/contracts.py:400 domains/content/contracts.py:368
+#: domains/business_content/contracts.py:399 domains/content/contracts.py:367
 #, python-format
 msgid "%(location)s must be a valid %(type)s."
 msgstr "%(location)s must be a valid %(type)s."
 
-#: domains/business_content/contracts.py:408 domains/content/contracts.py:376
+#: domains/business_content/contracts.py:407 domains/content/contracts.py:375
 #, python-format
 msgid "%(location)s must contain at least %(count)s item(s)."
 msgstr "%(location)s must contain at least %(count)s item(s)."
 
-#: domains/business_content/contracts.py:413 domains/content/contracts.py:381
+#: domains/business_content/contracts.py:412 domains/content/contracts.py:380
 #, python-format
 msgid "%(location)s must contain at most %(count)s item(s)."
 msgstr "%(location)s must contain at most %(count)s item(s)."
 
-#: domains/business_content/contracts.py:418 domains/content/contracts.py:386
+#: domains/business_content/contracts.py:417 domains/content/contracts.py:385
 #, python-format
 msgid "%(location)s must be one of %(options)s."
 msgstr "%(location)s must be one of %(options)s."
@@ -325,53 +323,53 @@ msgstr "The contracts file could not be parsed."
 msgid "Business profile not found."
 msgstr "Business profile not found."
 
-#: domains/business_payments/services.py:137
-#: domains/business_payments/services.py:180 domains/payments/services.py:111
+#: domains/business_payments/services.py:157
+#: domains/business_payments/services.py:198 domains/payments/services.py:111
 #: domains/payments/services.py:149
 msgid "The order reservation has expired."
 msgstr ""
 
-#: domains/business_payments/services.py:184 domains/payments/services.py:151
+#: domains/business_payments/services.py:202 domains/payments/services.py:151
 msgid "This order cannot be paid."
 msgstr ""
 
-#: domains/business_payments/services.py:189 domains/payments/services.py:154
+#: domains/business_payments/services.py:207 domains/payments/services.py:154
 msgid "This payment method is not available for manual payment."
 msgstr ""
 
-#: domains/business_payments/services.py:197 domains/payments/services.py:158
+#: domains/business_payments/services.py:215 domains/payments/services.py:158
 #, fuzzy
 #| msgid "No active payment channel is available."
 msgid "This payment method is not available."
 msgstr "No active payment channel is available."
 
-#: domains/business_payments/services.py:204 domains/payments/services.py:161
+#: domains/business_payments/services.py:222 domains/payments/services.py:161
 #, fuzzy
 #| msgid "No active payment channel is available."
 msgid "This payment channel is not available."
 msgstr "No active payment channel is available."
 
-#: domains/business_payments/services.py:211 domains/payments/services.py:166
+#: domains/business_payments/services.py:229 domains/payments/services.py:166
 msgid "This channel does not support the selected payment method."
 msgstr ""
 
-#: domains/business_payments/services.py:216 domains/payments/services.py:169
+#: domains/business_payments/services.py:234 domains/payments/services.py:169
 msgid "At least one payment document is required."
 msgstr ""
 
-#: domains/business_payments/services.py:220 domains/payments/services.py:171
+#: domains/business_payments/services.py:238 domains/payments/services.py:171
 msgid "No more than 10 payment documents are allowed."
 msgstr ""
 
-#: domains/business_payments/services.py:277 domains/payments/services.py:217
+#: domains/business_payments/services.py:294 domains/payments/services.py:217
 msgid "This payment is not awaiting review."
 msgstr ""
 
-#: domains/business_payments/services.py:501
+#: domains/business_payments/services.py:512
 msgid "This channel has payments. Only its active status can be changed."
 msgstr ""
 
-#: domains/business_payments/services.py:533
+#: domains/business_payments/services.py:544
 msgid "This channel has payments and cannot be deleted."
 msgstr ""
 
@@ -410,64 +408,93 @@ msgstr "Address not found."
 msgid "One or more selected locations do not exist."
 msgstr ""
 
-#: domains/cart/services.py:76
+#: domains/cart/checkout.py:200
+msgid "Set a delivery address before checkout."
+msgstr ""
+
+#: domains/cart/checkout.py:204
+msgid "No active payment channel is available."
+msgstr "No active payment channel is available."
+
+#: domains/cart/checkout.py:208
+msgid "The cart is empty."
+msgstr ""
+
+#: domains/cart/pricing.py:157
+msgid "Item is no longer available."
+msgstr ""
+
+#: domains/cart/pricing.py:160
+#, python-format
+msgid "Item %(sku)s is not available for purchase."
+msgstr ""
+
+#: domains/cart/pricing.py:166
+#: domains/inventory/services/inventory_service.py:1249
+#: domains/inventory/services/inventory_service.py:1332
+#, python-format
+msgid "Item %(sku)s does not have enough stock."
+msgstr ""
+
+#: domains/cart/pricing.py:182
+#, python-brace-format
+msgid "Requested quantity exceeds available stock; reduced to {count}."
+msgstr ""
+
+#: domains/cart/pricing.py:193
+msgid "Requested quantity exceeds available stock."
+msgstr ""
+
+#: domains/cart/pricing.py:200 domains/cart/services.py:373
+msgid "This product is now only available for pre-order."
+msgstr ""
+
+#: domains/cart/pricing.py:206 domains/cart/services.py:382
+msgid "This item is no longer available for purchase."
+msgstr ""
+
+#: domains/cart/services.py:91
 #, fuzzy
 #| msgid "Address not found."
 msgid "Cart not found."
 msgstr "Address not found."
 
-#: domains/cart/services.py:181 domains/cart/services.py:264
-msgid "Requested quantity exceeds available stock."
-msgstr ""
-
-#: domains/cart/services.py:257
-#, python-brace-format
-msgid "Requested quantity exceeds available stock; reduced to {count}."
-msgstr ""
-
-#: domains/cart/services.py:267 domains/cart/services.py:416
-msgid "This product is now only available for pre-order."
-msgstr ""
-
-#: domains/cart/services.py:270 domains/cart/services.py:425
-msgid "This item is no longer available for purchase."
-msgstr ""
-
-#: domains/cart/services.py:324
+#: domains/cart/services.py:281
 #, fuzzy
 #| msgid "The confirmation request is no longer valid."
 msgid "This item is no longer available."
 msgstr "The confirmation request is no longer valid."
 
-#: domains/cart/services.py:365 domains/cart/services.py:443
-#: domains/cart/services.py:460
-#: domains/inventory/services/inventory_service.py:1135
-#: domains/inventory/services/inventory_service.py:1152
-#: domains/inventory/services/inventory_service.py:1170
-#: domains/inventory/services/inventory_service.py:1219
-#: domains/inventory/services/inventory_service.py:1267
-#: domains/inventory/services/inventory_service.py:1318
-#: domains/inventory/services/inventory_service.py:1369
-#: domains/inventory/services/inventory_service.py:1462
+#: domains/cart/services.py:322 domains/cart/services.py:400
+#: domains/cart/services.py:417
+#: domains/inventory/services/inventory_service.py:1172
+#: domains/inventory/services/inventory_service.py:1189
+#: domains/inventory/services/inventory_service.py:1207
+#: domains/inventory/services/inventory_service.py:1237
+#: domains/inventory/services/inventory_service.py:1381
+#: domains/inventory/services/inventory_service.py:1429
+#: domains/inventory/services/inventory_service.py:1480
+#: domains/inventory/services/inventory_service.py:1531
+#: domains/inventory/services/inventory_service.py:1624
 msgid "Quantity must be greater than zero."
 msgstr ""
 
-#: domains/cart/services.py:369 domains/catalog/api/views.py:971
+#: domains/cart/services.py:326 domains/catalog/api/views.py:971
 #: domains/catalog/api/views.py:1008
 #, fuzzy
 #| msgid "Address not found."
 msgid "Variant not found."
 msgstr "Address not found."
 
-#: domains/cart/services.py:405
+#: domains/cart/services.py:362
 msgid "This item no longer exists."
 msgstr ""
 
-#: domains/cart/services.py:525 domains/preorder/services.py:68
+#: domains/cart/services.py:475 domains/preorder/services.py:68
 msgid "This product is not available for pre-order."
 msgstr ""
 
-#: domains/cart/services.py:545
+#: domains/cart/services.py:495
 #, fuzzy
 #| msgid "Address not found."
 msgid "Cart item not found."
@@ -694,7 +721,7 @@ msgstr "Address deleted."
 msgid "This field is required."
 msgstr ""
 
-#: domains/catalog/api/views.py:1020
+#: domains/catalog/api/views.py:1028
 #, fuzzy
 #| msgid "Address updated."
 msgid "Variant status updated."
@@ -740,54 +767,54 @@ msgstr ""
 msgid "'{value}' is not a valid option. Choices: {choices}"
 msgstr "'{value}' is not a valid option. Choices: {choices}"
 
-#: domains/catalog/services/product_service.py:329
+#: domains/catalog/services/product_service.py:357
 msgid "Changing the category caused a generated SKU conflict."
 msgstr ""
 
-#: domains/catalog/services/product_service.py:344
-#: domains/catalog/services/product_service.py:432
+#: domains/catalog/services/product_service.py:372
+#: domains/catalog/services/product_service.py:460
 msgid "One or more details are not assigned to the selected category."
 msgstr ""
 
-#: domains/catalog/services/product_service.py:383
+#: domains/catalog/services/product_service.py:411
 #, python-brace-format
 msgid "Required product details are missing: {names}."
 msgstr ""
 
-#: domains/catalog/services/product_service.py:397
+#: domains/catalog/services/product_service.py:425
 #, fuzzy, python-brace-format
 #| msgid "'{value}' is not a valid option. Choices: {choices}"
 msgid "'{value}' is not valid for {name}."
 msgstr "'{value}' is not a valid option. Choices: {choices}"
 
-#: domains/catalog/services/product_service.py:407
+#: domains/catalog/services/product_service.py:435
 #, python-brace-format
 msgid "{name} must be a number."
 msgstr ""
 
-#: domains/catalog/services/product_service.py:411
+#: domains/catalog/services/product_service.py:439
 #, python-brace-format
 msgid "{name} must be a finite number."
 msgstr ""
 
-#: domains/catalog/services/product_service.py:421
+#: domains/catalog/services/product_service.py:449
 msgid "Each product detail can only be submitted once."
 msgstr ""
 
-#: domains/catalog/services/product_service.py:519
-#: domains/catalog/services/product_service.py:584
+#: domains/catalog/services/product_service.py:547
+#: domains/catalog/services/product_service.py:612
 msgid "This option combination or generated SKU already exists."
 msgstr ""
 
-#: domains/catalog/services/product_service.py:601
+#: domains/catalog/services/product_service.py:629
 msgid "At least one variant selection is required."
 msgstr ""
 
-#: domains/catalog/services/product_service.py:606
+#: domains/catalog/services/product_service.py:634
 msgid "Each attribute can only be selected once."
 msgstr ""
 
-#: domains/catalog/services/product_service.py:611
+#: domains/catalog/services/product_service.py:639
 msgid "Each option must belong to its submitted attribute."
 msgstr ""
 
@@ -1093,12 +1120,13 @@ msgstr ""
 #: domains/inventory/services/inventory_pricing_service.py:112
 #: domains/inventory/services/inventory_pricing_service.py:435
 #: domains/inventory/services/inventory_reporting_service.py:173
-#: domains/marketplace/services.py:79 domains/marketplace/services.py:106
+#: domains/marketplace/services/pricing_service.py:79
+#: domains/marketplace/services/pricing_service.py:106
 msgid "Unsupported pricing cost strategy."
 msgstr ""
 
 #: domains/inventory/services/inventory_pricing_service.py:119
-#: domains/marketplace/services.py:101
+#: domains/marketplace/services/pricing_service.py:101
 msgid "Expected profit percentage must be greater than or equal to zero."
 msgstr ""
 
@@ -1123,409 +1151,391 @@ msgstr ""
 msgid "Price must be greater than or equal to zero."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:188
+#: domains/inventory/services/inventory_service.py:205
 msgid "Could not generate a unique warehouse code."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:200
+#: domains/inventory/services/inventory_service.py:217
 msgid "Switch another warehouse to default instead."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:209
+#: domains/inventory/services/inventory_service.py:226
 msgid "The default warehouse cannot be changed while it contains stock."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:223
+#: domains/inventory/services/inventory_service.py:240
 msgid ""
 "The default warehouse cannot be deleted. Switch another warehouse to default "
 "first."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:229
+#: domains/inventory/services/inventory_service.py:246
 msgid "This warehouse cannot be deleted while it contains stock."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:280
+#: domains/inventory/services/inventory_service.py:297
 msgid "Inventory setup requires exactly one default warehouse."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:306
+#: domains/inventory/services/inventory_service.py:323
 msgid "Define serialized units before converting stocked inventory."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:320
+#: domains/inventory/services/inventory_service.py:337
 msgid "This field is required for normal inventory."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:333
+#: domains/inventory/services/inventory_service.py:350
 msgid "Inventory must satisfy 0 <= reserved <= sellable <= quantity."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:359
+#: domains/inventory/services/inventory_service.py:376
 msgid "This field is required for serialized inventory."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:389
-#: domains/inventory/services/inventory_service.py:892
+#: domains/inventory/services/inventory_service.py:406
+#: domains/inventory/services/inventory_service.py:929
 msgid "Inventory setup is missing the serial_number attribute definition."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:405
+#: domains/inventory/services/inventory_service.py:422
 msgid "Each serialized row can only appear once."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:408
+#: domains/inventory/services/inventory_service.py:425
 msgid "One or more serialized row IDs do not belong to this variant."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:422
+#: domains/inventory/services/inventory_service.py:439
 msgid "Reserved serialized rows cannot be deleted."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:427
-#: domains/inventory/services/inventory_service.py:897
+#: domains/inventory/services/inventory_service.py:444
+#: domains/inventory/services/inventory_service.py:934
 msgid "Serial number cannot be blank."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:431
-#: domains/inventory/services/inventory_service.py:449
-#: domains/inventory/services/inventory_service.py:562
-#: domains/inventory/services/inventory_service.py:902
-#: domains/inventory/services/inventory_service.py:940
+#: domains/inventory/services/inventory_service.py:448
+#: domains/inventory/services/inventory_service.py:466
+#: domains/inventory/services/inventory_service.py:579
+#: domains/inventory/services/inventory_service.py:939
+#: domains/inventory/services/inventory_service.py:977
 msgid "Serial numbers must be globally unique, ignoring case."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:511
+#: domains/inventory/services/inventory_service.py:528
 msgid "Reserved serialized rows cannot be edited."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:575
+#: domains/inventory/services/inventory_service.py:592
 msgid "Deactivate the marketplace offer before changing inventory type."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:629
+#: domains/inventory/services/inventory_service.py:646
 msgid "Receive supplies before converting serialized inventory to normal."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:865
+#: domains/inventory/services/inventory_service.py:902
 msgid "A variant with stock cannot be deleted."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:949
+#: domains/inventory/services/inventory_service.py:986
 #, python-format
 msgid "Cannot transition from \"%(current)s\" to \"%(target)s\"."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1014
+#: domains/inventory/services/inventory_service.py:1051
 msgid "Serialized inventory is calculated from registered units."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1051
+#: domains/inventory/services/inventory_service.py:1088
 msgid ""
 "Received supply quantity cannot be lower than reserved or sellable stock."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1063
+#: domains/inventory/services/inventory_service.py:1100
 msgid ""
 "Inventory without received supplies still has reserved or sellable stock."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1112
-#: domains/inventory/services/inventory_service.py:1145
-#: domains/inventory/services/inventory_service.py:1163
-#: domains/inventory/services/inventory_service.py:1188
-#: domains/inventory/services/inventory_service.py:1236
-#: domains/inventory/services/inventory_service.py:1284
-#: domains/inventory/services/inventory_service.py:1338
-#: domains/inventory/services/inventory_service.py:1380
-#: domains/inventory/services/inventory_service.py:1410
+#: domains/inventory/services/inventory_service.py:1149
+#: domains/inventory/services/inventory_service.py:1182
+#: domains/inventory/services/inventory_service.py:1200
+#: domains/inventory/services/inventory_service.py:1350
+#: domains/inventory/services/inventory_service.py:1398
+#: domains/inventory/services/inventory_service.py:1446
+#: domains/inventory/services/inventory_service.py:1500
+#: domains/inventory/services/inventory_service.py:1542
+#: domains/inventory/services/inventory_service.py:1572
 #, fuzzy
 #| msgid "Address not found."
 msgid "Inventory not found."
 msgstr "Address not found."
 
-#: domains/inventory/services/inventory_service.py:1117
+#: domains/inventory/services/inventory_service.py:1154
 msgid "Unit count is required for serialized inventory."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1121
+#: domains/inventory/services/inventory_service.py:1158
 msgid "Unit count must be greater than zero."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1148
+#: domains/inventory/services/inventory_service.py:1185
 msgid "Use receive_stock for serialized inventory."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1166
+#: domains/inventory/services/inventory_service.py:1203
 msgid "Use unit-level operations for serialized inventory."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1175
+#: domains/inventory/services/inventory_service.py:1212
 #, python-format
 msgid "Cannot decrease more than sellable. Available: %(available)s."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1193
-#: domains/inventory/services/inventory_service.py:1241
-#: domains/inventory/services/inventory_service.py:1289
-#: domains/inventory/services/inventory_service.py:1343
-#: domains/inventory/services/inventory_service.py:1490
+#: domains/inventory/services/inventory_service.py:1242
+msgid "No inventory is configured for this item."
+msgstr ""
+
+#: domains/inventory/services/inventory_service.py:1355
+#: domains/inventory/services/inventory_service.py:1403
+#: domains/inventory/services/inventory_service.py:1451
+#: domains/inventory/services/inventory_service.py:1505
+#: domains/inventory/services/inventory_service.py:1652
 msgid "Unit IDs are required for serialized inventory."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1202
-#: domains/inventory/services/inventory_service.py:1250
-#: domains/inventory/services/inventory_service.py:1298
-#: domains/inventory/services/inventory_service.py:1352
-#: domains/inventory/services/inventory_service.py:1396
-#: domains/inventory/services/inventory_service.py:1426
-#: domains/inventory/services/inventory_service.py:1499
+#: domains/inventory/services/inventory_service.py:1364
+#: domains/inventory/services/inventory_service.py:1412
+#: domains/inventory/services/inventory_service.py:1460
+#: domains/inventory/services/inventory_service.py:1514
+#: domains/inventory/services/inventory_service.py:1558
+#: domains/inventory/services/inventory_service.py:1588
+#: domains/inventory/services/inventory_service.py:1661
 msgid "One or more unit IDs are invalid."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1208
+#: domains/inventory/services/inventory_service.py:1370
 #, python-format
 msgid "Unit %(id)s is in state \"%(state)s\" and cannot be reserved."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1224
+#: domains/inventory/services/inventory_service.py:1386
 #, python-format
 msgid "Cannot reserve more than available. Available: %(available)s."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1256
+#: domains/inventory/services/inventory_service.py:1418
 #, python-format
 msgid "Unit %(id)s is in state \"%(state)s\" and is not reserved."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1272
+#: domains/inventory/services/inventory_service.py:1434
 #, python-format
 msgid "Cannot release more than reserved. Reserved: %(reserved)s."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1307
+#: domains/inventory/services/inventory_service.py:1469
 #, python-format
 msgid "Unit %(id)s is in state \"%(state)s\" and cannot be sold."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1323
+#: domains/inventory/services/inventory_service.py:1485
 #, python-format
 msgid "Cannot sell more than sellable. Sellable: %(sellable)s."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1358
+#: domains/inventory/services/inventory_service.py:1520
 #, python-format
 msgid "Unit %(id)s is in state \"%(state)s\" and cannot be returned."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1383
+#: domains/inventory/services/inventory_service.py:1545
 msgid "Mark damaged is only available for serialized inventory."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1387
-#: domains/inventory/services/inventory_service.py:1417
+#: domains/inventory/services/inventory_service.py:1549
+#: domains/inventory/services/inventory_service.py:1579
 msgid "Unit IDs are required."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1413
+#: domains/inventory/services/inventory_service.py:1575
 msgid "Mark lost is only available for serialized inventory."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1441
+#: domains/inventory/services/inventory_service.py:1603
 msgid "Source inventory not found."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1443
+#: domains/inventory/services/inventory_service.py:1605
 msgid "Destination inventory not found."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1445
+#: domains/inventory/services/inventory_service.py:1607
 msgid "Source and destination cannot be the same."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1448
+#: domains/inventory/services/inventory_service.py:1610
 msgid "Source and destination must hold the same variant."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1467
+#: domains/inventory/services/inventory_service.py:1629
 #, python-format
 msgid "Cannot transfer more than sellable. Available: %(available)s."
 msgstr ""
 
-#: domains/inventory/services/inventory_service.py:1508
+#: domains/inventory/services/inventory_service.py:1670
 #, python-format
 msgid "Unit %(id)s is in state \"%(state)s\" and cannot be transferred."
 msgstr ""
 
-#: domains/inventory/services/inventory_supply_service.py:166
+#: domains/inventory/services/inventory_supply_service.py:167
 msgid "Received supplies cannot change variant, warehouse, or quantity."
 msgstr ""
 
-#: domains/inventory/services/inventory_supply_service.py:181
+#: domains/inventory/services/inventory_supply_service.py:182
 msgid "Quantity cannot change because this supply has already been consumed."
 msgstr ""
 
-#: domains/inventory/services/inventory_supply_service.py:203
+#: domains/inventory/services/inventory_supply_service.py:204
 msgid "Received supplies cannot be deleted."
 msgstr ""
 
-#: domains/inventory/services/inventory_supply_service.py:207
+#: domains/inventory/services/inventory_supply_service.py:208
 msgid "Supply has already been consumed and cannot be deleted."
 msgstr ""
 
-#: domains/inventory/services/inventory_supply_service.py:223
+#: domains/inventory/services/inventory_supply_service.py:224
 msgid "This supply has already been received."
 msgstr ""
 
-#: domains/inventory/services/inventory_supply_service.py:233
+#: domains/inventory/services/inventory_supply_service.py:234
 msgid "Serial items are only accepted for serialized inventory."
 msgstr ""
 
-#: domains/inventory/services/inventory_supply_service.py:299
+#: domains/inventory/services/inventory_supply_service.py:320
 msgid "This order item has already consumed its supply layers."
 msgstr ""
 
-#: domains/inventory/services/inventory_supply_service.py:346
+#: domains/inventory/services/inventory_supply_service.py:367
 #, python-format
 msgid "Supply %(reference)s does not cover %(needed)s consumed units."
 msgstr ""
 
-#: domains/inventory/services/inventory_supply_service.py:379
+#: domains/inventory/services/inventory_supply_service.py:400
 #, python-format
 msgid "Supplies do not cover %(needed)s units for this sale."
 msgstr ""
 
-#: domains/inventory/services/inventory_supply_service.py:427
+#: domains/inventory/services/inventory_supply_service.py:448
 msgid "Reversal quantity must be greater than zero."
 msgstr ""
 
-#: domains/inventory/services/inventory_supply_service.py:432
+#: domains/inventory/services/inventory_supply_service.py:453
 #, python-format
 msgid "Only %(available)s consumed units are reversible."
 msgstr ""
 
-#: domains/inventory/services/inventory_supply_service.py:460
+#: domains/inventory/services/inventory_supply_service.py:481
 msgid "Unsupported supply cost type."
 msgstr ""
 
-#: domains/inventory/services/inventory_supply_service.py:464
+#: domains/inventory/services/inventory_supply_service.py:485
 msgid "A valid amount is required."
 msgstr ""
 
-#: domains/inventory/services/inventory_supply_service.py:467
+#: domains/inventory/services/inventory_supply_service.py:488
 msgid "Amount must be greater than or equal to zero."
 msgstr ""
 
-#: domains/marketplace/services.py:88
+#: domains/marketplace/services/order_service.py:62
+#, python-format
+msgid "Item %(sku)s is no longer listed by the seller."
+msgstr ""
+
+#: domains/marketplace/services/order_service.py:77
+msgid "The basket contains items from more than one seller."
+msgstr ""
+
+#: domains/marketplace/services/pricing_service.py:88
 msgid "Discount type and value must be provided together."
 msgstr ""
 
-#: domains/marketplace/services.py:92
+#: domains/marketplace/services/pricing_service.py:92
 msgid "Percentage discount cannot exceed 100."
 msgstr ""
 
-#: domains/marketplace/services.py:96
+#: domains/marketplace/services/pricing_service.py:96
 msgid "Fixed discount cannot exceed the price."
 msgstr ""
 
-#: domains/order/admin_views.py:34
+#: domains/order/admin_views.py:41
 #, fuzzy
 #| msgid "You do not have permission to access this resource."
 msgid "You do not have permission to view return requests."
 msgstr "You do not have permission to access this resource."
 
-#: domains/order/admin_views.py:65 domains/order/admin_views.py:96
-#: domains/order/admin_views.py:110
+#: domains/order/admin_views.py:72 domains/order/admin_views.py:107
+#: domains/order/admin_views.py:121
 #, fuzzy
 #| msgid "Address not found."
 msgid "Order not found."
 msgstr "Address not found."
 
-#: domains/order/admin_views.py:132
+#: domains/order/admin_views.py:143
 #, fuzzy
 #| msgid "Address not found."
 msgid "Return request not found."
 msgstr "Address not found."
 
-#: domains/order/services.py:169
-msgid "Item is no longer available."
-msgstr ""
-
-#: domains/order/services.py:172
-#, python-format
-msgid "Item %(sku)s is not available for purchase."
-msgstr ""
-
-#: domains/order/services.py:178 domains/order/services.py:311
-#: domains/order/services.py:338
-#, python-format
-msgid "Item %(sku)s does not have enough stock."
-msgstr ""
-
-#: domains/order/services.py:190
-msgid "Set a delivery address before checkout."
-msgstr ""
-
-#: domains/order/services.py:194
-msgid "No active payment channel is available."
-msgstr "No active payment channel is available."
-
-#: domains/order/services.py:207
-msgid "The cart is empty."
-msgstr ""
-
-#: domains/order/services.py:306 domains/order/services.py:325
-msgid "No inventory is configured for this item."
-msgstr ""
-
-#: domains/order/services.py:898
+#: domains/order/flow.py:211
 msgid "This action is not available for the current order status."
 msgstr ""
 
-#: domains/order/services.py:903
+#: domains/order/flow.py:216
 msgid "Create a return request through the returns endpoint."
 msgstr ""
 
-#: domains/order/services.py:907
+#: domains/order/flow.py:220
 msgid "This actor is not allowed to execute the action."
 msgstr ""
 
-#: domains/order/services.py:1231
+#: domains/order/return_flow.py:152
 msgid "Unknown return action."
 msgstr ""
 
-#: domains/order/services.py:1242
+#: domains/order/return_flow.py:163
 msgid "This action is not available for the current return status."
 msgstr ""
 
-#: domains/order/services.py:1317
+#: domains/order/return_flow.py:242
 msgid "This order is not currently eligible for return."
 msgstr ""
 
-#: domains/order/services.py:1328
+#: domains/order/return_flow.py:253
 msgid "Every order item must belong to the selected order."
 msgstr ""
 
-#: domains/order/services.py:1347
+#: domains/order/return_flow.py:272
 #, python-format
 msgid "Order item %(item_id)s has only %(available)s available to return."
 msgstr ""
 
-#: domains/order/views.py:36
+#: domains/order/views.py:39
 #, fuzzy
 #| msgid "Address created."
 msgid "Order created."
 msgstr "Address created."
 
-#: domains/order/views.py:81
+#: domains/order/views.py:88
 msgid "Payment submitted for review."
 msgstr ""
 
-#: domains/order/views.py:130
+#: domains/order/views.py:142
 msgid "Order cancelled."
 msgstr ""
 
-#: domains/order/views.py:164
+#: domains/order/views.py:179
 #, fuzzy
 #| msgid "Address created."
 msgid "Return request created."
