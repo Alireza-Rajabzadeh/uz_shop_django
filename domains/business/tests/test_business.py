@@ -9,10 +9,11 @@ from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from domains.business.api.serializers import BusinessWorkingDaySerializer
-from domains.business.models import BusinessCategory, BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessWorkingDay
+from domains.business.models import BusinessCategory, BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessWorkingDay, SocialMedia, SocialMediaIcon
 from domains.catalog.models import Category, CategoryStatus
 from domains.files.models import File, FileStatus
 from domains.files.services import FileService
+from domains.vendor.models import Vendor, VendorStatus
 
 
 PROFILE = {"business_name": "Uz Shop", "display_name": "Uz", "legal_name": "Uz LLC", "email": "hello@example.com"}
@@ -21,12 +22,21 @@ PROFILE = {"business_name": "Uz Shop", "display_name": "Uz", "legal_name": "Uz L
 class BusinessModelTests(TransactionTestCase):
     reset_sequences = True
 
-    def test_profile_is_a_database_enforced_singleton(self):
-        BusinessProfile.objects.create(**PROFILE)
+    def test_a_vendor_may_hold_only_one_profile(self):
+        # business.0004 dropped the global business_profile_singleton_id and
+        # replaced it with one row per vendor, so the schema now enforces a
+        # different rule than "exactly one profile in the table": two
+        # vendor-less profiles are still allowed.
+        status, _ = VendorStatus.objects.get_or_create(
+            id=1, defaults={"name": "Active", "is_active": True}
+        )
+        vendor = Vendor.objects.create(
+            phone="+9876543212", national_id="1234567892", status=status
+        )
+        BusinessProfile.objects.create(vendor=vendor, **PROFILE)
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
-                BusinessProfile.objects.create(**PROFILE)
-        self.assertEqual(BusinessProfile.objects.count(), 1)
+                BusinessProfile.objects.create(vendor=vendor, **PROFILE)
 
     def test_keys_are_immutable_outside_the_api(self):
         phone = BusinessPhone.objects.create(key="support", title="Support", number="123")
@@ -53,7 +63,13 @@ class BusinessAPITests(APITestCase):
     @classmethod
     def setUpTestData(cls):
         cls.admin = get_user_model().objects.create_superuser(username="business-admin", email="admin@example.com", password="test")
-        cls.profile = BusinessProfile.objects.create(**PROFILE)
+        # inventory.0022 seeds a BusinessProfile into every fresh database.
+        # Adopt that row instead of adding a second one: the public read takes
+        # BusinessProfile.objects.first(), which has to resolve to this fixture.
+        cls.profile, _ = BusinessProfile.objects.update_or_create(id=1, defaults=PROFILE)
+        cls.social_media, _ = SocialMedia.objects.get_or_create(
+            slug="instagram", defaults={"name": "Instagram", "fa_name": "اینستاگرام"}
+        )
 
     def authenticate(self):
         token = RefreshToken.for_user(self.admin)
@@ -75,60 +91,70 @@ class BusinessAPITests(APITestCase):
         )
 
     @patch("domains.business.api.serializers.FileService.url", return_value="https://cdn.example.com/social.png")
-    def test_admin_accepts_available_image_logo_and_returns_metadata(self, _url):
+    def test_admin_accepts_available_image_icon_and_returns_metadata(self, _url):
         self.authenticate()
-        logo = self.make_file()
+        icon = SocialMediaIcon.objects.create(
+            social_media=self.social_media, file=self.make_file(), label="brand"
+        )
         response = self.client.post("/api/business/admin/social-links", {
-            "key": "instagram", "title": "Instagram", "platform": "instagram",
-            "url": "https://instagram.com/example", "logo_file_id": str(logo.id),
+            "key": "instagram", "title": "Instagram", "social_media_id": self.social_media.id,
+            "url": "https://instagram.com/example", "icon_id": icon.id,
         }, format="json")
 
         self.assertEqual(response.status_code, 201)
-        self.assertNotIn("logo_file_id", response.data["data"])
-        self.assertEqual(response.data["data"]["logo_file"]["id"], str(logo.id))
-        self.assertEqual(response.data["data"]["logo_file"]["url"], "https://cdn.example.com/social.png")
+        self.assertNotIn("icon_id", response.data["data"])
+        self.assertEqual(response.data["data"]["icon"]["id"], icon.id)
+        self.assertEqual(response.data["data"]["icon"]["url"], "https://cdn.example.com/social.png")
 
-    def test_admin_rejects_nonavailable_and_nonimage_logo_files(self):
+    def test_admin_rejects_nonavailable_and_nonimage_icon_files(self):
+        # The file-quality rule travelled with the field: a social link now
+        # takes an icon reference, and the check runs where that icon is
+        # uploaded rather than where the link is written.
         self.authenticate()
-        for logo in (self.make_file(status="failed"), self.make_file(file_type="document")):
-            response = self.client.post("/api/business/admin/social-links", {
-                "key": f"social-{logo.id}", "title": "Social", "platform": "web",
-                "url": "https://example.com", "logo_file_id": str(logo.id),
-            }, format="json")
+        for unusable in (self.make_file(status="failed"), self.make_file(file_type="document")):
+            response = self.client.post(
+                f"/api/business/admin/social-medias/{self.social_media.id}/icons",
+                {"file_id": unusable.id, "label": "unusable"},
+                format="json",
+            )
             self.assertEqual(response.status_code, 400)
-            self.assertIn("logo_file_id", response.data["errors"])
+            self.assertIn("file_id", response.data["errors"])
 
     @patch("domains.business.api.serializers.FileService.url", return_value="https://cdn.example.com/social.png")
     @patch("domains.business.api.views.CacheService")
-    def test_public_social_logo_url_and_null_logo(self, cache_class, _url):
+    def test_public_social_icon_url_and_null_icon(self, cache_class, _url):
         cache_class.return_value.get_public.return_value = None
-        logo = self.make_file()
-        BusinessSocialLink.objects.create(
-            key="with-logo", title="With logo", platform="web",
-            url="https://example.com/with-logo", logo_file=logo,
+        icon = SocialMediaIcon.objects.create(
+            social_media=self.social_media, file=self.make_file(), label="with-icon"
         )
         BusinessSocialLink.objects.create(
-            key="without-logo", title="Without logo", platform="web",
-            url="https://example.com/without-logo",
+            key="with-icon", title="With icon", social_media=self.social_media,
+            url="https://example.com/with-icon", icon=icon,
+        )
+        BusinessSocialLink.objects.create(
+            key="without-icon", title="Without icon", social_media=self.social_media,
+            url="https://example.com/without-icon",
         )
 
         response = self.client.get("/api/business/public")
         links = {item["key"]: item for item in response.data["data"]["social_links"]}
-        self.assertEqual(links["with-logo"]["logo_url"], "https://cdn.example.com/social.png")
-        self.assertIsNone(links["without-logo"]["logo_url"])
-        self.assertNotIn("logo_file", links["with-logo"])
-        self.assertNotIn("logo_file_id", links["with-logo"])
+        self.assertEqual(links["with-icon"]["icon_url"], "https://cdn.example.com/social.png")
+        self.assertIsNone(links["without-icon"]["icon_url"])
+        self.assertNotIn("icon", links["with-icon"])
+        self.assertNotIn("icon_id", links["with-icon"])
 
     @patch("domains.business.api.serializers.FileService.url", side_effect=FileService.Error("unavailable"))
-    def test_public_logo_url_generation_fails_gracefully(self, _url):
-        logo = self.make_file()
+    def test_public_icon_url_generation_fails_gracefully(self, _url):
+        icon = SocialMediaIcon.objects.create(
+            social_media=self.social_media, file=self.make_file(), label="broken"
+        )
         link = BusinessSocialLink.objects.create(
-            key="broken-logo", title="Broken logo", platform="web",
-            url="https://example.com/broken", logo_file=logo,
+            key="broken-icon", title="Broken icon", social_media=self.social_media,
+            url="https://example.com/broken", icon=icon,
         )
         from domains.business.api.serializers import PublicBusinessSocialLinkSerializer
 
-        self.assertIsNone(PublicBusinessSocialLinkSerializer(link).data["logo_url"])
+        self.assertIsNone(PublicBusinessSocialLinkSerializer(link).data["icon_url"])
 
     def test_admin_crud_search_and_private_visibility(self):
         self.authenticate()
@@ -152,8 +178,8 @@ class BusinessAPITests(APITestCase):
         BusinessPhone.objects.create(key="public", title="Public", number="1", notes="hidden")
         BusinessPhone.objects.create(key="private", title="Private", number="2", visibility="private")
         BusinessPhone.objects.create(key="inactive", title="Inactive", number="3", status="inactive")
-        BusinessSocialLink.objects.create(key="social", title="Social", platform="web", url="https://example.com")
-        BusinessSocialLink.objects.create(key="secret", title="Secret", platform="web", url="https://secret.example.com", visibility="private")
+        BusinessSocialLink.objects.create(key="social", title="Social", url="https://example.com")
+        BusinessSocialLink.objects.create(key="secret", title="Secret", url="https://secret.example.com", visibility="private")
         BusinessWorkingDay.objects.create(weekday=0, is_open=True, opens_at=time(9), closes_at=time(17))
         response = self.client.get("/api/business/public")
         self.assertEqual(response.status_code, 200)
@@ -228,7 +254,6 @@ class BusinessCategoryModelTests(TransactionTestCase):
 
     def test_same_category_for_different_businesses(self):
         from django.db import connection
-        from domains.vendor.models import Vendor, VendorStatus
 
         bp1 = self._get_or_create_business()
         status, _ = VendorStatus.objects.get_or_create(id=1, defaults={"name": "Active", "is_active": True})
@@ -369,8 +394,6 @@ class BusinessCategoryAPITests(APITestCase):
 class VendorCategoryBrowseTests(APITestCase):
     @classmethod
     def setUpTestData(cls):
-        from domains.vendor.models import Vendor, VendorStatus
-
         cls.vendor_status, _ = VendorStatus.objects.get_or_create(id=1, defaults={"name": "Active", "is_active": True})
         cls.vendor = Vendor.objects.create(phone="+9876543210", national_id="1234567890", status=cls.vendor_status)
         cls.profile = BusinessProfile.objects.get_or_create(
@@ -465,7 +488,7 @@ class VendorCategoryBrowseTests(APITestCase):
         self._auth()
         response = self.client.put(
             "/api/vendor/business/categories",
-            {"category_ids": [self.child1.id, self.child2.id]},
+            {"category_ids": [self.root1.id, self.root2.id]},
             format="json",
         )
         self.assertEqual(response.status_code, 200)

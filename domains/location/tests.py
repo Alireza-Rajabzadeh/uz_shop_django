@@ -29,23 +29,46 @@ class AdminLocationOptionAPITests(APITestCase):
         self.client.force_authenticate(self.admin)
 
     def test_location_options_require_address_view_permission_and_filter_hierarchy(self):
+        # The permissioned namespace is /api/location/options/. These routes
+        # started out on /api/customer/location-options/ and were repointed to a
+        # public customer view by 34fa79f, which is why the assertions below
+        # moved; that public contract is pinned by its own test underneath.
         self.client.force_authenticate(self.admin)
-        self.assertEqual(self.client.get("/api/customer/location-options/countries").status_code, 403)
+        self.assertEqual(self.client.get("/api/location/options/countries").status_code, 403)
 
         self.grant("view_customeraddress")
-        countries = self.client.get("/api/customer/location-options/countries")
+        countries = self.client.get("/api/location/options/countries")
         states = self.client.get(
-            f"/api/customer/location-options/states?country_id={self.iran.id}"
+            f"/api/location/options/states?country_id={self.iran.id}"
         )
         cities = self.client.get(
-            f"/api/customer/location-options/cities?state_id={self.tehran.id}"
+            f"/api/location/options/cities?state_id={self.tehran.id}"
         )
         self.assertEqual(countries.status_code, 200)
         self.assertEqual([item["id"] for item in states.data["data"]], [self.tehran.id])
         self.assertEqual([item["id"] for item in cities.data["data"]], [self.tehran_city.id])
-        self.assertEqual(self.client.get("/api/customer/location-options/states").status_code, 400)
+        self.assertEqual(self.client.get("/api/location/options/states").status_code, 400)
 
     def test_customer_principal_cannot_use_location_options(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self._customer_access_token()}")
+        response = self.client.get("/api/location/options/countries")
+        self.assertEqual(response.status_code, 401)
+
+    def test_customer_location_options_are_public_reference_data(self):
+        # An address form has to list countries before anyone has signed in,
+        # and a customer holds no model permission to grant, so this namespace
+        # is deliberately AllowAny. Pin it so the permission gate above does
+        # not quietly get pushed back onto it.
+        self.client.credentials()
+        self.assertEqual(
+            self.client.get("/api/customer/location-options/countries").status_code, 200
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self._customer_access_token()}")
+        self.assertEqual(
+            self.client.get("/api/customer/location-options/countries").status_code, 200
+        )
+
+    def _customer_access_token(self):
         status = CustomerStatus.objects.create(name="location-active", title="Active")
         customer = Customer.objects.create_user(
             phone="09123333333", password="password", first_name="Location",
@@ -53,9 +76,7 @@ class AdminLocationOptionAPITests(APITestCase):
         )
         refresh = RefreshToken.for_user(customer)
         refresh["user_type"] = "customer"
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {refresh.access_token}")
-        response = self.client.get("/api/customer/location-options/countries")
-        self.assertEqual(response.status_code, 401)
+        return str(refresh.access_token)
 
     def test_warehouse_permission_can_use_location_owned_options(self):
         permission = Permission.objects.get(

@@ -368,6 +368,37 @@ class VendorBusinessCategoryView(APIView):
 
         return api_response(data=CategoryBrowseSerializer(categories, many=True).data)
 
+    @transaction.atomic
+    def put(self, request):
+        business = _get_business(request)
+        if not business:
+            return api_response(False, "Business profile not found.", status_code=400)
+
+        serializer = BusinessCategoryUpsertSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        category_ids = serializer.validated_data["category_ids"]
+
+        existing_ids = set(
+            BusinessCategory.objects.filter(business=business)
+            .values_list("category_id", flat=True)
+        )
+        new_ids = set(category_ids)
+
+        to_remove = existing_ids - new_ids
+        to_add = new_ids - existing_ids
+
+        if to_remove:
+            BusinessCategory.objects.filter(business=business, category_id__in=to_remove).delete()
+
+        if to_add:
+            BusinessCategory.objects.bulk_create([
+                BusinessCategory(business=business, category_id=cid)
+                for cid in to_add
+            ])
+
+        categories = BusinessCategory.objects.filter(business=business).select_related("category")
+        return api_response(data=BusinessCategorySerializer(categories, many=True).data)
+
 
 class VendorCategorySearchView(APIView):
     authentication_classes = [VendorJWTAuthentication]
@@ -411,34 +442,3 @@ class VendorCategorySearchView(APIView):
             })
 
         return api_response(data=results)
-
-    @transaction.atomic
-    def put(self, request):
-        business = _get_business(request)
-        if not business:
-            return api_response(False, "Business profile not found.", status_code=400)
-
-        serializer = BusinessCategoryUpsertSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        category_ids = serializer.validated_data["category_ids"]
-
-        existing_ids = set(
-            BusinessCategory.objects.filter(business=business)
-            .values_list("category_id", flat=True)
-        )
-        new_ids = set(category_ids)
-
-        to_remove = existing_ids - new_ids
-        to_add = new_ids - existing_ids
-
-        if to_remove:
-            BusinessCategory.objects.filter(business=business, category_id__in=to_remove).delete()
-
-        if to_add:
-            BusinessCategory.objects.bulk_create([
-                BusinessCategory(business=business, category_id=cid)
-                for cid in to_add
-            ])
-
-        categories = BusinessCategory.objects.filter(business=business).select_related("category")
-        return api_response(data=BusinessCategorySerializer(categories, many=True).data)

@@ -189,7 +189,7 @@ Current catalog endpoints are administrative and permission-controlled. They are
 
 The marketplace domain owns per-business variant pricing through `BusinessOffer`.
 
-- `BusinessProfile` is a singleton (id=1) linked to a `Vendor`. Only one business exists.
+- `BusinessProfile` is scoped per `Vendor` through the `business_profile_one_per_vendor` constraint; `vendor` is nullable, and `inventory.0022` seeds `id=1` so migrated inventory rows have a business to point at. `business.0004` removed the old global singleton, so the schema alone does not enforce "only one business exists".
 - `BusinessOffer` has a unique constraint on `(business, variant)`. Each variant can have at most one offer per business.
 - `BusinessOffer` owns `price`, `discount_type`, and `discount_value`. These fields were removed from `ProductVariants`.
 - `OfferPriceHistory` is an append-only audit of price/discount changes, written by `MarketplacePricingService` for both the admin offer API and the vendor variant API. An omitted field keeps its stored value; an explicit `None` clears it. It is separate from `inventory.VariantPriceHistory`, which still records the cost-basis pricing flow.
