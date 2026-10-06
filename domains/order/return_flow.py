@@ -56,6 +56,16 @@ class BaseReturnRequestService:
     evidence_model = None
     history_model = None
 
+    def _scoped_requests(self):
+        """The return rows this instance may read or decide on.
+
+        Each call site narrows further by order or by customer. The hook
+        exists so a flow acting for a slice of the order table — a seller for
+        their own business — can scope the request rows in the query rather
+        than having the caller prove the order was theirs first.
+        """
+        return self.request_model.objects.all()
+
     @classmethod
     def available_admin_actions(cls, status):
         return [
@@ -68,7 +78,7 @@ class BaseReturnRequestService:
 
     def admin_payloads(self, order):
         requests = (
-            self.request_model.objects.filter(order=order)
+            self._scoped_requests().filter(order=order)
             .select_related("customer")
             .prefetch_related("items", "evidence__file__status")
             .order_by("-requested_at", "-id")
@@ -124,7 +134,7 @@ class BaseReturnRequestService:
 
     def list(self, customer):
         return (
-            self.request_model.objects.filter(customer=customer)
+            self._scoped_requests().filter(customer=customer)
             .select_related("order")
             .prefetch_related("items", "evidence__file__status")
             .order_by("-requested_at", "-id")
@@ -133,7 +143,7 @@ class BaseReturnRequestService:
     def get(self, customer, return_request_id):
         try:
             return (
-                self.request_model.objects.filter(customer=customer)
+                self._scoped_requests().filter(customer=customer)
                 .select_related("order")
                 .prefetch_related("items", "evidence__file__status")
                 .get(id=return_request_id)
@@ -151,7 +161,7 @@ class BaseReturnRequestService:
         if transition is None:
             raise self.ValidationError({"action": [_('Unknown return action.')]})
         request = (
-            self.request_model.objects.select_for_update()
+            self._scoped_requests().select_for_update()
             .filter(id=return_request_id, order_id=order_id)
             .first()
         )
@@ -277,7 +287,7 @@ class BaseReturnRequestService:
         if quantity_errors:
             raise self.ValidationError({"items": quantity_errors})
 
-        return_request = self.request_model.objects.create(
+        return_request = self._scoped_requests().create(
             order=order,
             customer=customer,
             reason=reason,

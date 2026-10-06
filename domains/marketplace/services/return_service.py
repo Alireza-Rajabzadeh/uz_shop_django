@@ -25,3 +25,18 @@ class MarketplaceReturnRequestService(BaseReturnRequestService):
     item_model = MarketplaceReturnRequestItem
     evidence_model = MarketplaceReturnRequestEvidence
     history_model = MarketplaceOrderHistory
+
+    def __init__(self, business=None):
+        """Decide on one seller's return requests.
+
+        A return row carries no business of its own; it inherits its
+        seller through the order it belongs to. Passing nothing keeps the
+        platform's administrative decisions unrestricted.
+        """
+        self.business = business
+
+    def _scoped_requests(self):
+        queryset = super()._scoped_requests()
+        if self.business is None:
+            return queryset
+        return queryset.filter(order__business=self.business)

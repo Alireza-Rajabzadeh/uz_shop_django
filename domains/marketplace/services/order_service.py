@@ -39,6 +39,20 @@ class MarketplaceOrderService(BaseOrderService):
     status_action_model = MarketplaceOrderStatusAction
     history_model = MarketplaceOrderHistory
 
+    def __init__(self, business=None):
+        """Act for one seller's orders.
+
+        ``business`` is what narrows the table. The platform's own reads pass
+        nothing and keep the unrestricted behaviour they always had.
+        """
+        self.business = business
+
+    def _scoped_orders(self):
+        queryset = super()._scoped_orders()
+        if self.business is None:
+            return queryset
+        return queryset.filter(business=self.business)
+
     @staticmethod
     def cart_service():
         return MarketplaceCartService()

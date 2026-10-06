@@ -66,6 +66,14 @@ from .views.inventory import (
     VendorStateOptionsView,
     VendorCityOptionsView,
 )
+from .views.orders import (
+    VendorOrderList,
+    VendorOrderDetail,
+    VendorOrderActions,
+    VendorOrderExecuteAction,
+    VendorOrderReturnAction,
+    VendorOrderStatusList,
+)
 from .admin_views import (
     AdminVendorList,
     AdminVendorDetail,
@@ -146,6 +154,19 @@ urlpatterns = [
     path("supplies/overview", VendorSupplyOverviewView.as_view()),
     path("supplies/<int:supply_id>", VendorSupplyDetailView.as_view()),
     path("supplies/<int:supply_id>/receive", VendorSupplyReceiveView.as_view()),
+    # Marketplace orders, scoped to this vendor's business
+    path("orders", VendorOrderList.as_view()),
+    path("orders/statuses", VendorOrderStatusList.as_view()),
+    path("orders/<int:order_id>", VendorOrderDetail.as_view()),
+    path("orders/<int:order_id>/actions", VendorOrderActions.as_view()),
+    path(
+        "orders/<int:order_id>/actions/<str:action_code>",
+        VendorOrderExecuteAction.as_view(),
+    ),
+    path(
+        "orders/<int:order_id>/returns/<int:return_request_id>/actions/<str:action_code>",
+        VendorOrderReturnAction.as_view(),
+    ),
     # File upload
     path("files/upload", VendorFileUploadView.as_view()),
     # Admin vendor management

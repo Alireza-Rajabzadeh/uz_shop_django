@@ -72,6 +72,20 @@ class BaseOrderService(BaseCheckoutService):
         service = self.return_service()
         return service.ACTIVE_STATUSES if service is not None else ()
 
+    # ───────────────────────── scoping ─────────────────────────
+
+    def _scoped_orders(self):
+        """The order rows this instance may read or mutate.
+
+        The customer flow narrows further by ``customer`` at each call site
+        and the administrative flow deliberately narrows not at all. A flow
+        that acts for someone who owns only part of the table — a seller
+        working their own business — overrides this, so every read, action
+        and status change below is scoped in the query instead of being
+        checked afterwards by each caller.
+        """
+        return self.order_model.objects.all()
+
     # ───────────────────────── reservation lifecycle ─────────────────────────
 
     def expire_lazy(self, orders):
@@ -90,7 +104,7 @@ class BaseOrderService(BaseCheckoutService):
         if orders is None:
             with transaction.atomic():
                 orders = list(
-                    self.order_model.objects.select_for_update()
+                    self._scoped_orders().select_for_update()
                     .select_related("status")
                     .filter(
                         status__name=self.STATUS_PAYMENT_PENDING,
@@ -168,7 +182,7 @@ class BaseOrderService(BaseCheckoutService):
         filters = {"id": order_id}
         if actor == "customer":
             filters["customer"] = customer
-        order = self.order_model.objects.select_related("status").filter(**filters).first()
+        order = self._scoped_orders().select_related("status").filter(**filters).first()
         if order is None:
             raise self.NotFoundError("Order not found.")
         assignments = self.status_action_model.objects.filter(
@@ -192,7 +206,7 @@ class BaseOrderService(BaseCheckoutService):
         if actor == "customer":
             filters["customer"] = customer
         order = (
-            self.order_model.objects.select_for_update()
+            self._scoped_orders().select_for_update()
             .select_related("status")
             .filter(**filters)
             .first()
@@ -287,7 +301,7 @@ class BaseOrderService(BaseCheckoutService):
     def _get_customer_order(self, customer, order_id):
         try:
             return (
-                self.order_model.objects.select_related("status")
+                self._scoped_orders().select_related("status")
                 .prefetch_related("status__status_actions__order_action")
                 .get(id=order_id, customer=customer)
             )
@@ -345,7 +359,7 @@ class BaseOrderService(BaseCheckoutService):
 
     def list_orders(self, customer):
         orders = list(
-            self.order_model.objects.select_related("status")
+            self._scoped_orders().select_related("status")
             .filter(customer=customer)
             .prefetch_related(
                 "items",
@@ -358,7 +372,7 @@ class BaseOrderService(BaseCheckoutService):
         return [self._customer_order_payload(order) for order in orders]
 
     def list_orders_admin(self, *, include_returns=False, **filters):
-        queryset = self.order_model.objects.select_related(
+        queryset = self._scoped_orders().select_related(
             "status", "customer"
         ).prefetch_related("status__status_actions__order_action")
         if include_returns:
@@ -462,7 +476,7 @@ class BaseOrderService(BaseCheckoutService):
     def get_order_admin(self, order_id, *, include_returns=True):
         try:
             order = (
-                self.order_model.objects.select_related("status", "customer__status")
+                self._scoped_orders().select_related("status", "customer__status")
                 .prefetch_related("status__status_actions__order_action")
                 .get(id=order_id)
             )
