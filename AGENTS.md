@@ -61,7 +61,7 @@ domains/files/          Provider-neutral stored-file lifecycle
 domains/importing/      External-source import pipelines (Digikala, etc.)
 domains/inventory/      Warehouses, stock, and inventory strategies
 domains/location/       Countries, states, and cities
-domains/marketplace/    BusinessOffer model, per-business variant pricing
+domains/marketplace/    BusinessOffer pricing, plus the marketplace basket, order, payment, and return flows
 domains/notifications/  Provider records, audit rows, and delivery workers
 domains/users/          Administrative users, auth, and permissions
 locale/                 Django translations
@@ -114,6 +114,7 @@ Root namespaces:
 - `/api/inventory/`
 - `/api/location/`
 - `/api/files/`
+- `/api/order/`
 - `/api/marketplace/`
 - `/api/notifications/`
 
@@ -205,6 +206,20 @@ The marketplace domain owns per-business variant pricing through `BusinessOffer`
 - The Digikala import pipeline no longer writes pricing to variants. Pricing is applied separately via inventory pricing.
 - Product search price filters (`price_operator`, `price`, `price_min`, `price_max`) filter on `BusinessOffer.price` with `is_active=True`.
 - The storefront search API (`/api/catalog/storefront/products`) serves pricing from `BusinessOffer` through `StorefrontProductService`.
+
+### Marketplace Orders
+
+The marketplace runs a basket, checkout, payment, and return flow parallel to the shop's, over its own tables, by extending the shop's service layer rather than copying it.
+
+- Tables: `MarketplaceCart`/`MarketplaceCartItem`, `MarketplaceOrder`/`MarketplaceOrderItem`, `MarketplaceOrderPayment` + `MarketplacePaymentDocument`, and `MarketplaceReturnRequest` + its item/evidence rows. The order carries `business`; an item carries `variant` and `marketplace_offer`, so a priced line still identifies what was sold after the offer moves on.
+- The shared machinery lives outside this domain and is extended, never duplicated: `BaseCartService` (`domains/cart/services.py`), `BaseCheckoutService` (`domains/cart/checkout.py`), `BaseOrderService` (`domains/order/flow.py`), `BaseReturnRequestService` (`domains/order/return_flow.py`). The marketplace services under `domains/marketplace/services/` subclass these and name their own tables; `domains.order` hosting the shared base is a deliberate one-way dependency.
+- The offer price is snapshotted onto the item at checkout. Historical totals are never recomputed from the current offer.
+- Reserve, release, consume, restore, and cancel stock have a single implementation. `InventorySupplyConsumption` references a shop `order_item` or a marketplace one; the schema requires exactly one, and `InventorySupplyConsumption._target_field()` derives which from the line's own class rather than asking the caller.
+- `MarketplaceOrderSeeder` copies `ORDER_STATUSES` / `ORDER_ACTIONS` / `ORDER_STATUS_ACTIONS` from `core/management/seeders/order.py` into `marketplace_order_status` and friends, so both flows speak one vocabulary while keeping tables they may later diverge on.
+- Customer routes under `/api/marketplace/`: `orders`, `orders/<id>`, `orders/<id>/pay`, `orders/<id>/actions`, `orders/<id>/actions/<code>`, `orders/<id>/cancel`, `payment-methods`, `returns`, `returns/<id>`.
+- Admin routes under `/api/marketplace/admin/`: `orders`, `orders/<id>`, `orders/<id>/actions`, `orders/<id>/actions/<code>`, `orders/<id>/returns/<id>/actions/<code>`, `statuses`. They gate on `marketplace.view_marketplaceorder` / `marketplace.change_marketplaceorder`, and on `marketplace.view_marketcplacereturnrequest` to see returns — the shop's `order.*` permissions do not reach this list.
+- Both route sets are the shop's views (`domains/order/views.py`, `domains/order/admin_views.py`) with a service attribute swapped, so the two flows answer with identical envelopes, status codes, and error shapes. Read the shop view before adding a marketplace endpoint.
+- Order geography is deliberately absent for this flow; `/api/order/admin/orders/geography` remains shop-only.
 
 ### Order Geography
 
