@@ -7,7 +7,7 @@ from rest_framework.views import APIView
 from core.responses import api_response
 from domains.vendor.auth import VendorJWTAuthentication
 
-from .models import BusinessPaymentChannel, BusinessPaymentMethod
+from .models import BusinessPaymentChannel
 from .serializers import (
     BusinessPaymentChannelWriteSerializer,
     BusinessPaymentMethodReadSerializer,
@@ -65,21 +65,6 @@ class VendorBusinessPaymentMethodList(BusinessPaymentAPIView):
             ).data,
         )
         return api_response(data=data)
-
-
-class VendorBusinessPaymentMethodDetail(BusinessPaymentAPIView):
-    @staticmethod
-    def get_object(method_id):
-        try:
-            return BusinessPaymentMethod.objects.get(id=method_id)
-        except BusinessPaymentMethod.DoesNotExist as exc:
-            raise NotFound("Payment method not found.") from exc
-
-    def get(self, request, method_id):
-        method = self.get_object(method_id)
-        return api_response(
-            data=BusinessPaymentMethodReadSerializer(method).data
-        )
 
 
 class VendorBusinessPaymentChannelList(BusinessPaymentAPIView):

@@ -7,13 +7,11 @@ from .views import (
     VendorBusinessPaymentDetail,
     VendorBusinessPaymentDocumentList,
     VendorBusinessPaymentList,
-    VendorBusinessPaymentMethodDetail,
     VendorBusinessPaymentMethodList,
 )
 
 urlpatterns = [
     path("methods", VendorBusinessPaymentMethodList.as_view()),
-    path("methods/<int:method_id>", VendorBusinessPaymentMethodDetail.as_view()),
     path("channels", VendorBusinessPaymentChannelList.as_view()),
     path("channels/<int:channel_id>", VendorBusinessPaymentChannelDetail.as_view()),
     path(

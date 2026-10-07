@@ -206,7 +206,6 @@ All views extend `BusinessPaymentAPIView`:
 | View | Method | URL | Purpose |
 |---|---|---|---|
 | `VendorBusinessPaymentMethodList` | GET | `methods` | List business payment methods |
-| `VendorBusinessPaymentMethodDetail` | GET | `methods/<id>` | Retrieve method (read-only) |
 | `VendorBusinessPaymentChannelList` | GET/POST | `channels` | List/create channels (business-scoped) |
 | `VendorBusinessPaymentChannelDetail` | GET/PATCH/DELETE | `channels/<id>` | Retrieve/update/delete channel (owner-scoped) |
 | `VendorBusinessPaymentChannelMethods` | POST | `channels/<id>/methods` | Replace supported methods |

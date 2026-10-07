@@ -133,13 +133,6 @@ class BusinessPaymentVendorAPITests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["data"]["count"], 2)
 
-    def test_vendor_a_can_read_any_method_detail(self):
-        self._auth(self.vendor_a)
-        response = self.client.get(
-            f"/api/vendor/business-payments/methods/{self.method_b.id}"
-        )
-        self.assertEqual(response.status_code, 200)
-
     def test_method_list_filters_by_point_to_channel_field(self):
         BusinessPaymentMethod.objects.create(
             code="deposit_acc",
@@ -538,11 +531,12 @@ class BusinessPaymentVendorAPITests(APITestCase):
         self.method_a.save(update_fields=["description"])
         self._auth(self.vendor_a)
         response = self.client.get(
-            f"/api/vendor/business-payments/methods/{self.method_a.id}"
+            "/api/vendor/business-payments/methods"
         )
-        self.assertEqual(
-            response.data["data"]["description"], "Pay with card to card."
-        )
+        self.assertEqual(response.status_code, 200)
+        rows = response.data["data"]["results"]
+        row = next(r for r in rows if r["id"] == self.method_a.id)
+        self.assertEqual(row["description"], "Pay with card to card.")
 
     def test_channel_create_and_method_replacement(self):
         self._auth(self.vendor_a)
@@ -577,7 +571,7 @@ class BusinessPaymentVendorAPITests(APITestCase):
         self._auth(self.vendor_a)
         self.assertEqual(
             self.client.delete(
-                f"/api/vendor/business-payments/methods/{self.method_a.id}"
+                "/api/vendor/business-payments/methods"
             ).status_code,
             405,
         )
@@ -708,7 +702,7 @@ class BusinessPaymentVendorAPITests(APITestCase):
     def test_method_patch_not_allowed(self):
         self._auth(self.vendor_a)
         response = self.client.patch(
-            f"/api/vendor/business-payments/methods/{self.method_a.id}",
+            "/api/vendor/business-payments/methods",
             {"code": "changed"},
             format="json",
         )
