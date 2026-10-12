@@ -4,6 +4,7 @@ from urllib.parse import quote
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
+from domains.catalog.cache import invalidate_categories_cache
 from domains.catalog.models import Category, CategoryStatus
 
 
@@ -46,7 +47,11 @@ class StorefrontStaticDataTests(TestCase):
             categories[0]["children"][0]["children"][0]["name"],
             "Smartphones",
         )
-        cache_service.put_public.assert_called_once_with("categories", categories)
+        # The TTL is part of the contract: the panels only re-fetch when the
+        # key is missing, so an expiring key is what refreshes their menu.
+        cache_service.put_public.assert_called_once_with(
+            "categories", categories, ttl=300
+        )
 
     @patch("domains.catalog.api.static_data.cache_service")
     def test_request_without_data_processes_all_handlers(self, cache_service):
@@ -110,3 +115,38 @@ class StorefrontStaticDataTests(TestCase):
 
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(len(response.data["data"]["categories"]), 1)
+
+
+class CategoryCacheInvalidationTests(TestCase):
+    """Every Category write must drop the shared storefront tree.
+
+    The panels read `public:categories` directly and only call
+    `/api/catalog/statics` on a miss, so a write that leaves the key in
+    place leaves the storefront menu stale until the key expires.
+    """
+
+    def setUp(self):
+        self.status = CategoryStatus.objects.create(name="active")
+
+    @patch("domains.catalog.cache.CacheService")
+    def test_category_create_update_and_delete_invalidate_the_tree(self, cache):
+        with self.captureOnCommitCallbacks(execute=True):
+            category = Category.objects.create(name="Electronics", status=self.status)
+        cache.return_value.delete_public.assert_called_with("categories")
+
+        cache.return_value.delete_public.reset_mock()
+        with self.captureOnCommitCallbacks(execute=True):
+            category.name = "Electronics & Photo"
+            category.save()
+        cache.return_value.delete_public.assert_called_with("categories")
+
+        cache.return_value.delete_public.reset_mock()
+        with self.captureOnCommitCallbacks(execute=True):
+            category.delete()
+        cache.return_value.delete_public.assert_called_with("categories")
+
+    @patch("domains.catalog.cache.CacheService")
+    def test_invalidation_drops_the_storefront_key(self, cache):
+        self.assertTrue(invalidate_categories_cache())
+
+        cache.return_value.delete_public.assert_called_once_with("categories")
