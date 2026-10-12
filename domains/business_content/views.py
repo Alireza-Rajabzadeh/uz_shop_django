@@ -119,28 +119,31 @@ class PublicLandingPage(LandingPageBySlug):
     allowed_statuses = (LandingPage.Status.PUBLISHED,)
     content_field = "published_content"
 
+    def resolve_payload(self, request, slug):
+        # The TTL rides along with the payload so one lock-protected
+        # rebuild decides whether the result is stored at all.
+        response = super().get(request, slug)
+        page = LandingPage.objects.only("cache_ttl").get(
+            slug=slug, business_id=public_business_id()
+        )
+        return response.data["data"], page.cache_ttl
+
     def get(self, request, slug):
         key = landing_page_cache_key(slug)
         cached = CacheService().get_public(key)
         if cached is not None:
             return api_response(data=cached)
-        response = super().get(request, slug)
-        page = LandingPage.objects.only("cache_ttl").get(
-            slug=slug, business_id=public_business_id()
+        data = CacheService().get_or_set_public(
+            key, lambda: self.resolve_payload(request, slug)
         )
-        if page.cache_ttl > 0:
-            CacheService().put_public(key, response.data["data"], ttl=page.cache_ttl)
-        return response
+        return api_response(data=data)
 
 
 class PublicHomePage(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
 
-    def get(self, request):
-        cached = CacheService().get_public(HOME_CACHE_KEY)
-        if cached is not None:
-            return api_response(data=cached)
+    def resolve_payload(self):
         try:
             page = PageService().get_home_page()
         except Page.DoesNotExist as exc:
@@ -149,10 +152,16 @@ class PublicHomePage(APIView):
         if page.status != Page.Status.PUBLISHED:
             raise NotFound(_("Page not found."))
 
-        page.selected_content = LandingPageContentResolver().resolve(page.published_content)
-        data = PageContentSerializer(page).data
-        if page.cache_ttl > 0:
-            CacheService().put_public(HOME_CACHE_KEY, data, ttl=page.cache_ttl)
+        page.selected_content = LandingPageContentResolver().resolve(
+            page.published_content
+        )
+        return PageContentSerializer(page).data, page.cache_ttl
+
+    def get(self, request):
+        cached = CacheService().get_public(HOME_CACHE_KEY)
+        if cached is not None:
+            return api_response(data=cached)
+        data = CacheService().get_or_set_public(HOME_CACHE_KEY, self.resolve_payload)
         return api_response(data=data)
 
 
@@ -186,16 +195,22 @@ class PublicPage(PageBySlug):
     allowed_statuses = (Page.Status.PUBLISHED,)
     content_field = "published_content"
 
+    def resolve_payload(self, request, slug):
+        response = super().get(request, slug)
+        page = Page.objects.only("cache_ttl").get(
+            slug=slug, business_id=public_business_id()
+        )
+        return response.data["data"], page.cache_ttl
+
     def get(self, request, slug):
         key = page_cache_key(slug)
         cached = CacheService().get_public(key)
         if cached is not None:
             return api_response(data=cached)
-        response = super().get(request, slug)
-        page = Page.objects.only("cache_ttl").get(slug=slug, business_id=public_business_id())
-        if page.cache_ttl > 0:
-            CacheService().put_public(key, response.data["data"], ttl=page.cache_ttl)
-        return response
+        data = CacheService().get_or_set_public(
+            key, lambda: self.resolve_payload(request, slug)
+        )
+        return api_response(data=data)
 
 
 def read_component_contracts():

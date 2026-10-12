@@ -124,6 +124,7 @@ class BusinessAPITests(APITestCase):
     @patch("domains.business.api.views.CacheService")
     def test_public_social_icon_url_and_null_icon(self, cache_class, _url):
         cache_class.return_value.get_public.return_value = None
+        cache_class.return_value.get_or_set_public.side_effect = lambda key, builder: builder()[0]
         icon = SocialMediaIcon.objects.create(
             social_media=self.social_media, file=self.make_file(), label="with-icon"
         )
@@ -175,6 +176,7 @@ class BusinessAPITests(APITestCase):
     @patch("domains.business.api.views.CacheService")
     def test_public_filters_private_inactive_and_notes(self, cache_class):
         cache_class.return_value.get_public.return_value = None
+        cache_class.return_value.get_or_set_public.side_effect = lambda key, builder: builder()[0]
         BusinessPhone.objects.create(key="public", title="Public", number="1", notes="hidden")
         BusinessPhone.objects.create(key="private", title="Private", number="2", visibility="private")
         BusinessPhone.objects.create(key="inactive", title="Inactive", number="3", status="inactive")
@@ -187,7 +189,11 @@ class BusinessAPITests(APITestCase):
         self.assertEqual([item["key"] for item in data["phones"]], ["public"])
         self.assertNotIn("notes", data["phones"][0])
         self.assertEqual([item["key"] for item in data["social_links"]], ["social"])
-        cache_class.return_value.put_public.assert_called_once_with("business:data", data, ttl=3600)
+        # The store decision belongs to `CacheService`; the view hands over
+        # the profile's own TTL with the payload it built.
+        key, builder = cache_class.return_value.get_or_set_public.call_args.args
+        self.assertEqual(key, "business:data")
+        self.assertEqual(builder(), (data, 3600))
 
     @patch("domains.business.api.views.BusinessService.public_data")
     @patch("domains.business.api.views.CacheService")
@@ -198,17 +204,22 @@ class BusinessAPITests(APITestCase):
         public_data.assert_not_called()
 
     @patch("domains.business.api.views.CacheService")
-    def test_zero_ttl_disables_cache_write(self, cache_class):
+    def test_zero_ttl_is_handed_over_and_the_payload_still_renders(self, cache_class):
         cache_class.return_value.get_public.return_value = None
+        cache_class.return_value.get_or_set_public.side_effect = lambda key, builder: builder()[0]
         self.profile.cache_ttl = 0
         self.profile.save()
-        self.client.get("/api/business/public")
-        cache_class.return_value.put_public.assert_not_called()
+        response = self.client.get("/api/business/public")
+        self.assertEqual(response.status_code, 200)
+        _, builder = cache_class.return_value.get_or_set_public.call_args.args
+        self.assertEqual(builder()[1], 0)
 
     @patch("domains.business.api.views.CacheService")
     def test_cache_outage_fails_open(self, cache_class):
+        # A cache that answers with nothing is indistinguishable from one
+        # that is down: either way the view rebuilds and still serves 200.
         cache_class.return_value.get_public.return_value = None
-        cache_class.return_value.put_public.return_value = False
+        cache_class.return_value.get_or_set_public.side_effect = lambda key, builder: builder()[0]
         response = self.client.get("/api/business/public")
         self.assertEqual(response.status_code, 200)
 

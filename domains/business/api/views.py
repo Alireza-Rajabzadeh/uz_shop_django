@@ -86,11 +86,12 @@ class PublicBusinessView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
-    def get(self, request):
-        cache = CacheService()
-        cached = cache.get_public(BUSINESS_CACHE_KEY)
-        if cached is not None:
-            return api_response(data=cached)
+    def resolve_payload(self):
+        """Return the public business payload and its cache TTL.
+
+        A business without a profile is still a valid response, but there
+        is no `cache_ttl` to honour, so nothing is stored.
+        """
         objects = BusinessService.public_data()
         profile = objects["profile"]
         data = {
@@ -99,8 +100,14 @@ class PublicBusinessView(APIView):
             "social_links": PublicBusinessSocialLinkSerializer(objects["social_links"], many=True).data,
             "working_hours": PublicBusinessWorkingDaySerializer(objects["working_hours"], many=True).data,
         }
-        if profile and profile.cache_ttl > 0:
-            cache.put_public(BUSINESS_CACHE_KEY, data, ttl=profile.cache_ttl)
+        return data, (profile.cache_ttl if profile else None)
+
+    def get(self, request):
+        cache = CacheService()
+        cached = cache.get_public(BUSINESS_CACHE_KEY)
+        if cached is not None:
+            return api_response(data=cached)
+        data = cache.get_or_set_public(BUSINESS_CACHE_KEY, self.resolve_payload)
         return api_response(data=data)
 
 

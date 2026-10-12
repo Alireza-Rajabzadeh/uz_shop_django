@@ -29,8 +29,9 @@ class PublicContentCacheTests(TestCase):
         resolver.assert_not_called()
 
     @patch("domains.business_content.views.CacheService")
-    def test_page_cache_miss_writes_final_payload_with_model_ttl(self, cache):
+    def test_page_cache_miss_hands_the_model_ttl_to_the_cache(self, cache):
         cache.return_value.get_public.return_value = None
+        cache.return_value.get_or_set_public.side_effect = lambda key, builder: builder()[0]
         page = Page.objects.create(
             title="About",
             slug="about",
@@ -43,13 +44,14 @@ class PublicContentCacheTests(TestCase):
         response = self.client.get(f"/api/business-content/pages/{page.slug}")
 
         self.assertEqual(response.status_code, 200)
-        cache.return_value.put_public.assert_called_once_with(
-            "business-content:pages:about", response.data["data"], ttl=45
-        )
+        key, builder = cache.return_value.get_or_set_public.call_args.args
+        self.assertEqual(key, "business-content:pages:about")
+        self.assertEqual(builder()[1], 45)
 
     @patch("domains.business_content.views.CacheService")
-    def test_zero_ttl_disables_home_cache_write(self, cache):
+    def test_zero_ttl_is_handed_over_and_the_page_still_renders(self, cache):
         cache.return_value.get_public.return_value = None
+        cache.return_value.get_or_set_public.side_effect = lambda key, builder: builder()[0]
         Page.objects.create(
             title="Home",
             slug="home",
@@ -62,11 +64,14 @@ class PublicContentCacheTests(TestCase):
         response = self.client.get("/api/business-content/home")
 
         self.assertEqual(response.status_code, 200)
-        cache.return_value.put_public.assert_not_called()
+        self.assertEqual(response.data["data"]["title"], "Home")
+        _, builder = cache.return_value.get_or_set_public.call_args.args
+        self.assertEqual(builder()[1], 0)
 
     @patch("domains.business_content.views.CacheService")
     def test_delivery_reads_the_storefront_business(self, cache):
         cache.return_value.get_public.return_value = None
+        cache.return_value.get_or_set_public.side_effect = lambda key, builder: builder()[0]
         Page.objects.create(
             title="Other business home",
             slug="home",
