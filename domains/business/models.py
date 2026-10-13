@@ -86,6 +86,20 @@ class BusinessProfile(TimestampedModel):
     legal_name = models.CharField(max_length=200, blank=True)
     email = models.EmailField(blank=True)
     address = models.TextField(blank=True)
+    province = models.ForeignKey(
+        "location.State",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="business_profiles",
+    )
+    city = models.ForeignKey(
+        "location.City",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="business_profiles",
+    )
     postal_code = models.CharField(max_length=32, blank=True)
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, validators=[MinValueValidator(-90), MaxValueValidator(90)])
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, validators=[MinValueValidator(-180), MaxValueValidator(180)])

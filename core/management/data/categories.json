@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "source": "test.html",
-  "category_count": 1016,
+  "category_count": 1017,
   "categories": [
     {
       "id": 1001,
@@ -6254,6 +6254,12 @@
       "id": 2016,
       "name": "پت شاپ",
       "source_url": "/landing/fmcg-petshop/",
+      "children": []
+    },
+    {
+      "id": 2017,
+      "name": "سایر",
+      "source_url": "/search/category-other/",
       "children": []
     }
   ]

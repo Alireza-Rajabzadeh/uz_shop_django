@@ -3,7 +3,13 @@ from django.urls import path
 from domains.location.api.views import (
     CityDetail, CityListCreate, CountryDetail, CountryListCreate, StateDetail, StateListCreate,
 )
-from domains.location.api.options import CityOptions, CountryOptions, StateOptions
+from domains.location.api.options import (
+    CityOptions,
+    CountryOptions,
+    StateOptions,
+    VendorCityOptions,
+    VendorProvinceOptions,
+)
 
 urlpatterns = [
     path("countries", CountryListCreate.as_view(), name="country-list"),
@@ -15,4 +21,6 @@ urlpatterns = [
     path("options/countries", CountryOptions.as_view(), name="country-options"),
     path("options/states", StateOptions.as_view(), name="state-options"),
     path("options/cities", CityOptions.as_view(), name="city-options"),
+    path("options/vendor/provinces", VendorProvinceOptions.as_view(), name="vendor-province-options"),
+    path("options/vendor/cities", VendorCityOptions.as_view(), name="vendor-city-options"),
 ]

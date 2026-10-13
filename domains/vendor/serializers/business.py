@@ -3,6 +3,7 @@ from rest_framework import serializers
 from domains.business.models import BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessWorkingDay, SocialMedia, SocialMediaIcon
 from domains.files.models import File
 from domains.files.services import FileService
+from domains.location.models import City, State
 
 
 class VendorBusinessProfileSerializer(serializers.ModelSerializer):
@@ -23,6 +24,23 @@ class VendorBusinessProfileSerializer(serializers.ModelSerializer):
     )
     dark_logo = serializers.SerializerMethodField()
 
+    # Location picks ride the location domain: the panel writes the ids its
+    # province/city selects produced and reads back display titles.
+    province_id = serializers.PrimaryKeyRelatedField(
+        source="province",
+        queryset=State.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    city_id = serializers.PrimaryKeyRelatedField(
+        source="city",
+        queryset=City.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    province = serializers.SerializerMethodField()
+    city = serializers.SerializerMethodField()
+
     # Lifecycle state is admin-decided: readable so the panel can gate its
     # UX, but never writable — a vendor editing "business information"
     # must not be able to move itself out of `confirmation_await`.
@@ -33,7 +51,8 @@ class VendorBusinessProfileSerializer(serializers.ModelSerializer):
         model = BusinessProfile
         fields = [
             "id", "business_name", "display_name", "legal_name", "email",
-            "address", "postal_code", "latitude", "longitude",
+            "address", "province_id", "city_id", "province", "city",
+            "postal_code", "latitude", "longitude",
             "light_logo_id", "light_logo", "dark_logo_id", "dark_logo",
             "enamad_link", "availability_status", "availability_message",
             "availability_until", "cache_ttl", "status", "status_code",
@@ -44,6 +63,36 @@ class VendorBusinessProfileSerializer(serializers.ModelSerializer):
     def get_status_code(self, obj):
         """`status`'s stable string code — the panel's gating contract."""
         return obj.status.code if obj.status_id else None
+
+    def get_province(self, obj):
+        if not obj.province_id:
+            return None
+        return {"id": obj.province_id, "title": obj.province.fa_title or obj.province.name}
+
+    def get_city(self, obj):
+        if not obj.city_id:
+            return None
+        return {"id": obj.city_id, "title": obj.city.fa_title or obj.city.name}
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        instance = self.instance
+        # Partial updates only carry the changed keys, so resolve the
+        # effective pair before checking that the city belongs to the
+        # province standing next to it.
+        province = (
+            attrs["province"] if "province" in attrs
+            else (instance.province if instance else None)
+        )
+        city = (
+            attrs["city"] if "city" in attrs
+            else (instance.city if instance else None)
+        )
+        if province and city and city.state_id != province.id:
+            raise serializers.ValidationError(
+                {"city_id": "The city does not belong to the selected province."}
+            )
+        return attrs
 
     def validate_light_logo_id(self, value):
         if value is not None and (

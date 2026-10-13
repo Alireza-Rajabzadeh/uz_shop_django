@@ -1,10 +1,11 @@
 from rest_framework import serializers
-from rest_framework.permissions import BasePermission
+from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.views import APIView
 
 from core.responses import api_response
 from domains.location.models import City, Country, State
 from domains.users.auth import AdminJWTAuthentication
+from domains.vendor.auth import VendorJWTAuthentication
 
 
 class LocationOptionSerializer(serializers.ModelSerializer):
@@ -78,6 +79,35 @@ class StateOptions(AdminLocationOptionView):
 
 
 class CityOptions(AdminLocationOptionView):
+    def get(self, request):
+        query = StateFilterSerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        cities = City.objects.filter(
+            state_id=query.validated_data["state_id"]
+        ).order_by("fa_title", "name")
+        return api_response(data=CityOptionSerializer(cities, many=True).data)
+
+
+class VendorLocationOptionView(APIView):
+    """Same option payloads for the vendor panels.
+
+    The admin options above require admin permissions; a vendor picking a
+    province/city for the business profile is an ordinary authenticated
+    read of the shared location domain, so these endpoints answer to the
+    vendor JWT and nothing else.
+    """
+
+    authentication_classes = [VendorJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+
+class VendorProvinceOptions(VendorLocationOptionView):
+    def get(self, request):
+        states = State.objects.order_by("fa_title", "name")
+        return api_response(data=StateOptionSerializer(states, many=True).data)
+
+
+class VendorCityOptions(VendorLocationOptionView):
     def get(self, request):
         query = StateFilterSerializer(data=request.query_params)
         query.is_valid(raise_exception=True)
