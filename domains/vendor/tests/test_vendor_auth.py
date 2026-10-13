@@ -1,4 +1,5 @@
 import uuid
+from contextlib import contextmanager
 from unittest.mock import patch
 
 from django.test import override_settings
@@ -6,6 +7,7 @@ from django.utils import timezone
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from core.services import ConfirmedRequestService
 from domains.vendor.enums.VendorStatusEnum import VendorStatusEnum
 from domains.vendor.models import Vendor, VendorStatus
 
@@ -50,6 +52,21 @@ class VendorRegistrationConfirmationAPITests(APITestCase):
             {"request_id": request_id, "code": code},
             format="json",
         )
+
+    @contextmanager
+    def _no_resend_cooldown(self):
+        # The resend cooldown is core behavior (asserted for login in the
+        # customer suite); the reuse tests need it out of the way without
+        # reimplementing Redis keys or waiting 30 seconds.
+        original = ConfirmedRequestService.generate_code
+
+        def generate_without_cooldown(service, *args, **kwargs):
+            return original(service, *args, **{**kwargs, "cooldown": 0})
+
+        with patch.object(
+            ConfirmedRequestService, "generate_code", generate_without_cooldown
+        ):
+            yield
 
     def test_request_and_confirm_creates_active_vendor_with_tokens(self):
         response, payload = self.register()
@@ -97,15 +114,67 @@ class VendorRegistrationConfirmationAPITests(APITestCase):
         vendor = Vendor.objects.get(phone=payload["phone"])
         self.assertEqual(vendor.status_id, VendorStatusEnum.PENDING.value)
 
-    def test_duplicate_phone_is_rejected(self):
-        unique = uuid.uuid4().int % 1_000_000_000
-        phone = f"09{unique:09d}"
-        self.register(phone=phone)
+    def test_confirmed_vendor_phone_is_rejected(self):
+        first, payload = self.register()
+        self.confirm(first.data["data"]["request_id"])
 
-        response, _ = self.register(phone=phone)
+        response, _ = self.register(phone=payload["phone"])
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("phone", response.data["errors"])
+
+    def test_pending_vendor_may_rerequest_registration(self):
+        unique = uuid.uuid4().int % 1_000_000_000
+        phone = f"09{unique:09d}"
+        first, payload = self.register(phone=phone)
+        first_request_id = first.data["data"]["request_id"]
+
+        with self._no_resend_cooldown():
+            response, _ = self.register(
+                phone=phone,
+                national_id=payload["national_id"],
+            )
+
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(Vendor.objects.filter(phone=phone).count(), 1)
+        # The newer challenge replaces the previous one for the same signup.
+        self.assertEqual(self.confirm(first_request_id).status_code, 400)
+
+        confirmed = self.confirm(response.data["data"]["request_id"])
+        self.assertEqual(confirmed.status_code, 200)
+        vendor = Vendor.objects.get(phone=phone)
+        self.assertEqual(vendor.status_id, VendorStatusEnum.ACTIVE.value)
+
+    def test_rerequest_refreshes_pending_vendor(self):
+        first, payload = self.register(last_name="Original")
+
+        with self._no_resend_cooldown():
+            response, _ = self.register(
+                phone=payload["phone"],
+                national_id=payload["national_id"],
+                last_name="Refreshed",
+                password="NewPass!123",
+                password_confirmation="NewPass!123",
+            )
+
+        self.assertEqual(response.status_code, 202)
+        self.confirm(response.data["data"]["request_id"])
+        vendor = Vendor.objects.get(phone=payload["phone"])
+        self.assertEqual(vendor.last_name, "Refreshed")
+
+        # Only the refreshed password works after confirmation.
+        stale_login = self.client.post(
+            "/api/vendor/login",
+            {"phone": payload["phone"], "password": payload["password"]},
+            format="json",
+        )
+        self.assertEqual(stale_login.status_code, 401)
+        login = self.client.post(
+            "/api/vendor/login",
+            {"phone": payload["phone"], "password": "NewPass!123"},
+            format="json",
+        )
+        self.assertEqual(login.status_code, 202)
 
     def test_duplicate_national_id_is_rejected(self):
         national_id = str(uuid.uuid4().int % 10_000_000_000)

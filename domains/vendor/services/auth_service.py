@@ -41,11 +41,26 @@ class VendorAuthService:
         password = validated_data.pop("password")
         validated_data.pop("password_confirmation")
 
-        vendor = Vendor(**validated_data, status_id=VendorStatusEnum.PENDING.value)
-        vendor.set_password(password)
-        vendor.save()
-
-        VendorPreference.objects.create(vendor=vendor)
+        # A pending signup may re-request (resend, expired code, edited form):
+        # reuse its row so an abandoned registration never locks the phone.
+        # The serializer already rejects every confirmed account, so anything
+        # pending on this phone is the same signup. The password is refreshed
+        # before the code is generated because the challenge stores the new
+        # credential fingerprint.
+        vendor = Vendor.objects.filter(
+            phone=validated_data["phone"],
+            status_id=VendorStatusEnum.PENDING.value,
+        ).first()
+        if vendor is None:
+            vendor = Vendor(**validated_data, status_id=VendorStatusEnum.PENDING.value)
+            vendor.set_password(password)
+            vendor.save()
+            VendorPreference.objects.create(vendor=vendor)
+        else:
+            for field, value in validated_data.items():
+                setattr(vendor, field, value)
+            vendor.set_password(password)
+            vendor.save()
 
         confirmed_requests = ConfirmedRequestService()
         try:

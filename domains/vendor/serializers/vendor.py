@@ -3,6 +3,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils.translation import gettext as _
 from rest_framework import serializers
 from core.utils import PhoneNormalizationError, normalize_phone
+from domains.vendor.enums.VendorStatusEnum import VendorStatusEnum
 from domains.vendor.models import Vendor, VendorPreference
 
 
@@ -26,12 +27,29 @@ class VendorRegisterSerializer(serializers.Serializer):
             value = normalize_phone(value)
         except PhoneNormalizationError as exc:
             raise serializers.ValidationError(_("Enter a valid mobile number.")) from exc
-        if Vendor.objects.filter(phone=value).exists():
+        # A confirmed account owns its number. A pending signup may re-request:
+        # VendorAuthService.request_registration reuses that row, so a resend
+        # or an expired code never locks the number.
+        if Vendor.objects.filter(phone=value).exclude(
+            status_id=VendorStatusEnum.PENDING.value
+        ).exists():
             raise serializers.ValidationError(_("Phone number already registered."))
         return value
 
     def validate_national_id(self, value):
-        if Vendor.objects.filter(national_id=value).exists():
+        candidates = Vendor.objects.filter(national_id=value)
+        if candidates.exclude(status_id=VendorStatusEnum.PENDING.value).exists():
+            raise serializers.ValidationError(_("National ID already registered."))
+        # Same retry rule as the phone: an unconfirmed signup may reuse its own
+        # national ID, but a different signup may not claim it while pending.
+        raw_phone = self.initial_data.get("phone")
+        try:
+            request_phone = normalize_phone(raw_phone) if raw_phone else None
+        except PhoneNormalizationError:
+            request_phone = None
+        if request_phone and candidates.filter(
+            status_id=VendorStatusEnum.PENDING.value
+        ).exclude(phone=request_phone).exists():
             raise serializers.ValidationError(_("National ID already registered."))
         return value
 
