@@ -10,6 +10,7 @@ from core.responses import api_response
 from core.services import CacheService
 from domains.business.models import BusinessProfile
 from domains.catalog.services import CategoryService, ProductService
+from domains.packages.permissions import RequiresContentLandingPage
 from domains.vendor.auth import VendorJWTAuthentication
 
 from .cache import HOME_CACHE_KEY, landing_page_cache_key, page_cache_key
@@ -417,12 +418,18 @@ class VendorSuggestionPageList(VendorContentAPIView):
 
 
 class VendorLandingPageList(VendorContentList):
+    # Landing pages are the gated content surface; plain pages stay
+    # with every tier. See `domains.packages.permissions`.
+    permission_classes = [IsAuthenticated, RequiresContentLandingPage]
+
     model = LandingPage
     serializer_class = LandingPageSerializer
     detail_serializer = LandingPageDetailSerializer
 
 
 class VendorLandingPageDetail(VendorContentDetail):
+    permission_classes = [IsAuthenticated, RequiresContentLandingPage]
+
     model = LandingPage
     serializer_class = LandingPageSerializer
     detail_serializer = LandingPageDetailSerializer
@@ -431,6 +438,8 @@ class VendorLandingPageDetail(VendorContentDetail):
 
 
 class VendorLandingPagePublish(VendorContentPublish):
+    permission_classes = [IsAuthenticated, RequiresContentLandingPage]
+
     model = LandingPage
     detail_serializer = LandingPageDetailSerializer
     service_class = LandingPageService
@@ -438,6 +447,8 @@ class VendorLandingPagePublish(VendorContentPublish):
 
 
 class VendorLandingPagePreview(VendorContentPreview):
+    permission_classes = [IsAuthenticated, RequiresContentLandingPage]
+
     model = LandingPage
     content_serializer = LandingPageContentSerializer
     allowed_statuses = (LandingPage.Status.DRAFT, LandingPage.Status.PUBLISHED)
@@ -445,6 +456,8 @@ class VendorLandingPagePreview(VendorContentPreview):
 
 
 class VendorLandingPageSEO(VendorResourceSEOView):
+    permission_classes = [IsAuthenticated, RequiresContentLandingPage]
+
     resource_type = "landing_page"
     model = LandingPage
     not_found_message = "Landing page not found."

@@ -109,6 +109,7 @@ INSTALLED_APPS = [
     "domains.business_content.apps.BusinessContentConfig",
     "domains.marketplace.apps.MarketplaceConfig",
     "domains.banks.apps.BanksConfig",
+    "domains.packages.apps.PackagesConfig",
     "core",
     "domains.users",
 ]
@@ -180,6 +181,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "core.middleware.business_status.BusinessStatusMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"

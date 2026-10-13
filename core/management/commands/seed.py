@@ -3,6 +3,8 @@ from django.core.management.base import BaseCommand
 from core.management.seeders.banks import BankSeeder
 from core.management.seeders.brands import BrandSeeder
 from core.management.seeders.business_payment_statuses import BusinessPaymentStatusSeeder
+
+from core.management.seeders.business_statuses import BusinessStatusSeeder
 from core.management.seeders.categories import CategorySeeder
 from core.management.seeders.category_details import CategoryDetailSeeder
 from core.management.seeders.inventory import InventorySeeder
@@ -13,6 +15,7 @@ from core.management.seeders.product_statuses import ProductStatusSeeder
 from core.management.seeders.product_variant_statuses import ProductVariantStatusSeeder
 from core.management.seeders.order import OrderSeeder
 from core.management.seeders.marketplace_order import MarketplaceOrderSeeder
+from core.management.seeders.packages import PackagesSeeder
 from core.management.seeders.payments import PaymentsSeeder
 from core.management.seeders.customers import CustomerSeeder
 from core.management.seeders.location import LocationSeeder
@@ -32,6 +35,7 @@ class Command(BaseCommand):
             BrandSeeder(),
             VariantAttributeSeeder(),
             VendorStatusSeeder(),
+            BusinessStatusSeeder(),
             BusinessPaymentStatusSeeder(),
             BankSeeder(),
             CategoryDetailSeeder(),
@@ -45,6 +49,7 @@ class Command(BaseCommand):
             MarketplaceOrderSeeder(),
             PaymentsSeeder(),
             SocialMediaSeeder(),
+            PackagesSeeder(),
         ]
 
         for seeder in seeders:

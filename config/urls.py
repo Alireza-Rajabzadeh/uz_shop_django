@@ -49,4 +49,5 @@ urlpatterns = [
     path("api/order", OrderListCreateView.as_view()),
     path("api/order/", include("domains.order.urls")),
     path("api/marketplace/", include("domains.marketplace.api.urls")),
+    path("api/packages/", include("domains.packages.urls")),
 ]

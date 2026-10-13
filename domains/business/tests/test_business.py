@@ -9,7 +9,8 @@ from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from domains.business.api.serializers import BusinessWorkingDaySerializer
-from domains.business.models import BusinessCategory, BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessWorkingDay, SocialMedia, SocialMediaIcon
+from domains.business.data.business_statuses import BUSINESS_STATUS_SEED
+from domains.business.models import BusinessCategory, BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessStatus, BusinessWorkingDay, SocialMedia, SocialMediaIcon
 from domains.catalog.models import Category, CategoryStatus
 from domains.files.models import File, FileStatus
 from domains.files.services import FileService
@@ -17,6 +18,21 @@ from domains.vendor.models import Vendor, VendorStatus
 
 
 PROFILE = {"business_name": "Uz Shop", "display_name": "Uz", "legal_name": "Uz LLC", "email": "hello@example.com"}
+
+
+def ensure_business_status_rows():
+    """Recreate what a TransactionTestCase flush erased.
+
+    The teardown flush empties every table, including the reference rows
+    `business.0011` seeds, so a test in this family that builds a profile
+    must restore the FK targets — the same way these tests already
+    restore `VendorStatus` inline.
+    """
+    for row in BUSINESS_STATUS_SEED:
+        BusinessStatus.objects.get_or_create(
+            id=row["id"],
+            defaults={"code": row["code"], "name": row["name"], "title": row["title"]},
+        )
 
 
 class BusinessModelTests(TransactionTestCase):
@@ -27,6 +43,7 @@ class BusinessModelTests(TransactionTestCase):
         # replaced it with one row per vendor, so the schema now enforces a
         # different rule than "exactly one profile in the table": two
         # vendor-less profiles are still allowed.
+        ensure_business_status_rows()
         status, _ = VendorStatus.objects.get_or_create(
             id=1, defaults={"name": "Active", "is_active": True}
         )
@@ -240,6 +257,7 @@ class BusinessCategoryModelTests(TransactionTestCase):
     reset_sequences = True
 
     def _get_or_create_business(self):
+        ensure_business_status_rows()
         business, _ = BusinessProfile.objects.get_or_create(
             id=1, defaults=PROFILE
         )

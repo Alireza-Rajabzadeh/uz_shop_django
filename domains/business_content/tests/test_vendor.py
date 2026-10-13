@@ -1,8 +1,10 @@
 from rest_framework.test import APITestCase
 
+from core.management.seeders.packages import PackagesSeeder
 from core.services import CacheService
 from domains.business.models import BusinessCategory, BusinessProfile
 from domains.catalog.models import Category, CategoryStatus, Product, ProductStatus
+from domains.packages.models import Package
 from domains.vendor.enums.VendorStatusEnum import VendorStatusEnum
 from domains.vendor.models import Vendor, VendorStatus
 
@@ -61,6 +63,16 @@ class VendorContentAPITests(APITestCase):
             business_name="Other Content Business",
             display_name="Other Content Business",
         )
+
+        # Landing-page authoring is gated by `content.landingpage`. These
+        # tests are about ownership scoping, not entitlement, so both
+        # sellers sit on the tier that grants it.
+        PackagesSeeder().run()
+        pro = Package.objects.get(code="pro")
+        self.business.package = pro
+        self.business.save()
+        self.other_business.package = pro
+        self.other_business.save()
 
         category_status = CategoryStatus.objects.create(name="active")
         self.category = Category.objects.create(

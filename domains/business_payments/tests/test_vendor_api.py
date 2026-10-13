@@ -8,6 +8,7 @@ from rest_framework.test import APITestCase
 
 from core.management.seeders.order import OrderSeeder
 from core.management.seeders.payments import PaymentsSeeder
+from domains.business.enums.BusinessStatusEnum import BusinessStatusEnum
 from domains.business.models import BusinessProfile
 from domains.customer.models import Customer, CustomerStatus
 from domains.files.models import File, FileStatus
@@ -52,6 +53,8 @@ def _make_business(vendor):
         vendor=vendor,
         business_name=f"Business {vendor.national_id}",
         display_name=f"Biz {vendor.national_id}",
+        # Fixture businesses are trading: the lifecycle gate stays open.
+        status_id=BusinessStatusEnum.ACTIVE.value,
     )
 
 

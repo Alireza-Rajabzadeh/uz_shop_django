@@ -237,7 +237,10 @@ class PublicBusinessProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = BusinessProfile
-        exclude = ["cache_ttl", "created_at", "updated_at"]
+        # `package` is deliberately excluded: the storefront has no use for a
+        # tier id, and this serializer also feeds the public Redis payload
+        # under `business:data`.
+        exclude = ["cache_ttl", "created_at", "updated_at", "package"]
 
     def _get_logo_url(self, file):
         if file is None:

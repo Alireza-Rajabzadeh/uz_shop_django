@@ -33,6 +33,7 @@ from domains.inventory.services import InventoryService
 from domains.marketplace.models import BusinessOffer
 from domains.marketplace.models.offer_price_history import SOURCE_VENDOR
 from domains.marketplace.services import MarketplacePricingService
+from domains.packages.permissions import RequiresShopProducts
 from domains.vendor.auth import VendorJWTAuthentication
 from domains.vendor.services.vendor_product_service import VendorProductService
 from domains.vendor.serializers.products import (
@@ -92,7 +93,7 @@ def _get_vendor_variant(variant_id, category_ids, vendor):
 
 class VendorProductFilterOptionsView(APIView):
     authentication_classes = [VendorJWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, RequiresShopProducts]
 
     def get(self, request):
         business, category_ids = _get_business_category_ids(request.user)
@@ -132,7 +133,7 @@ class VendorProductFilterOptionsView(APIView):
 
 class VendorProductListView(APIView):
     authentication_classes = [VendorJWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, RequiresShopProducts]
 
     def get(self, request):
         _, category_ids = _get_business_category_ids(request.user)
@@ -169,7 +170,7 @@ class VendorProductListView(APIView):
 
 class VendorProductDetailView(APIView):
     authentication_classes = [VendorJWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, RequiresShopProducts]
 
     def get(self, request, id):
         _, category_ids = _get_business_category_ids(request.user)
@@ -189,7 +190,7 @@ class VendorProductDetailView(APIView):
 
 class VendorProductSimilarSearchView(APIView):
     authentication_classes = [VendorJWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, RequiresShopProducts]
 
     def get(self, request):
         name = request.query_params.get("name", "").strip()
@@ -221,7 +222,7 @@ class VendorProductSimilarSearchView(APIView):
 
 class VendorProductCreateView(APIView):
     authentication_classes = [VendorJWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, RequiresShopProducts]
 
     def post(self, request):
         serializer = VendorProductCreateSerializer(data=request.data)
@@ -252,7 +253,7 @@ class VendorProductCreateView(APIView):
 
 class VendorProductEditableCheckView(APIView):
     authentication_classes = [VendorJWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, RequiresShopProducts]
 
     def get(self, request, id):
         _, category_ids = _get_business_category_ids(request.user)
@@ -269,7 +270,7 @@ class VendorProductEditableCheckView(APIView):
 
 class VendorProductUpdateView(APIView):
     authentication_classes = [VendorJWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, RequiresShopProducts]
 
     def get(self, request, id):
         _, category_ids = _get_business_category_ids(request.user)
@@ -303,7 +304,7 @@ class VendorProductUpdateView(APIView):
 
 class VendorProductFormOptionsView(APIView):
     authentication_classes = [VendorJWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, RequiresShopProducts]
 
     def get(self, request):
         _, category_ids = _get_business_category_ids(request.user)
@@ -352,7 +353,7 @@ class VendorProductFormOptionsView(APIView):
 
 class VendorProductDetailDefinitionsView(APIView):
     authentication_classes = [VendorJWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, RequiresShopProducts]
 
     def get(self, request):
         _, category_ids = _get_business_category_ids(request.user)
@@ -398,7 +399,7 @@ class VendorProductDetailDefinitionsView(APIView):
 
 class VendorFileUploadView(APIView):
     authentication_classes = [VendorJWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, RequiresShopProducts]
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request):
@@ -424,7 +425,7 @@ class VendorFileUploadView(APIView):
 
 class VendorProductFileListCreateView(APIView):
     authentication_classes = [VendorJWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, RequiresShopProducts]
 
     def get(self, request, product_id):
         _, category_ids = _get_business_category_ids(request.user)
@@ -460,7 +461,7 @@ class VendorProductFileListCreateView(APIView):
 
 class VendorProductFileDetailView(APIView):
     authentication_classes = [VendorJWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, RequiresShopProducts]
 
     def _get_relation(self, product_id, relation_id, category_ids):
         product = _get_vendor_product(product_id, category_ids)
@@ -501,7 +502,7 @@ class VendorProductFileDetailView(APIView):
 
 class VendorProductFileReorderView(APIView):
     authentication_classes = [VendorJWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, RequiresShopProducts]
 
     def patch(self, request, product_id):
         _, category_ids = _get_business_category_ids(request.user)
@@ -529,7 +530,7 @@ class VendorProductFileReorderView(APIView):
 
 class VendorProductVariantListCreateView(APIView):
     authentication_classes = [VendorJWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, RequiresShopProducts]
 
     def get(self, request, product_id):
         business, category_ids = _get_business_category_ids(request.user)
@@ -602,7 +603,7 @@ class VendorProductVariantListCreateView(APIView):
 
 class VendorProductVariantFormOptionsView(APIView):
     authentication_classes = [VendorJWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, RequiresShopProducts]
 
     def get(self, request, product_id):
         business, category_ids = _get_business_category_ids(request.user)
@@ -641,7 +642,7 @@ class VendorProductVariantFormOptionsView(APIView):
 
 class VendorProductVariantDetailView(APIView):
     authentication_classes = [VendorJWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, RequiresShopProducts]
 
     # Vendor-writable variant fields. Status and vendor ownership are not
     # vendor-writable; pricing fields are handled separately via _sync_business_offer.
@@ -858,7 +859,7 @@ class VendorVariantMarketplaceStatusView(APIView):
     """
 
     authentication_classes = [VendorJWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, RequiresShopProducts]
 
     def patch(self, request, variant_id):
         _, category_ids = _get_business_category_ids(request.user)

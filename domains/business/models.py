@@ -3,6 +3,9 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import Q
 
+from domains.business.enums.BusinessStatusEnum import BusinessStatusEnum
+from domains.packages.models import DEFAULT_PACKAGE_CODE, Package
+
 
 class TimestampedModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
@@ -22,6 +25,27 @@ class RecordStatus(models.TextChoices):
     INACTIVE = "inactive", "Inactive"
 
 
+class BusinessStatus(models.Model):
+    """Reference rows for the business lifecycle.
+
+    Seeded reference data with fixed ids (see `BusinessStatusEnum` and
+    `domains.business.data.business_statuses`): there is no admin or
+    vendor write path, only the migration that creates the table and the
+    `BusinessStatusSeeder`. `code` is the API contract; `title` carries
+    the Persian display string.
+    """
+
+    code = models.CharField(max_length=32, unique=True)
+    name = models.CharField(max_length=64)
+    title = models.CharField(max_length=64)
+
+    class Meta:
+        db_table = "business_status"
+
+    def __str__(self):
+        return self.code
+
+
 class BusinessProfile(TimestampedModel):
     class Availability(models.TextChoices):
         OPEN = "open", "Open"
@@ -36,6 +60,26 @@ class BusinessProfile(TimestampedModel):
         related_name="business_profiles",
         null=True,
         blank=True,
+    )
+    # PROTECT guards the package, not the business: a business can still be
+    # deleted, but a tier cannot be removed out from under the businesses on
+    # it. Matches `PackagePriceHistory.package`.
+    package = models.ForeignKey(
+        "packages.Package",
+        on_delete=models.PROTECT,
+        related_name="business_profiles",
+        null=True,
+        blank=True,
+    )
+    # Lifecycle state, decided by the admin's confirmation flow — unrelated
+    # to the storefront's `availability_status` below. PROTECT: a status row
+    # cannot be removed from under the businesses standing on it. Default 3
+    # (confirmation_await): every new registration starts unconfirmed.
+    status = models.ForeignKey(
+        BusinessStatus,
+        on_delete=models.PROTECT,
+        related_name="business_profiles",
+        default=BusinessStatusEnum.CONFIRMATION_AWAIT.value,
     )
     business_name = models.CharField(max_length=200)
     display_name = models.CharField(max_length=200)
@@ -70,6 +114,24 @@ class BusinessProfile(TimestampedModel):
         constraints = [
             models.UniqueConstraint(fields=["vendor"], name="business_profile_one_per_vendor"),
         ]
+
+    def save(self, *args, **kwargs):
+        # A new business starts on the default tier.
+        #
+        # Create-only, so an explicit `null` written by a later update is
+        # left alone rather than silently reassigned. `.filter().first()`
+        # rather than `.get()` because an environment that has not seeded
+        # packages should keep NULL instead of raising, which is also what
+        # lets the many call sites that build a profile without seeding keep
+        # working.
+        if self._state.adding and self.package_id is None:
+            self.package = Package.objects.filter(code=DEFAULT_PACKAGE_CODE).first()
+        super().save(*args, **kwargs)
+
+    @property
+    def package_code(self):
+        """The tier this business is on; a missing package means the default."""
+        return self.package.code if self.package_id else DEFAULT_PACKAGE_CODE
 
     def __str__(self):
         return self.display_name

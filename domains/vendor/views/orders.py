@@ -30,6 +30,7 @@ from domains.order.serializers import (
     AdminOrderListQuerySerializer,
     AdminReturnActionSerializer,
 )
+from domains.packages.permissions import RequiresShopOrders
 
 from ..auth import VendorJWTAuthentication
 from .business import _get_business
@@ -41,7 +42,10 @@ VENDOR_ORDER_ACTIONS = frozenset({"confirm", "prepare", "pack", "ship", "deliver
 
 class VendorOrderAPIView(APIView):
     authentication_classes = [VendorJWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    # Every seller-facing order route extends this base, so the entitlement
+    # check sits here once: an order-less package cannot read the list it
+    # would have hidden in the menu either.
+    permission_classes = [IsAuthenticated, RequiresShopOrders]
 
     @staticmethod
     def _business(request):

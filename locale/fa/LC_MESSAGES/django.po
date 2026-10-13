@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: uz_shop_django\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-05 14:18+0000\n"
+"POT-Creation-Date: 2026-10-13 10:14+0000\n"
 "PO-Revision-Date: 2026-07-23 12:11+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -15,11 +15,11 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
 
-#: config/settings.py:334
+#: config/settings.py:336
 msgid "English"
 msgstr "انگلیسی"
 
-#: config/settings.py:334
+#: config/settings.py:336
 msgid "Persian"
 msgstr "فارسی"
 
@@ -30,6 +30,14 @@ msgstr "خطای داخلی سرور"
 #: core/exceptions.py:69
 msgid "Request failed"
 msgstr "درخواست ناموفق"
+
+#: core/middleware/business_status.py:70
+msgid "Your business has been banned."
+msgstr "کسب‌وکار شما مسدود شده است."
+
+#: core/middleware/business_status.py:77
+msgid "Your business is awaiting confirmation."
+msgstr "کسب‌وکار شما در انتظار تأیید است."
 
 #: core/utils/card_number.py:17
 msgid "Card number must be 16 digits."
@@ -286,39 +294,39 @@ msgstr "%(location)s باید یکی از %(options)s باشد."
 msgid "A content item with this slug already exists in this scope."
 msgstr "محتوایی با این اسلاگ از قبل در این محدوده وجود دارد."
 
-#: domains/business_content/views.py:102 domains/business_content/views.py:105
+#: domains/business_content/views.py:103 domains/business_content/views.py:106
 #: domains/content/views.py:149 domains/content/views.py:177
 #: domains/content/views.py:302 domains/content/views.py:383
 #: domains/content/views.py:386
 msgid "Landing page not found."
 msgstr "صفحه فرود پیدا نشد."
 
-#: domains/business_content/views.py:147 domains/business_content/views.py:150
-#: domains/business_content/views.py:169 domains/business_content/views.py:172
+#: domains/business_content/views.py:151 domains/business_content/views.py:154
+#: domains/business_content/views.py:179 domains/business_content/views.py:182
 #: domains/content/views.py:210 domains/content/views.py:238
-#: domains/content/views.py:370 domains/content/views.py:426
-#: domains/content/views.py:429 domains/content/views.py:448
-#: domains/content/views.py:451
+#: domains/content/views.py:370 domains/content/views.py:433
+#: domains/content/views.py:436 domains/content/views.py:461
+#: domains/content/views.py:464
 msgid "Page not found."
 msgstr "صفحه پیدا نشد."
 
-#: domains/business_content/views.py:207 domains/content/views.py:486
+#: domains/business_content/views.py:223 domains/content/views.py:505
 msgid "content contracts file not found"
 msgstr "فایل قرارداد محتوا پیدا نشد"
 
-#: domains/business_content/views.py:209
+#: domains/business_content/views.py:225
 msgid "Run sync_business_content_contracts to generate the file."
 msgstr "برای ساخت فایل، sync_business_content_contracts را اجرا کنید."
 
-#: domains/business_content/views.py:218 domains/content/views.py:497
+#: domains/business_content/views.py:234 domains/content/views.py:516
 msgid "content contracts file is invalid"
 msgstr "فایل قرارداد محتوا نامعتبر است"
 
-#: domains/business_content/views.py:219 domains/content/views.py:498
+#: domains/business_content/views.py:235 domains/content/views.py:517
 msgid "The contracts file could not be parsed."
 msgstr "فایل قرارداد قابل تجزیه نبود."
 
-#: domains/business_content/views.py:265
+#: domains/business_content/views.py:281 domains/vendor/views/orders.py:54
 msgid "Business profile not found."
 msgstr "پروفایل کسب‌وکار پیدا نشد."
 
@@ -372,7 +380,7 @@ msgstr "این کانال دارای پرداخت است؛ فقط وضعیت ف�
 msgid "This channel has payments and cannot be deleted."
 msgstr "این کانال دارای پرداخت است و قابل حذف نیست."
 
-#: domains/business_payments/views.py:150
+#: domains/business_payments/views.py:135
 msgid "Payment channel deleted."
 msgstr "کانال پرداخت حذف شد."
 
@@ -859,7 +867,7 @@ msgstr "محتوایی با این اسلاگ از قبل وجود دارد."
 msgid "SEO resource not found."
 msgstr "منبع SEO پیدا نشد."
 
-#: domains/content/views.py:488
+#: domains/content/views.py:507
 msgid "Run sync_content_contracts to generate the file."
 msgstr "برای ساخت فایل، sync_content_contracts را اجرا کنید."
 
@@ -1460,12 +1468,12 @@ msgstr "مبلغ معتبر الزامی است."
 msgid "Amount must be greater than or equal to zero."
 msgstr "مبلغ باید بزرگ‌تر یا مساوی صفر باشد."
 
-#: domains/marketplace/services/order_service.py:62
+#: domains/marketplace/services/order_service.py:76
 #, python-format
 msgid "Item %(sku)s is no longer listed by the seller."
 msgstr "کالای %(sku)s دیگر توسط فروشنده عرضه نمی‌شود."
 
-#: domains/marketplace/services/order_service.py:77
+#: domains/marketplace/services/order_service.py:91
 msgid "The basket contains items from more than one seller."
 msgstr "سبد خرید شامل کالاهایی از بیش از یک فروشنده است."
 
@@ -1488,47 +1496,49 @@ msgid "You do not have permission to view return requests."
 msgstr "شما مجوز دسترسی به این منبع را ندارید."
 
 #: domains/order/admin_views.py:72 domains/order/admin_views.py:107
-#: domains/order/admin_views.py:121
+#: domains/order/admin_views.py:121 domains/vendor/views/orders.py:93
+#: domains/vendor/views/orders.py:103 domains/vendor/views/orders.py:117
+#: domains/vendor/views/orders.py:143
 #, fuzzy
 #| msgid "Address not found."
 msgid "Order not found."
 msgstr "سفارش پیدا نشد."
 
-#: domains/order/admin_views.py:143
+#: domains/order/admin_views.py:143 domains/vendor/views/orders.py:136
 #, fuzzy
 #| msgid "Address not found."
 msgid "Return request not found."
 msgstr "درخواست مرجوعی پیدا نشد."
 
-#: domains/order/flow.py:211
+#: domains/order/flow.py:225
 msgid "This action is not available for the current order status."
 msgstr "این عمل برای وضعیت فعلی سفارش در دسترس نیست."
 
-#: domains/order/flow.py:216
+#: domains/order/flow.py:230
 msgid "Create a return request through the returns endpoint."
 msgstr "از مسیر مرجوعی، درخواست مرجوعی ایجاد کنید."
 
-#: domains/order/flow.py:220
+#: domains/order/flow.py:234
 msgid "This actor is not allowed to execute the action."
 msgstr "این کاربر مجوز انجام این عمل را ندارد."
 
-#: domains/order/return_flow.py:152
+#: domains/order/return_flow.py:162
 msgid "Unknown return action."
 msgstr "عمل مرجوعی ناشناخته است."
 
-#: domains/order/return_flow.py:163
+#: domains/order/return_flow.py:173
 msgid "This action is not available for the current return status."
 msgstr "این عمل برای وضعیت فعلی مرجوعی در دسترس نیست."
 
-#: domains/order/return_flow.py:242
+#: domains/order/return_flow.py:252
 msgid "This order is not currently eligible for return."
 msgstr "این سفارش در حال حاضر واجد شرایط مرجوعی نیست."
 
-#: domains/order/return_flow.py:253
+#: domains/order/return_flow.py:263
 msgid "Every order item must belong to the selected order."
 msgstr "هر قلم سفارش باید متعلق به سفارش انتخاب‌شده باشد."
 
-#: domains/order/return_flow.py:272
+#: domains/order/return_flow.py:282
 #, python-format
 msgid "Order item %(item_id)s has only %(available)s available to return."
 msgstr "قلم سفارش %(item_id)s فقط %(available)s قابل بازگشت دارد."
@@ -1552,6 +1562,87 @@ msgstr "سفارش لغو شد."
 #| msgid "Address created."
 msgid "Return request created."
 msgstr "درخواست مرجوعی ایجاد شد."
+
+#: domains/packages/admin_views.py:56
+msgid "Package created."
+msgstr "بسته ایجاد شد."
+
+#: domains/packages/admin_views.py:81
+msgid "Package updated."
+msgstr "بسته به‌روزرسانی شد."
+
+#: domains/packages/admin_views.py:116
+msgid "Feature created."
+msgstr "قابلیت ایجاد شد."
+
+#: domains/packages/admin_views.py:141
+msgid "Feature updated."
+msgstr "قابلیت به‌روزرسانی شد."
+
+#: domains/packages/admin_views.py:171
+msgid "Feature assigned."
+msgstr "قابلیت اختصاص داده شد."
+
+#: domains/packages/admin_views.py:201
+msgid "Feature configuration updated."
+msgstr "پیکربندی قابلیت به‌روزرسانی شد."
+
+#: domains/packages/admin_views.py:208
+msgid "Feature removed from package."
+msgstr "قابلیت از بسته حذف شد."
+
+#: domains/packages/exceptions.py:31
+msgid "This feature is not available in your package."
+msgstr "این قابلیت در بسته شما در دسترس نیست."
+
+#: domains/packages/exceptions.py:71
+#, python-format
+msgid "You have reached the limit of %(limit)s for this feature."
+msgstr "به سقف %(limit)s برای این قابلیت رسیده‌اید."
+
+#: domains/packages/models.py:42
+msgid "Code cannot be changed after creation."
+msgstr "کد پس از ایجاد قابل تغییر نیست."
+
+#: domains/packages/serializers.py:28
+msgid "Feature configuration must be a JSON object."
+msgstr "پیکربندی قابلیت باید یک شیء JSON باشد."
+
+#: domains/packages/serializers.py:35
+msgid "This setting must be a boolean."
+msgstr "این تنظیم باید بولین باشد."
+
+#: domains/packages/serializers.py:44
+msgid "This setting must be a non-negative integer."
+msgstr "این تنظیم باید یک عدد صحیح غیرمنفی باشد."
+
+#: domains/packages/serializers.py:150 domains/packages/serializers.py:175
+msgid "Price cannot be negative."
+msgstr "قیمت نمی‌تواند منفی باشد."
+
+#: domains/packages/serializers.py:158 domains/packages/serializers.py:183
+msgid "Discount cannot be negative."
+msgstr "تخفیف نمی‌تواند منفی باشد."
+
+#: domains/packages/serializers.py:159 domains/packages/serializers.py:184
+msgid "Discount must be a percentage between 0 and 100."
+msgstr "تخفیف باید درصدی بین ۰ تا ۱۰۰ باشد."
+
+#: domains/packages/services.py:38
+msgid "Package not found."
+msgstr "بسته پیدا نشد."
+
+#: domains/packages/services.py:106
+msgid "Feature not found."
+msgstr "قابلیت پیدا نشد."
+
+#: domains/packages/services.py:140
+msgid "This feature is already assigned to the package."
+msgstr "این قابلیت قبلاً به بسته اضافه شده است."
+
+#: domains/packages/services.py:151
+msgid "This feature is not assigned to the package."
+msgstr "این قابلیت به بسته اضافه نشده است."
 
 #: domains/preorder/admin_views.py:42 domains/preorder/services.py:83
 #, fuzzy
@@ -1721,6 +1812,10 @@ msgstr "حساب فعال نیست."
 #| msgid "Registration successful."
 msgid "Registration confirmed."
 msgstr "ثبت‌نام تایید شد."
+
+#: domains/vendor/views/orders.py:111
+msgid "This action is not available for this order."
+msgstr "این عمل برای این سفارش در دسترس نیست."
 
 #: domains/wishlist/admin_views.py:42 domains/wishlist/services.py:77
 #, fuzzy

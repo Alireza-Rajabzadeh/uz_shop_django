@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: uz_shop_django\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-05 14:18+0000\n"
+"POT-Creation-Date: 2026-10-13 10:14+0000\n"
 "PO-Revision-Date: 2026-07-23 12:11+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -15,11 +15,11 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: config/settings.py:334
+#: config/settings.py:336
 msgid "English"
 msgstr "English"
 
-#: config/settings.py:334
+#: config/settings.py:336
 msgid "Persian"
 msgstr "Persian"
 
@@ -30,6 +30,14 @@ msgstr "Internal server error"
 #: core/exceptions.py:69
 msgid "Request failed"
 msgstr "Request failed"
+
+#: core/middleware/business_status.py:70
+msgid "Your business has been banned."
+msgstr "Your business has been banned."
+
+#: core/middleware/business_status.py:77
+msgid "Your business is awaiting confirmation."
+msgstr "Your business is awaiting confirmation."
 
 #: core/utils/card_number.py:17
 msgid "Card number must be 16 digits."
@@ -287,39 +295,39 @@ msgstr "%(location)s must be one of %(options)s."
 msgid "A content item with this slug already exists in this scope."
 msgstr "A content item with this slug already exists in this scope."
 
-#: domains/business_content/views.py:102 domains/business_content/views.py:105
+#: domains/business_content/views.py:103 domains/business_content/views.py:106
 #: domains/content/views.py:149 domains/content/views.py:177
 #: domains/content/views.py:302 domains/content/views.py:383
 #: domains/content/views.py:386
 msgid "Landing page not found."
 msgstr "Landing page not found."
 
-#: domains/business_content/views.py:147 domains/business_content/views.py:150
-#: domains/business_content/views.py:169 domains/business_content/views.py:172
+#: domains/business_content/views.py:151 domains/business_content/views.py:154
+#: domains/business_content/views.py:179 domains/business_content/views.py:182
 #: domains/content/views.py:210 domains/content/views.py:238
-#: domains/content/views.py:370 domains/content/views.py:426
-#: domains/content/views.py:429 domains/content/views.py:448
-#: domains/content/views.py:451
+#: domains/content/views.py:370 domains/content/views.py:433
+#: domains/content/views.py:436 domains/content/views.py:461
+#: domains/content/views.py:464
 msgid "Page not found."
 msgstr "Page not found."
 
-#: domains/business_content/views.py:207 domains/content/views.py:486
+#: domains/business_content/views.py:223 domains/content/views.py:505
 msgid "content contracts file not found"
 msgstr "content contracts file not found"
 
-#: domains/business_content/views.py:209
+#: domains/business_content/views.py:225
 msgid "Run sync_business_content_contracts to generate the file."
 msgstr "Run sync_business_content_contracts to generate the file."
 
-#: domains/business_content/views.py:218 domains/content/views.py:497
+#: domains/business_content/views.py:234 domains/content/views.py:516
 msgid "content contracts file is invalid"
 msgstr "content contracts file is invalid"
 
-#: domains/business_content/views.py:219 domains/content/views.py:498
+#: domains/business_content/views.py:235 domains/content/views.py:517
 msgid "The contracts file could not be parsed."
 msgstr "The contracts file could not be parsed."
 
-#: domains/business_content/views.py:265
+#: domains/business_content/views.py:281 domains/vendor/views/orders.py:54
 msgid "Business profile not found."
 msgstr "Business profile not found."
 
@@ -373,7 +381,7 @@ msgstr ""
 msgid "This channel has payments and cannot be deleted."
 msgstr ""
 
-#: domains/business_payments/views.py:150
+#: domains/business_payments/views.py:135
 msgid "Payment channel deleted."
 msgstr ""
 
@@ -855,7 +863,7 @@ msgstr "A content item with this slug already exists."
 msgid "SEO resource not found."
 msgstr "SEO resource not found."
 
-#: domains/content/views.py:488
+#: domains/content/views.py:507
 msgid "Run sync_content_contracts to generate the file."
 msgstr "Run sync_content_contracts to generate the file."
 
@@ -1448,12 +1456,12 @@ msgstr ""
 msgid "Amount must be greater than or equal to zero."
 msgstr ""
 
-#: domains/marketplace/services/order_service.py:62
+#: domains/marketplace/services/order_service.py:76
 #, python-format
 msgid "Item %(sku)s is no longer listed by the seller."
 msgstr ""
 
-#: domains/marketplace/services/order_service.py:77
+#: domains/marketplace/services/order_service.py:91
 msgid "The basket contains items from more than one seller."
 msgstr ""
 
@@ -1476,47 +1484,49 @@ msgid "You do not have permission to view return requests."
 msgstr "You do not have permission to access this resource."
 
 #: domains/order/admin_views.py:72 domains/order/admin_views.py:107
-#: domains/order/admin_views.py:121
+#: domains/order/admin_views.py:121 domains/vendor/views/orders.py:93
+#: domains/vendor/views/orders.py:103 domains/vendor/views/orders.py:117
+#: domains/vendor/views/orders.py:143
 #, fuzzy
 #| msgid "Address not found."
 msgid "Order not found."
 msgstr "Address not found."
 
-#: domains/order/admin_views.py:143
+#: domains/order/admin_views.py:143 domains/vendor/views/orders.py:136
 #, fuzzy
 #| msgid "Address not found."
 msgid "Return request not found."
 msgstr "Address not found."
 
-#: domains/order/flow.py:211
+#: domains/order/flow.py:225
 msgid "This action is not available for the current order status."
 msgstr ""
 
-#: domains/order/flow.py:216
+#: domains/order/flow.py:230
 msgid "Create a return request through the returns endpoint."
 msgstr ""
 
-#: domains/order/flow.py:220
+#: domains/order/flow.py:234
 msgid "This actor is not allowed to execute the action."
 msgstr ""
 
-#: domains/order/return_flow.py:152
+#: domains/order/return_flow.py:162
 msgid "Unknown return action."
 msgstr ""
 
-#: domains/order/return_flow.py:163
+#: domains/order/return_flow.py:173
 msgid "This action is not available for the current return status."
 msgstr ""
 
-#: domains/order/return_flow.py:242
+#: domains/order/return_flow.py:252
 msgid "This order is not currently eligible for return."
 msgstr ""
 
-#: domains/order/return_flow.py:253
+#: domains/order/return_flow.py:263
 msgid "Every order item must belong to the selected order."
 msgstr ""
 
-#: domains/order/return_flow.py:272
+#: domains/order/return_flow.py:282
 #, python-format
 msgid "Order item %(item_id)s has only %(available)s available to return."
 msgstr ""
@@ -1540,6 +1550,87 @@ msgstr ""
 #| msgid "Address created."
 msgid "Return request created."
 msgstr "Address created."
+
+#: domains/packages/admin_views.py:56
+msgid "Package created."
+msgstr "Package created."
+
+#: domains/packages/admin_views.py:81
+msgid "Package updated."
+msgstr "Package updated."
+
+#: domains/packages/admin_views.py:116
+msgid "Feature created."
+msgstr "Feature created."
+
+#: domains/packages/admin_views.py:141
+msgid "Feature updated."
+msgstr "Feature updated."
+
+#: domains/packages/admin_views.py:171
+msgid "Feature assigned."
+msgstr "Feature assigned."
+
+#: domains/packages/admin_views.py:201
+msgid "Feature configuration updated."
+msgstr "Feature configuration updated."
+
+#: domains/packages/admin_views.py:208
+msgid "Feature removed from package."
+msgstr "Feature removed from package."
+
+#: domains/packages/exceptions.py:31
+msgid "This feature is not available in your package."
+msgstr "This feature is not available in your package."
+
+#: domains/packages/exceptions.py:71
+#, python-format
+msgid "You have reached the limit of %(limit)s for this feature."
+msgstr "You have reached the limit of %(limit)s for this feature."
+
+#: domains/packages/models.py:42
+msgid "Code cannot be changed after creation."
+msgstr "Code cannot be changed after creation."
+
+#: domains/packages/serializers.py:28
+msgid "Feature configuration must be a JSON object."
+msgstr "Feature configuration must be a JSON object."
+
+#: domains/packages/serializers.py:35
+msgid "This setting must be a boolean."
+msgstr "This setting must be a boolean."
+
+#: domains/packages/serializers.py:44
+msgid "This setting must be a non-negative integer."
+msgstr "This setting must be a non-negative integer."
+
+#: domains/packages/serializers.py:150 domains/packages/serializers.py:175
+msgid "Price cannot be negative."
+msgstr "Price cannot be negative."
+
+#: domains/packages/serializers.py:158 domains/packages/serializers.py:183
+msgid "Discount cannot be negative."
+msgstr "Discount cannot be negative."
+
+#: domains/packages/serializers.py:159 domains/packages/serializers.py:184
+msgid "Discount must be a percentage between 0 and 100."
+msgstr "Discount must be a percentage between 0 and 100."
+
+#: domains/packages/services.py:38
+msgid "Package not found."
+msgstr "Package not found."
+
+#: domains/packages/services.py:106
+msgid "Feature not found."
+msgstr "Feature not found."
+
+#: domains/packages/services.py:140
+msgid "This feature is already assigned to the package."
+msgstr "This feature is already assigned to the package."
+
+#: domains/packages/services.py:151
+msgid "This feature is not assigned to the package."
+msgstr "This feature is not assigned to the package."
 
 #: domains/preorder/admin_views.py:42 domains/preorder/services.py:83
 #, fuzzy
@@ -1709,6 +1800,10 @@ msgstr "Account is inactive."
 #| msgid "Registration successful."
 msgid "Registration confirmed."
 msgstr "Registration successful."
+
+#: domains/vendor/views/orders.py:111
+msgid "This action is not available for this order."
+msgstr "This action is not available for this order."
 
 #: domains/wishlist/admin_views.py:42 domains/wishlist/services.py:77
 #, fuzzy

@@ -38,6 +38,7 @@ from domains.marketplace.api.serializers import OfferPriceHistorySerializer
 from domains.marketplace.models import BusinessOffer
 from domains.marketplace.models.offer_price_history import SOURCE_VENDOR
 from domains.marketplace.services import MarketplacePricingService
+from domains.packages.exceptions import require_capacity
 from domains.vendor.auth import VendorJWTAuthentication
 from domains.vendor.services.vendor_product_service import VendorProductService
 from domains.vendor.views.products import _get_business_category_ids
@@ -348,6 +349,15 @@ class VendorWarehouseListView(VendorInventoryAPIView):
         business = self._get_business(request)
         from domains.inventory.api.serializers import WarehouseWriteSerializer
         from domains.inventory.models import Warehouse
+
+        # One location is the baseline every business keeps, whatever its
+        # tier. Only building on top of that is a package decision — the
+        # feature must be granted and its `limit` not reached yet.
+        current = Warehouse.objects.filter(business=business).count()
+        if current:
+            require_capacity(
+                business, "shop.multiple_warehouses", current=current
+            )
 
         serializer = WarehouseWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

@@ -23,6 +23,12 @@ class VendorBusinessProfileSerializer(serializers.ModelSerializer):
     )
     dark_logo = serializers.SerializerMethodField()
 
+    # Lifecycle state is admin-decided: readable so the panel can gate its
+    # UX, but never writable — a vendor editing "business information"
+    # must not be able to move itself out of `confirmation_await`.
+    status = serializers.PrimaryKeyRelatedField(read_only=True)
+    status_code = serializers.SerializerMethodField()
+
     class Meta:
         model = BusinessProfile
         fields = [
@@ -30,9 +36,14 @@ class VendorBusinessProfileSerializer(serializers.ModelSerializer):
             "address", "postal_code", "latitude", "longitude",
             "light_logo_id", "light_logo", "dark_logo_id", "dark_logo",
             "enamad_link", "availability_status", "availability_message",
-            "availability_until", "cache_ttl", "created_at", "updated_at",
+            "availability_until", "cache_ttl", "status", "status_code",
+            "created_at", "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
+
+    def get_status_code(self, obj):
+        """`status`'s stable string code — the panel's gating contract."""
+        return obj.status.code if obj.status_id else None
 
     def validate_light_logo_id(self, value):
         if value is not None and (
