@@ -13,3 +13,9 @@ from .variant_attribute import (
     VariantAttribute,
     VariantOption,
 )
+from .vendor_product import (
+    VendorProduct,
+    VendorProductDetails,
+    VendorProductFile,
+    VendorProductStatus,
+)

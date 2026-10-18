@@ -39,17 +39,28 @@ class AdminModelPermissions(DjangoModelPermissions):
         return super()._queryset(view)
 
 
+def _can(user, perm):
+    """Whether the principal holds `perm`.
+
+    Non-admin principals (a vendor or customer that authenticated against a
+    shared authentication stack) are not Django users and have no permission
+    API; they hold nothing, so deny rather than raising an AttributeError.
+    """
+    checker = getattr(user, "has_perm", None)
+    return bool(checker and checker(perm))
+
+
 class CustomActionPermission(BasePermission):
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
         perms = getattr(view, "required_permissions", None)
         if perms is not None:
-            return any(request.user.has_perm(perm) for perm in perms)
+            return any(_can(request.user, perm) for perm in perms)
         perm = getattr(view, "required_permission", None)
         if perm is None:
             return True
-        return request.user.has_perm(perm)
+        return _can(request.user, perm)
 
 
 class AllRequiredPermissions(BasePermission):
@@ -57,7 +68,7 @@ class AllRequiredPermissions(BasePermission):
         if not request.user or not request.user.is_authenticated:
             return False
         return all(
-            request.user.has_perm(permission)
+            _can(request.user, permission)
             for permission in getattr(view, "required_permissions", ())
         )
 
@@ -69,5 +80,5 @@ class MethodPermission(BasePermission):
         mapping = getattr(view, "method_permissions", {})
         codename = mapping.get(request.method)
         if codename:
-            return request.user.has_perm(codename)
+            return _can(request.user, codename)
         return True

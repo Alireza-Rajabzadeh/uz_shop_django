@@ -56,12 +56,6 @@ class VendorProductServiceTests(TestCase):
         self.active_status, _ = ProductStatus.objects.get_or_create(
             name="active"
         )
-        self.wait_status, _ = ProductStatus.objects.get_or_create(
-            name="wait_for_admin_confirmation"
-        )
-        self.rejected_status, _ = ProductStatus.objects.get_or_create(
-            name="admin_rejected"
-        )
         self.inactive_status, _ = ProductStatus.objects.get_or_create(
             name="inactive"
         )
@@ -84,169 +78,7 @@ class VendorProductServiceTests(TestCase):
             product.save(update_fields=["created_by_vendor", "creator_model"])
         return product
 
-    # ─────────────────────── create_vendor_product ───────────────────────
-
-    def test_create_vendor_product_sets_wait_for_admin_confirmation(self):
-        product = VendorProductService.create_vendor_product(
-            vendor=self.vendor,
-            name="New Phone",
-            category_ids=[self.category.id],
-        )
-        product.refresh_from_db()
-        self.assertEqual(product.status.name, "wait_for_admin_confirmation")
-
-    def test_create_vendor_product_sets_created_by_vendor(self):
-        product = VendorProductService.create_vendor_product(
-            vendor=self.vendor,
-            name="New Phone",
-            category_ids=[self.category.id],
-        )
-        product.refresh_from_db()
-        self.assertEqual(product.created_by_vendor_id, self.vendor.pk)
-        self.assertEqual(product.creator_model, "vendor.vendor")
-
-    def test_create_vendor_product_sets_pending_status_initially_then_overrides(self):
-        product = VendorProductService.create_vendor_product(
-            vendor=self.vendor,
-            name="New Phone",
-            category_ids=[self.category.id],
-        )
-        product.refresh_from_db()
-        self.assertNotEqual(product.status.name, "pending")
-        self.assertEqual(product.status.name, "wait_for_admin_confirmation")
-
-    def test_create_vendor_product_with_description(self):
-        product = VendorProductService.create_vendor_product(
-            vendor=self.vendor,
-            name="New Phone",
-            category_ids=[self.category.id],
-            description="A great phone",
-        )
-        product.refresh_from_db()
-        self.assertEqual(product.description, "A great phone")
-
-    # ─────────────────────── update_vendor_product ───────────────────────
-
-    def test_update_from_wait_for_admin_confirmation_resets_to_wait(self):
-        product = self._make_product(
-            status=self.wait_status, vendor=self.vendor, creator_model="vendor.vendor"
-        )
-        VendorProductService.update_vendor_product(
-            product, self.vendor, name="Updated Name",
-            category_ids=[self.category.id],
-        )
-        product.refresh_from_db()
-        self.assertEqual(product.status.name, "wait_for_admin_confirmation")
-        self.assertEqual(product.name, "Updated Name")
-
-    def test_update_from_admin_rejected_resubmits_to_wait(self):
-        product = self._make_product(
-            status=self.rejected_status, vendor=self.vendor, creator_model="vendor.vendor"
-        )
-        VendorProductService.update_vendor_product(
-            product, self.vendor, name="Resubmitted",
-            category_ids=[self.category.id],
-        )
-        product.refresh_from_db()
-        self.assertEqual(product.status.name, "wait_for_admin_confirmation")
-        self.assertEqual(product.name, "Resubmitted")
-
-    def test_update_blocks_when_status_active(self):
-        product = self._make_product(
-            status=self.active_status, vendor=self.vendor, creator_model="vendor.vendor"
-        )
-        with self.assertRaises(PermissionDenied):
-            VendorProductService.update_vendor_product(
-                product, self.vendor, name="Should Fail"
-            )
-
-    def test_update_blocks_when_status_pending(self):
-        product = self._make_product(
-            status=self.pending_status, vendor=self.vendor, creator_model="vendor.vendor"
-        )
-        with self.assertRaises(PermissionDenied):
-            VendorProductService.update_vendor_product(
-                product, self.vendor, name="Should Fail"
-            )
-
-    def test_update_blocks_when_status_inactive(self):
-        product = self._make_product(
-            status=self.inactive_status, vendor=self.vendor, creator_model="vendor.vendor"
-        )
-        with self.assertRaises(PermissionDenied):
-            VendorProductService.update_vendor_product(
-                product, self.vendor, name="Should Fail"
-            )
-
-    def test_update_blocks_when_created_by_other_vendor(self):
-        product = self._make_product(
-            status=self.wait_status, vendor=self.other_vendor, creator_model="vendor.vendor"
-        )
-        with self.assertRaises(PermissionDenied):
-            VendorProductService.update_vendor_product(
-                product, self.vendor, name="Should Fail"
-            )
-
-    def test_update_blocks_when_creator_model_not_vendor(self):
-        product = self._make_product(
-            status=self.wait_status, vendor=self.vendor, creator_model="catalog.product"
-        )
-        with self.assertRaises(PermissionDenied):
-            VendorProductService.update_vendor_product(
-                product, self.vendor, name="Should Fail"
-            )
-
-    # ─────────────────────── can_vendor_edit ───────────────────────
-
-    def test_can_edit_true_when_wait_for_admin_confirmation(self):
-        product = self._make_product(
-            status=self.wait_status, vendor=self.vendor, creator_model="vendor.vendor"
-        )
-        self.assertTrue(VendorProductService.can_vendor_edit(product, self.vendor))
-
-    def test_can_edit_true_when_admin_rejected(self):
-        product = self._make_product(
-            status=self.rejected_status, vendor=self.vendor, creator_model="vendor.vendor"
-        )
-        self.assertTrue(VendorProductService.can_vendor_edit(product, self.vendor))
-
-    def test_can_edit_false_when_active(self):
-        product = self._make_product(
-            status=self.active_status, vendor=self.vendor, creator_model="vendor.vendor"
-        )
-        self.assertFalse(VendorProductService.can_vendor_edit(product, self.vendor))
-
-    def test_can_edit_false_when_pending(self):
-        product = self._make_product(
-            status=self.pending_status, vendor=self.vendor, creator_model="vendor.vendor"
-        )
-        self.assertFalse(VendorProductService.can_vendor_edit(product, self.vendor))
-
-    def test_can_edit_false_when_different_vendor(self):
-        product = self._make_product(
-            status=self.wait_status, vendor=self.other_vendor, creator_model="vendor.vendor"
-        )
-        self.assertFalse(VendorProductService.can_vendor_edit(product, self.vendor))
-
-    def test_can_edit_false_when_creator_model_not_vendor(self):
-        product = self._make_product(
-            status=self.wait_status, vendor=self.vendor, creator_model="catalog.product"
-        )
-        self.assertFalse(VendorProductService.can_vendor_edit(product, self.vendor))
-
-    def test_can_edit_false_when_no_vendor(self):
-        product = self._make_product(status=self.wait_status)
-        self.assertFalse(VendorProductService.can_vendor_edit(product, self.vendor))
-
     # ─────────────────────── can_manage_variants ───────────────────────
-
-    def test_cannot_add_variant_when_wait_for_admin_confirmation(self):
-        product = self._make_product(status=self.wait_status)
-        self.assertFalse(VendorProductService.can_manage_variants(product))
-
-    def test_cannot_add_variant_when_admin_rejected(self):
-        product = self._make_product(status=self.rejected_status)
-        self.assertFalse(VendorProductService.can_manage_variants(product))
 
     def test_can_manage_variants_when_active(self):
         product = self._make_product(status=self.active_status)
@@ -459,50 +291,11 @@ class VendorProductServiceTests(TestCase):
         )
         self.assertLessEqual(len(results), 5)
 
-    # ─────────────────────── get_editable_annotation ───────────────────────
-
-    def test_editable_annotation_wait_for_admin_confirmation(self):
-        product = self._make_product(
-            status=self.wait_status, vendor=self.vendor, creator_model="vendor.vendor"
-        )
-        from django.db.models import Value
-        qs = Product.objects.filter(pk=product.pk).annotate(
-            editable=VendorProductService.get_editable_annotation(self.vendor)
-        )
-        self.assertTrue(qs.first().editable)
-
-    def test_editable_annotation_admin_rejected(self):
-        product = self._make_product(
-            status=self.rejected_status, vendor=self.vendor, creator_model="vendor.vendor"
-        )
-        qs = Product.objects.filter(pk=product.pk).annotate(
-            editable=VendorProductService.get_editable_annotation(self.vendor)
-        )
-        self.assertTrue(qs.first().editable)
-
-    def test_editable_annotation_active_is_false(self):
-        product = self._make_product(
-            status=self.active_status, vendor=self.vendor, creator_model="vendor.vendor"
-        )
-        qs = Product.objects.filter(pk=product.pk).annotate(
-            editable=VendorProductService.get_editable_annotation(self.vendor)
-        )
-        self.assertFalse(qs.first().editable)
-
-    def test_editable_annotation_other_vendor_is_false(self):
-        product = self._make_product(
-            status=self.wait_status, vendor=self.other_vendor, creator_model="vendor.vendor"
-        )
-        qs = Product.objects.filter(pk=product.pk).annotate(
-            editable=VendorProductService.get_editable_annotation(self.vendor)
-        )
-        self.assertFalse(qs.first().editable)
-
     # ─────────────────────── get_created_by_me_annotation ───────────────────────
 
     def test_created_by_me_true(self):
         product = self._make_product(
-            status=self.wait_status, vendor=self.vendor, creator_model="vendor.vendor"
+            status=self.active_status, vendor=self.vendor, creator_model="vendor.vendor"
         )
         qs = Product.objects.filter(pk=product.pk).annotate(
             created_by_me=VendorProductService.get_created_by_me_annotation(self.vendor)
@@ -511,7 +304,7 @@ class VendorProductServiceTests(TestCase):
 
     def test_created_by_me_false_for_other_vendor(self):
         product = self._make_product(
-            status=self.wait_status, vendor=self.other_vendor, creator_model="vendor.vendor"
+            status=self.active_status, vendor=self.other_vendor, creator_model="vendor.vendor"
         )
         qs = Product.objects.filter(pk=product.pk).annotate(
             created_by_me=VendorProductService.get_created_by_me_annotation(self.vendor)

@@ -22,6 +22,7 @@ from core.management.seeders.location import LocationSeeder
 from core.management.seeders.marketplace import MarketplaceSeeder
 from core.management.seeders.social_media import SocialMediaSeeder
 from core.management.seeders.variant_attributes import VariantAttributeSeeder
+from core.management.seeders.vendor_product_statuses import VendorProductStatusSeeder
 from core.management.seeders.vendor_statuses import VendorStatusSeeder
 
 
@@ -41,6 +42,7 @@ class Command(BaseCommand):
             CategoryDetailSeeder(),
             ProductStatusSeeder(),
             ProductVariantStatusSeeder(),
+            VendorProductStatusSeeder(),
             InventorySeeder(),
             InventoryAttributeDefinitionSeeder(),
             MarketplaceSeeder(),

@@ -20,6 +20,13 @@ from .storefront import (
     StorefrontProductSearch,
     StorefrontStaticData,
 )
+from .vendor_product_review_views import (
+    VendorProductReviewList,
+    VendorProductReviewDetail,
+    VendorProductReviewConfirm,
+    VendorProductReviewApply,
+    VendorProductReviewDecide,
+)
 
 urlpatterns = [
     path("statics", StorefrontStaticData.as_view()),
@@ -52,6 +59,16 @@ urlpatterns = [
     path("variant-attributes/<int:id>", VariantAttributeDetail.as_view()),
     path("variant-options", VariantOptionListCreate.as_view()),
     path("variant-options/<int:id>", VariantOptionDetail.as_view()),
+
+    # Vendor product submissions awaiting admin confirmation
+    path("vendor-products", VendorProductReviewList.as_view()),
+    path("vendor-products/<int:id>", VendorProductReviewDetail.as_view()),
+    path(
+        "vendor-products/<int:id>/confirm",
+        VendorProductReviewConfirm.as_view(),
+    ),
+    path("vendor-products/<int:id>/apply", VendorProductReviewApply.as_view()),
+    path("vendor-products/<int:id>/decide", VendorProductReviewDecide.as_view()),
 
     # Products
     path("product-form-options", ProductFormOptions.as_view()),

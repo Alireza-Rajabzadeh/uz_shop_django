@@ -6,7 +6,6 @@ class ProductStatusSeeder(BaseSeeder):
     def run(self):
         for name in (
             "active", "inactive", "pending", "preorder",
-            "wait_for_admin_confirmation", "admin_rejected",
         ):
             status = ProductStatus.objects.filter(name__iexact=name).first()
             if status is None:

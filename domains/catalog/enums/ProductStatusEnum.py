@@ -6,5 +6,3 @@ class ProductStatusEnum(Enum):
     INACTIVE = "inactive"
     PENDING = "pending"
     PREORDER = "preorder"
-    WAIT_FOR_ADMIN_CONFIRMATION = "wait_for_admin_confirmation"
-    ADMIN_REJECTED = "admin_rejected"

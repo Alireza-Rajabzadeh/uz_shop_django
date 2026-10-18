@@ -24,7 +24,6 @@ from .admin import (
 )
 from .products import (
     VendorProductSimilarSerializer,
-    VendorProductCreateSerializer,
     VendorProductListSerializer,
     VendorProductDetailSerializer,
 )

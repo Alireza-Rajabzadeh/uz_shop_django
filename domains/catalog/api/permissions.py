@@ -18,6 +18,14 @@ class CatalogModelPermissions(DjangoModelPermissions):
         "DELETE": ["%(app_label)s.delete_%(model_name)s"],
     }
 
+    def has_permission(self, request, view):
+        # A principal that is not a Django user (a vendor token that reached
+        # here, for example) cannot hold catalog model permissions. Answer 403
+        # instead of letting `has_perms` raise an AttributeError into a 500.
+        if not hasattr(request.user, "has_perms"):
+            return False
+        return super().has_permission(request, view)
+
     def _queryset(self, view):
         model = getattr(view, "model", None)
         if model is not None:

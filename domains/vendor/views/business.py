@@ -1,6 +1,7 @@
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.translation import gettext as _
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
@@ -36,7 +37,7 @@ class VendorBusinessProfileView(APIView):
 
     def post(self, request):
         if BusinessProfile.objects.filter(vendor=request.user).exists():
-            return api_response(False, "Business profile already exists.", status_code=400)
+            return api_response(False, _("Business profile already exists."), status_code=400)
         serializer = VendorBusinessProfileSerializer(data=request.data, context={"vendor": request.user})
         serializer.is_valid(raise_exception=True)
         serializer.save(vendor=request.user)
@@ -45,7 +46,7 @@ class VendorBusinessProfileView(APIView):
     def patch(self, request):
         profile = _get_business(request)
         if not profile:
-            return api_response(False, "Business profile not found.", status_code=404)
+            return api_response(False, _("Business profile not found."), status_code=404)
         serializer = VendorBusinessProfileSerializer(profile, data=request.data, partial=True, context={"vendor": request.user})
         serializer.is_valid(raise_exception=True)
         serializer.save()
@@ -66,7 +67,7 @@ class VendorBusinessPhoneListCreateView(APIView):
     def post(self, request):
         business = _get_business(request)
         if not business:
-            return api_response(False, "Business profile not found.", status_code=400)
+            return api_response(False, _("Business profile not found."), status_code=400)
         serializer = VendorBusinessPhoneSerializer(data=request.data, context={"business": business})
         serializer.is_valid(raise_exception=True)
         serializer.save(business=business)
@@ -110,7 +111,7 @@ class VendorBusinessSocialLinkListCreateView(APIView):
     def post(self, request):
         business = _get_business(request)
         if not business:
-            return api_response(False, "Business profile not found.", status_code=400)
+            return api_response(False, _("Business profile not found."), status_code=400)
         serializer = VendorBusinessSocialLinkSerializer(data=request.data, context={"business": business})
         serializer.is_valid(raise_exception=True)
         serializer.save(business=business)
@@ -148,7 +149,7 @@ class VendorBusinessSocialLinkReorderView(APIView):
     def patch(self, request):
         business = _get_business(request)
         if not business:
-            return api_response(False, "Business profile not found.", status_code=400)
+            return api_response(False, _("Business profile not found."), status_code=400)
 
         serializer = VendorSocialLinkReorderSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -194,7 +195,7 @@ class VendorBusinessPhoneReorderView(APIView):
     def patch(self, request):
         business = _get_business(request)
         if not business:
-            return api_response(False, "Business profile not found.", status_code=400)
+            return api_response(False, _("Business profile not found."), status_code=400)
 
         serializer = VendorPhoneReorderSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -244,7 +245,7 @@ class VendorBusinessWorkingDayListCreateView(APIView):
     def post(self, request):
         business = _get_business(request)
         if not business:
-            return api_response(False, "Business profile not found.", status_code=400)
+            return api_response(False, _("Business profile not found."), status_code=400)
         serializer = VendorBusinessWorkingDaySerializer(data=request.data, context={"vendor": request.user})
         serializer.is_valid(raise_exception=True)
         serializer.save(vendor=request.user)
@@ -259,7 +260,7 @@ class VendorBusinessWorkingDayUpsertView(APIView):
     def patch(self, request):
         business = _get_business(request)
         if not business:
-            return api_response(False, "Business profile not found.", status_code=400)
+            return api_response(False, _("Business profile not found."), status_code=400)
 
         serializer = VendorBusinessWorkingDayUpsertSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -372,7 +373,7 @@ class VendorBusinessCategoryView(APIView):
     def put(self, request):
         business = _get_business(request)
         if not business:
-            return api_response(False, "Business profile not found.", status_code=400)
+            return api_response(False, _("Business profile not found."), status_code=400)
 
         serializer = BusinessCategoryUpsertSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

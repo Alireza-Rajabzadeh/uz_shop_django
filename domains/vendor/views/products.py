@@ -10,10 +10,6 @@ from core.responses import api_response
 from domains.business.models import BusinessProfile
 from domains.catalog.api.serializers import (
     ProductDetailReadSerializer,
-    ProductFileReadSerializer,
-    ProductFileUpdateSerializer,
-    ProductFileWriteSerializer,
-    ProductFileReorderSerializer,
     ProductListSerializer,
     ProductVariantSerializer,
     ProductVariantWriteSerializer,
@@ -26,7 +22,7 @@ from domains.catalog.models import (
     ProductStatus,
     ProductVariants,
 )
-from domains.catalog.services import ProductService, ProductFileService
+from domains.catalog.services import ProductService
 from domains.files.api.serializers import FileUploadSerializer
 from domains.files.services import FileService
 from domains.inventory.services import InventoryService
@@ -38,15 +34,12 @@ from domains.vendor.auth import VendorJWTAuthentication
 from domains.vendor.services.vendor_product_service import VendorProductService
 from domains.vendor.serializers.products import (
     VendorProductSimilarSerializer,
-    VendorProductCreateSerializer,
-    VendorProductUpdateSerializer,
     VendorProductListSerializer,
     VendorProductDetailSerializer,
 )
 
 
 product_service = ProductService()
-product_file_service = ProductFileService()
 file_service = FileService()
 inventory_service = InventoryService()
 vendor_product_service = VendorProductService()
@@ -156,7 +149,6 @@ class VendorProductListView(APIView):
             **({"status_id": status_id} if status_id else {}),
             **({"search": search} if search else {}),
         ).annotate(
-            editable=vendor_product_service.get_editable_annotation(request.user),
             created_by_me=vendor_product_service.get_created_by_me_annotation(request.user),
         )
 
@@ -180,7 +172,6 @@ class VendorProductDetailView(APIView):
         serialized = VendorProductDetailSerializer(
             product, context={"vendor": request.user}
         ).data
-        serialized["editable"] = vendor_product_service.can_vendor_edit(product, request.user)
         serialized["created_by_me"] = product.created_by_vendor_id == request.user.pk
         return api_response(data=serialized)
 
@@ -218,85 +209,6 @@ class VendorProductSimilarSearchView(APIView):
         )
         serializer = VendorProductSimilarSerializer(results, many=True)
         return api_response(data=serializer.data)
-
-
-class VendorProductCreateView(APIView):
-    authentication_classes = [VendorJWTAuthentication]
-    permission_classes = [IsAuthenticated, RequiresShopProducts]
-
-    def post(self, request):
-        serializer = VendorProductCreateSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
-
-        brand = None
-        if data.get("brand_id"):
-            brand = Brand.objects.get(pk=data["brand_id"])
-
-        try:
-            product = vendor_product_service.create_vendor_product(
-                vendor=request.user,
-                name=data["name"],
-                category_ids=data["category_ids"],
-                brand=brand,
-                description=data.get("description", ""),
-                details=data.get("details", []),
-            )
-        except Exception as exc:
-            raise ValidationError(str(exc)) from exc
-
-        result = VendorProductDetailSerializer(product).data
-        result["editable"] = True
-        result["created_by_me"] = True
-        return api_response(True, "Product created.", result, status_code=201)
-
-
-class VendorProductEditableCheckView(APIView):
-    authentication_classes = [VendorJWTAuthentication]
-    permission_classes = [IsAuthenticated, RequiresShopProducts]
-
-    def get(self, request, id):
-        _, category_ids = _get_business_category_ids(request.user)
-        if not category_ids:
-            return api_response(data={"editable": False})
-        product = _get_vendor_product(id, category_ids)
-        return api_response(data={
-            "editable": vendor_product_service.can_vendor_edit(product, request.user),
-        })
-
-
-# ─────────────────────── Product Update (Edit) ───────────────────────
-
-
-class VendorProductUpdateView(APIView):
-    authentication_classes = [VendorJWTAuthentication]
-    permission_classes = [IsAuthenticated, RequiresShopProducts]
-
-    def get(self, request, id):
-        _, category_ids = _get_business_category_ids(request.user)
-        if not category_ids:
-            return api_response(False, "Business profile not found.", status_code=404)
-        product = _get_vendor_product(id, category_ids)
-        if not vendor_product_service.can_vendor_edit(product, request.user):
-            raise PermissionDenied("You do not have permission to edit this product.")
-        serialized = VendorProductDetailSerializer(product).data
-        serialized["editable"] = True
-        return api_response(data=serialized)
-
-    def patch(self, request, id):
-        _, category_ids = _get_business_category_ids(request.user)
-        if not category_ids:
-            return api_response(False, "Business profile not found.", status_code=404)
-        product = _get_vendor_product(id, category_ids)
-        if not vendor_product_service.can_vendor_edit(product, request.user):
-            raise PermissionDenied("You do not have permission to edit this product.")
-        serializer = VendorProductUpdateSerializer(data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        vendor_product_service.update_vendor_product(product, request.user, **serializer.validated_data)
-        product.refresh_from_db()
-        result = VendorProductDetailSerializer(product).data
-        result["editable"] = vendor_product_service.can_vendor_edit(product, request.user)
-        return api_response(data=result)
 
 
 # ─────────────────────── Product Form Options ───────────────────────
@@ -420,108 +332,6 @@ class VendorFileUploadView(APIView):
             True, "File uploaded.",
             {"id": str(file_obj.id), "url": file_service.url(file_obj)},
             status_code=201,
-        )
-
-
-class VendorProductFileListCreateView(APIView):
-    authentication_classes = [VendorJWTAuthentication]
-    permission_classes = [IsAuthenticated, RequiresShopProducts]
-
-    def get(self, request, product_id):
-        _, category_ids = _get_business_category_ids(request.user)
-        if not category_ids:
-            return api_response(data=[])
-        product = _get_vendor_product(product_id, category_ids)
-        relations = product_file_service.list_for_product(product)
-        return api_response(
-            data=ProductFileReadSerializer(relations, many=True).data
-        )
-
-    def post(self, request, product_id):
-        _, category_ids = _get_business_category_ids(request.user)
-        if not category_ids:
-            return api_response(False, "Business profile not found.", status_code=404)
-        product = _get_vendor_product(product_id, category_ids)
-        serializer = ProductFileWriteSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        try:
-            relation = product_file_service.attach(
-                product, **serializer.validated_data
-            )
-        except ProductFileService.ValidationError as exc:
-            from rest_framework.exceptions import ValidationError
-            raise ValidationError(exc.errors) from exc
-        return api_response(
-            True,
-            "File attached to product.",
-            ProductFileReadSerializer(relation).data,
-            status_code=201,
-        )
-
-
-class VendorProductFileDetailView(APIView):
-    authentication_classes = [VendorJWTAuthentication]
-    permission_classes = [IsAuthenticated, RequiresShopProducts]
-
-    def _get_relation(self, product_id, relation_id, category_ids):
-        product = _get_vendor_product(product_id, category_ids)
-        relation = product_file_service.get_for_product(product, relation_id)
-        if relation is None:
-            from rest_framework.exceptions import NotFound
-            raise NotFound("Product file not found.")
-        return relation
-
-    def patch(self, request, product_id, relation_id):
-        _, category_ids = _get_business_category_ids(request.user)
-        if not category_ids:
-            return api_response(False, "Business profile not found.", status_code=404)
-        relation = self._get_relation(product_id, relation_id, category_ids)
-        serializer = ProductFileUpdateSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        try:
-            relation = product_file_service.update(
-                relation, **serializer.validated_data
-            )
-        except ProductFileService.ValidationError as exc:
-            from rest_framework.exceptions import ValidationError
-            raise ValidationError(exc.errors) from exc
-        return api_response(
-            True,
-            "Product file updated.",
-            ProductFileReadSerializer(relation).data,
-        )
-
-    def delete(self, request, product_id, relation_id):
-        _, category_ids = _get_business_category_ids(request.user)
-        if not category_ids:
-            return api_response(False, "Business profile not found.", status_code=404)
-        relation = self._get_relation(product_id, relation_id, category_ids)
-        product_file_service.delete(relation)
-        return api_response(True, "File detached from product.", None)
-
-
-class VendorProductFileReorderView(APIView):
-    authentication_classes = [VendorJWTAuthentication]
-    permission_classes = [IsAuthenticated, RequiresShopProducts]
-
-    def patch(self, request, product_id):
-        _, category_ids = _get_business_category_ids(request.user)
-        if not category_ids:
-            return api_response(False, "Business profile not found.", status_code=404)
-        product = _get_vendor_product(product_id, category_ids)
-        serializer = ProductFileReorderSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        try:
-            relations = product_file_service.reorder(
-                product, serializer.validated_data["files"]
-            )
-        except ProductFileService.ValidationError as exc:
-            from rest_framework.exceptions import ValidationError
-            raise ValidationError(exc.errors) from exc
-        return api_response(
-            True,
-            "Product files reordered.",
-            ProductFileReadSerializer(relations, many=True).data,
         )
 
 

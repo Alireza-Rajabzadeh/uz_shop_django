@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: uz_shop_django\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-13 10:14+0000\n"
+"POT-Creation-Date: 2026-10-14 07:19+0000\n"
 "PO-Revision-Date: 2026-07-23 12:11+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -326,7 +326,11 @@ msgstr "فایل قرارداد محتوا نامعتبر است"
 msgid "The contracts file could not be parsed."
 msgstr "فایل قرارداد قابل تجزیه نبود."
 
-#: domains/business_content/views.py:281 domains/vendor/views/orders.py:54
+#: domains/business_content/views.py:281 domains/vendor/views/business.py:49
+#: domains/vendor/views/business.py:70 domains/vendor/views/business.py:114
+#: domains/vendor/views/business.py:152 domains/vendor/views/business.py:198
+#: domains/vendor/views/business.py:248 domains/vendor/views/business.py:263
+#: domains/vendor/views/business.py:376 domains/vendor/views/orders.py:54
 msgid "Business profile not found."
 msgstr "پروفایل کسب‌وکار پیدا نشد."
 
@@ -898,27 +902,27 @@ msgstr "آدرس حذف شد."
 #: domains/customer/serializers/customer.py:27
 #: domains/customer/serializers/customer.py:46
 #: domains/customer/serializers/customer.py:66
-#: domains/vendor/serializers/vendor.py:28
-#: domains/vendor/serializers/vendor.py:57
-#: domains/vendor/serializers/vendor.py:77
+#: domains/vendor/serializers/vendor.py:29
+#: domains/vendor/serializers/vendor.py:75
+#: domains/vendor/serializers/vendor.py:95
 msgid "Enter a valid mobile number."
 msgstr "شماره موبایل معتبر وارد کنید."
 
 #: domains/customer/serializers/customer.py:29
-#: domains/vendor/serializers/vendor.py:30
+#: domains/vendor/serializers/vendor.py:36
 msgid "Phone number already registered."
 msgstr "شماره تلفن قبلاً ثبت شده است."
 
 #: domains/customer/serializers/customer.py:34
 #: domains/customer/serializers/customer.py:80
-#: domains/vendor/serializers/vendor.py:40
-#: domains/vendor/serializers/vendor.py:91
+#: domains/vendor/serializers/vendor.py:58
+#: domains/vendor/serializers/vendor.py:109
 msgid "Passwords do not match."
 msgstr "رمز عبور مطابقت ندارد."
 
 #: domains/customer/serializers/customer.py:127
 #: domains/users/serializers/profile.py:92
-#: domains/vendor/serializers/vendor.py:138
+#: domains/vendor/serializers/vendor.py:156
 #, fuzzy
 #| msgid "Passwords do not match."
 msgid "Password confirmation does not match."
@@ -930,7 +934,7 @@ msgid "Please wait before requesting another code."
 msgstr "لطفاً پیش از درخواست کد جدید کمی صبر کنید."
 
 #: domains/customer/services/auth_service.py:73
-#: domains/vendor/services/auth_service.py:145
+#: domains/vendor/services/auth_service.py:160
 #, python-format
 msgid ""
 "Your UzShop login confirmation code is %(code)s. It expires in %(minutes)s "
@@ -944,7 +948,7 @@ msgstr ""
 #: domains/customer/services/auth_service.py:99
 #: domains/customer/services/auth_service.py:172
 #: domains/customer/services/auth_service.py:177 domains/customer/views.py:81
-#: domains/vendor/services/auth_service.py:160 domains/vendor/views.py:94
+#: domains/vendor/services/auth_service.py:175 domains/vendor/views.py:94
 #: domains/vendor/views/__init__.py:94
 msgid "The confirmation code could not be sent."
 msgstr "ارسال کد تایید انجام نشد."
@@ -961,43 +965,43 @@ msgstr "ارسال کد تایید انجام نشد."
 #: domains/customer/services/auth_service.py:330
 #: domains/customer/services/auth_service.py:334
 #: domains/customer/services/auth_service.py:348
-#: domains/vendor/services/auth_service.py:93
-#: domains/vendor/services/auth_service.py:102
-#: domains/vendor/services/auth_service.py:178
-#: domains/vendor/services/auth_service.py:187
-#: domains/vendor/services/auth_service.py:245
-#: domains/vendor/services/auth_service.py:249
-#: domains/vendor/services/auth_service.py:258
-#: domains/vendor/services/auth_service.py:268
-#: domains/vendor/services/auth_service.py:335
-#: domains/vendor/services/auth_service.py:345
-#: domains/vendor/services/auth_service.py:354
-#: domains/vendor/services/auth_service.py:358
-#: domains/vendor/services/auth_service.py:362
-#: domains/vendor/services/auth_service.py:376
+#: domains/vendor/services/auth_service.py:108
+#: domains/vendor/services/auth_service.py:117
+#: domains/vendor/services/auth_service.py:193
+#: domains/vendor/services/auth_service.py:202
+#: domains/vendor/services/auth_service.py:260
+#: domains/vendor/services/auth_service.py:264
+#: domains/vendor/services/auth_service.py:273
+#: domains/vendor/services/auth_service.py:283
+#: domains/vendor/services/auth_service.py:350
+#: domains/vendor/services/auth_service.py:360
+#: domains/vendor/services/auth_service.py:369
+#: domains/vendor/services/auth_service.py:373
+#: domains/vendor/services/auth_service.py:377
+#: domains/vendor/services/auth_service.py:391
 msgid "The confirmation code is invalid or expired."
 msgstr "کد تایید نامعتبر است یا منقضی شده است."
 
 #: domains/customer/services/auth_service.py:131
-#: domains/vendor/services/auth_service.py:107
-#: domains/vendor/services/auth_service.py:192
+#: domains/vendor/services/auth_service.py:122
+#: domains/vendor/services/auth_service.py:207
 msgid "The confirmation request is no longer valid."
 msgstr "درخواست تایید دیگر معتبر نیست."
 
 #: domains/customer/services/auth_service.py:134
 #: domains/customer/services/auth_service.py:365
-#: domains/vendor/services/auth_service.py:195
-#: domains/vendor/services/auth_service.py:393
+#: domains/vendor/services/auth_service.py:210
+#: domains/vendor/services/auth_service.py:408
 msgid "Account is inactive."
 msgstr "حساب کاربری غیرفعال است."
 
 #: domains/customer/services/auth_service.py:143
-#: domains/vendor/services/auth_service.py:204
+#: domains/vendor/services/auth_service.py:219
 msgid "Phone number is already verified."
 msgstr "شماره موبایل قبلاً تایید شده است."
 
 #: domains/customer/services/auth_service.py:160
-#: domains/vendor/services/auth_service.py:218
+#: domains/vendor/services/auth_service.py:233
 #, python-format
 msgid ""
 "Your UzShop phone verification code is %(code)s. It expires in %(minutes)s "
@@ -1007,7 +1011,7 @@ msgstr ""
 "معتبر است."
 
 #: domains/customer/services/auth_service.py:283
-#: domains/vendor/services/auth_service.py:297
+#: domains/vendor/services/auth_service.py:312
 #, python-format
 msgid ""
 "Your UzShop password reset code is %(code)s. It expires in %(minutes)s "
@@ -1018,15 +1022,15 @@ msgstr ""
 
 #: domains/customer/services/auth_service.py:359
 #: domains/customer/services/auth_service.py:362
-#: domains/vendor/services/auth_service.py:387
-#: domains/vendor/services/auth_service.py:390
+#: domains/vendor/services/auth_service.py:402
+#: domains/vendor/services/auth_service.py:405
 msgid "Invalid phone number or password."
 msgstr "شماره تلفن یا رمز عبور اشتباه است."
 
 #: domains/customer/services/auth_service.py:388
 #: domains/users/services/management_service.py:99
 #: domains/users/services/profile_service.py:57
-#: domains/vendor/services/auth_service.py:431
+#: domains/vendor/services/auth_service.py:446
 msgid "The current password is incorrect."
 msgstr "رمز عبور فعلی اشتباه است."
 
@@ -1776,13 +1780,14 @@ msgstr "فروشنده پیدا نشد."
 msgid "Vendor updated."
 msgstr "فروشنده به‌روزرسانی شد."
 
-#: domains/vendor/serializers/vendor.py:35
+#: domains/vendor/serializers/vendor.py:42
+#: domains/vendor/serializers/vendor.py:53
 #, fuzzy
 #| msgid "Phone number already registered."
 msgid "National ID already registered."
 msgstr "کد ملی قبلاً ثبت شده است."
 
-#: domains/vendor/services/auth_service.py:65
+#: domains/vendor/services/auth_service.py:80
 #, fuzzy, python-format
 #| msgid ""
 #| "Your UzShop login confirmation code is %(code)s. It expires in "
@@ -1794,14 +1799,14 @@ msgstr ""
 "کد تایید ثبت‌نام شما در ازشاپ %(code)s است. این کد تا %(minutes)s دقیقه معتبر "
 "است."
 
-#: domains/vendor/services/auth_service.py:111
-#: domains/vendor/services/auth_service.py:120
+#: domains/vendor/services/auth_service.py:126
+#: domains/vendor/services/auth_service.py:135
 #, fuzzy
 #| msgid "Account is inactive."
 msgid "Account is not pending confirmation."
 msgstr "حساب در انتظار تایید نیست."
 
-#: domains/vendor/services/auth_service.py:396
+#: domains/vendor/services/auth_service.py:411
 #, fuzzy
 #| msgid "Account is inactive."
 msgid "Account is not active."
@@ -1812,6 +1817,10 @@ msgstr "حساب فعال نیست."
 #| msgid "Registration successful."
 msgid "Registration confirmed."
 msgstr "ثبت‌نام تایید شد."
+
+#: domains/vendor/views/business.py:40
+msgid "Business profile already exists."
+msgstr "پروفایل کسب‌وکار قبلاً ثبت شده است."
 
 #: domains/vendor/views/orders.py:111
 msgid "This action is not available for this order."

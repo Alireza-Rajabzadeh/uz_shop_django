@@ -31,20 +31,22 @@ from .views.products import (
     VendorProductFilterOptionsView,
     VendorProductListView,
     VendorProductDetailView,
-    VendorProductUpdateView,
     VendorProductFormOptionsView,
     VendorProductDetailDefinitionsView,
     VendorFileUploadView,
-    VendorProductFileListCreateView,
-    VendorProductFileDetailView,
-    VendorProductFileReorderView,
     VendorProductVariantListCreateView,
     VendorProductVariantFormOptionsView,
     VendorProductVariantDetailView,
     VendorVariantMarketplaceStatusView,
     VendorProductSimilarSearchView,
-    VendorProductCreateView,
-    VendorProductEditableCheckView,
+)
+from .views.product_submissions import (
+    VendorProductSubmissionListView,
+    VendorProductSubmissionDetailView,
+    VendorProductSubmissionSubmitView,
+    VendorProductSubmissionFileListCreateView,
+    VendorProductSubmissionFileDetailView,
+    VendorProductSubmissionFileReorderView,
 )
 from .views.inventory import (
     VendorVariantInventoryDetailView,
@@ -113,17 +115,33 @@ urlpatterns = [
     path("business/categories/search", VendorCategorySearchView.as_view()),
     # Products
     path("products", VendorProductListView.as_view()),
-    path("products/create", VendorProductCreateView.as_view()),
     path("products/similar", VendorProductSimilarSearchView.as_view()),
     path("products/<int:id>", VendorProductDetailView.as_view()),
-    path("products/<int:id>/editable", VendorProductEditableCheckView.as_view()),
-    path("products/<int:id>/update", VendorProductUpdateView.as_view()),
-    path("products/<int:product_id>/files", VendorProductFileListCreateView.as_view()),
-    path("products/<int:product_id>/files/reorder", VendorProductFileReorderView.as_view()),
-    path("products/<int:product_id>/files/<int:relation_id>", VendorProductFileDetailView.as_view()),
     path("products/<int:product_id>/variants", VendorProductVariantListCreateView.as_view()),
     path("products/<int:product_id>/variant-form-options", VendorProductVariantFormOptionsView.as_view()),
     path("products/<int:product_id>/detail-definitions", VendorProductDetailDefinitionsView.as_view()),
+    # Product submissions: vendor drafts staged for admin confirmation
+    path("product-submissions", VendorProductSubmissionListView.as_view()),
+    path(
+        "product-submissions/<int:id>",
+        VendorProductSubmissionDetailView.as_view(),
+    ),
+    path(
+        "product-submissions/<int:id>/submit",
+        VendorProductSubmissionSubmitView.as_view(),
+    ),
+    path(
+        "product-submissions/<int:submission_id>/files",
+        VendorProductSubmissionFileListCreateView.as_view(),
+    ),
+    path(
+        "product-submissions/<int:submission_id>/files/reorder",
+        VendorProductSubmissionFileReorderView.as_view(),
+    ),
+    path(
+        "product-submissions/<int:submission_id>/files/<int:relation_id>",
+        VendorProductSubmissionFileDetailView.as_view(),
+    ),
     # Product filter/form options
     path("product-filter-options", VendorProductFilterOptionsView.as_view()),
     path("product-form-options", VendorProductFormOptionsView.as_view()),

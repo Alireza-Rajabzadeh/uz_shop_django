@@ -1,9 +1,11 @@
-"""The project-wide business-status write gate.
+"""The project-wide business-status gate.
 
 These tests use real minted bearer tokens through `client.credentials`,
 so unlike `force_authenticate` fixtures every request here actually
 passes through `core.middleware.business_status` before reaching DRF —
-which is the whole point: one gate, applied to every vendor write.
+which is the whole point: one gate, applied to every vendor request,
+reads included. The panel caches `businessStatus` client-side, so the
+server-side allowlist is what makes that cache safe to trust.
 """
 
 from rest_framework.test import APITestCase
@@ -79,7 +81,9 @@ class BusinessStatusMiddlewareTests(APITestCase):
 
     def test_banned_vendor_is_blocked_even_from_business_information(self):
         # The pending allowlist is deliberately not a banned allowlist:
-        # a ban means nothing changes.
+        # a ban means nothing changes. It is also what stops the boot-read
+        # exemption from being a hole — `/business/profile` is a boot path,
+        # so a write to it must not ride along with the status read.
         self.as_vendor(self.banned_vendor)
         response = self.client.patch("/api/vendor/business/profile", {}, format="json")
         self.assert_gate_denied(response, "business_banned")
@@ -98,13 +102,80 @@ class BusinessStatusMiddlewareTests(APITestCase):
         )
         self.assert_gate_denied(response, "business_confirmation_await")
 
+    # --- reads --------------------------------------------------------------
+
+    def test_boot_reads_stay_open_for_every_status(self):
+        # The shell needs these four to render *why* it is refusing:
+        # `/vendor/me` feeds AuthGuard, `/packages/me` feeds VendorInitGate,
+        # the profile feeds BusinessStatusGate, and the catalog feeds the
+        # badges. Denying one fails open or hides the notice entirely.
+        for vendor in (self.active_vendor, self.banned_vendor, self.pending_vendor):
+            self.as_vendor(vendor)
+            response = self.client.get("/api/vendor/business/profile")
+            self.assertNotEqual(response.status_code, 403)
+
+    def test_pending_vendor_is_blocked_from_reading_the_panel(self):
+        # The cache is refreshed only while the notice is showing, so an
+        # ordinary page still asks — and the server says no regardless.
+        self.as_vendor(self.pending_vendor)
+        response = self.client.get("/api/vendor/products")
+        self.assert_gate_denied(response, "business_confirmation_await")
+
+    def test_banned_vendor_is_blocked_from_reading_the_panel(self):
+        self.as_vendor(self.banned_vendor)
+        response = self.client.get("/api/vendor/products")
+        self.assert_gate_denied(response, "business_banned")
+
+    def test_banned_vendor_is_not_lifted_by_business_information_reads(self):
+        # The pending allowlist is deliberately not a banned allowlist,
+        # for reads exactly as for writes.
+        self.as_vendor(self.banned_vendor)
+        response = self.client.get("/api/vendor/business/phones")
+        self.assert_gate_denied(response, "business_banned")
+
+    def test_active_vendor_reads_reach_the_view(self):
+        self.as_vendor(self.active_vendor)
+        response = self.client.get("/api/vendor/products")
+        self.assertNotEqual(response.status_code, 403)
+
+    def test_pending_vendor_may_read_the_onboarding_reference_data(self):
+        # The wizard's platform list is reference data, not business data:
+        # a pending vendor is expected to be filling their business in.
+        self.as_vendor(self.pending_vendor)
+        response = self.client.get("/api/business/public/social-medias")
+        self.assertNotEqual(response.status_code, 403)
+
+    def test_banned_vendor_is_blocked_from_the_onboarding_reference_data(self):
+        self.as_vendor(self.banned_vendor)
+        response = self.client.get("/api/business/public/social-medias")
+        self.assert_gate_denied(response, "business_banned")
+
+    def test_gate_denial_is_a_403_never_a_401(self):
+        # The panel clears its tokens on 401 only. If a gate refusal ever
+        # arrived as 401 the vendor would be bounced to the login screen
+        # instead of being shown the notice that explains the refusal.
+        self.as_vendor(self.banned_vendor)
+        response = self.client.post("/api/vendor/products/create", {}, format="json")
+        self.assertEqual(response.status_code, 403)
+        self.assertNotEqual(response.status_code, 401)
+
     # --- pass-throughs -----------------------------------------------------
 
     def test_pending_vendor_may_still_update_business_information(self):
+        # The write half of the same allowlist `test_boot_reads_stay_open_...`
+        # covers for reads: everything under `/vendor/business/` is the
+        # vendor's own, and filling it in is the point of pending.
         self.as_vendor(self.pending_vendor)
         response = self.client.patch("/api/vendor/business/profile", {}, format="json")
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["success"])
+
+    def test_pending_vendor_may_still_write_business_information(self):
+        self.as_vendor(self.pending_vendor)
+        response = self.client.post(
+            "/api/vendor/business/phones", {"phone": "09120000000"}, format="json"
+        )
+        self.assertNotEqual(response.status_code, 403)
 
     def test_active_vendor_writes_reach_the_view(self):
         # 400 is the view's own validation answering, i.e. the gate let it
@@ -112,12 +183,6 @@ class BusinessStatusMiddlewareTests(APITestCase):
         self.as_vendor(self.active_vendor)
         response = self.client.post("/api/vendor/warehouses", {}, format="json")
         self.assertNotEqual(response.status_code, 403)
-
-    def test_reads_stay_open_for_every_status(self):
-        for vendor in (self.active_vendor, self.banned_vendor, self.pending_vendor):
-            self.as_vendor(vendor)
-            response = self.client.get("/api/vendor/business/profile")
-            self.assertNotEqual(response.status_code, 403)
 
     def test_anonymous_write_is_answered_by_dr_f_not_the_gate(self):
         self.client.credentials()
