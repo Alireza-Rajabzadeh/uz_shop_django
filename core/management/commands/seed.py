@@ -24,6 +24,7 @@ from core.management.seeders.social_media import SocialMediaSeeder
 from core.management.seeders.variant_attributes import VariantAttributeSeeder
 from core.management.seeders.vendor_product_statuses import VendorProductStatusSeeder
 from core.management.seeders.vendor_statuses import VendorStatusSeeder
+from core.management.seeders.vendors_club import VendorsClubSeeder
 
 
 class Command(BaseCommand):
@@ -52,6 +53,7 @@ class Command(BaseCommand):
             PaymentsSeeder(),
             SocialMediaSeeder(),
             PackagesSeeder(),
+            VendorsClubSeeder(),
         ]
 
         for seeder in seeders:

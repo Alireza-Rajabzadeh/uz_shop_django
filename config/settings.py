@@ -110,6 +110,7 @@ INSTALLED_APPS = [
     "domains.marketplace.apps.MarketplaceConfig",
     "domains.banks.apps.BanksConfig",
     "domains.packages.apps.PackagesConfig",
+    "domains.vendors_club.apps.VendorsClubConfig",
     "core",
     "domains.users",
 ]
@@ -343,3 +344,12 @@ MONGO_PORT = int(os.getenv("MONGO_PORT", "27017"))
 MONGO_USER = os.getenv("MONGO_USER", "")
 MONGO_PASSWORD = os.getenv("MONGO_PASSWORD", "")
 MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "uzshop")
+
+# How long a vendor club membership's cached balances may go unreconciled
+# before a read rebuilds them from the point ledger. Awards always update the
+# balances incrementally; a full rebuild only happens once this window
+# elapses, or when a caller asks for one explicitly. `0` reconciles on every
+# read.
+VENDORS_CLUB_SYNC_INTERVAL_SECONDS = int(
+    os.getenv("VENDORS_CLUB_SYNC_INTERVAL_SECONDS", str(24 * 60 * 60))
+)
