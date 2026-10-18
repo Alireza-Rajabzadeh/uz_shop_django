@@ -76,6 +76,15 @@ def _running_total(direction):
     )
 
 
+def build_club_summary(vendor):
+    """The caller's club summary, shaped for the API.
+
+    Shared by the dedicated summary endpoint and the vendor profile read, so
+    the club cards show the same balances wherever they are rendered.
+    """
+    return VendorClubSummarySerializer(PointsService.summary(vendor)).data
+
+
 class VendorClubMembershipView(APIView):
     """The caller's club membership and current point balances.
 
@@ -104,29 +113,7 @@ class VendorClubSummaryView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        membership = PointsService.get_membership(request.user)
-        ledger = membership.transactions
-        totals = {
-            row["transaction_type"]: row["total"]
-            for row in ledger.values("transaction_type").annotate(
-                total=Sum("points")
-            )
-        }
-        payload = {
-            "lifetime_points": membership.lifetime_points,
-            "available_points": membership.available_points,
-            "transaction_count": ledger.count(),
-            "totals_by_type": {
-                code: totals.get(code, 0)
-                for code, _label in VendorClubPointTransaction.TransactionType.choices
-            },
-            "last_activity_at": ledger.order_by("-created_at", "-id")
-            .values_list("created_at", flat=True)
-            .first(),
-            "member_since": membership.created_at,
-            "last_synced_at": membership.last_synced_at,
-        }
-        return api_response(data=VendorClubSummarySerializer(payload).data)
+        return api_response(data=build_club_summary(request.user))
 
 
 class VendorClubTransactionListView(APIView):

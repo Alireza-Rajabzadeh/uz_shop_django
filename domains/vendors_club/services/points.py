@@ -2,7 +2,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.db import IntegrityError, transaction
-from django.db.models import F, Q
+from django.db.models import F, Q, Sum
 from django.utils import timezone
 
 from ..models import (
@@ -309,3 +309,35 @@ class PointsService:
         if force_sync or cls.is_reconciliation_due(membership):
             return cls._reconcile(membership.pk).membership
         return membership
+
+    @classmethod
+    def summary(cls, vendor):
+        """The vendor's balances plus aggregates over their own ledger.
+
+        Balances come through `get_membership`, so they are reconciled the
+        same way the membership endpoint reports them. The per-type totals
+        count the *magnitude* stored on each row; the transaction type
+        carries the sign.
+        """
+        membership = cls.get_membership(vendor)
+        ledger = membership.transactions
+        totals = {
+            row["transaction_type"]: row["total"]
+            for row in ledger.values("transaction_type").annotate(
+                total=Sum("points")
+            )
+        }
+        return {
+            "lifetime_points": membership.lifetime_points,
+            "available_points": membership.available_points,
+            "transaction_count": ledger.count(),
+            "totals_by_type": {
+                code: totals.get(code, 0)
+                for code, _label in cls.TransactionType.choices
+            },
+            "last_activity_at": ledger.order_by("-created_at", "-id")
+            .values_list("created_at", flat=True)
+            .first(),
+            "member_since": membership.created_at,
+            "last_synced_at": membership.last_synced_at,
+        }

@@ -24,6 +24,7 @@ from ..services.auth_service import (
     VendorConfirmationUnavailable,
 )
 from ..models import VendorPreference
+from .club import build_club_summary
 
 
 class VendorRegister(APIView):
@@ -181,8 +182,9 @@ class VendorMe(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        serializer = VendorProfileSerializer(request.user)
-        return api_response(True, "", serializer.data)
+        data = VendorProfileSerializer(request.user).data
+        data["club"] = build_club_summary(request.user)
+        return api_response(True, "", data)
 
     def patch(self, request):
         serializer = VendorUpdateSerializer(request.user, data=request.data, partial=True)

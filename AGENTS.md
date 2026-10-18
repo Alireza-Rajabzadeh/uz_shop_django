@@ -343,7 +343,9 @@ if result.status == AwardStatus.AWARDED:
 - `GET /api/vendor/club/membership` — the caller's membership and balances.
 - `GET /api/vendor/club/summary` — the same balances plus aggregates over the
   caller's ledger: `transaction_count`, `totals_by_type`, `last_activity_at`,
-  `member_since`, and `last_synced_at`.
+  `member_since`, and `last_synced_at`. The vendor profile read
+  `GET /api/vendor/me` returns the same object under `club`, so the panel shows
+  the club cards without a second request.
 - `GET /api/vendor/club/transactions` — the caller's own ledger, newest first,
   paginated. Each row carries `lifetime_points_after` and
   `available_points_after`, the balances the movement produced. Optional

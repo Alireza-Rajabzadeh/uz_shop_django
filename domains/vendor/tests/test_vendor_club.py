@@ -296,3 +296,39 @@ class VendorClubSummaryApiTests(VendorClubApiFixture):
         data = response.data["data"]
         self.assertEqual(data["available_points"], 100)
         self.assertEqual(data["transaction_count"], 1)
+
+
+class VendorProfileClubApiTests(VendorClubApiFixture):
+    """The club summary rides along on the vendor profile read."""
+
+    def test_the_profile_needs_a_seller(self):
+        self.as_anonymous()
+
+        response = self.client.get("/api/vendor/me")
+
+        self.assertIn(response.status_code, (401, 403))
+
+    def test_the_profile_carries_the_callers_club_summary(self):
+        self.award(reference_id="1")  # earn 100
+        self.spend(points=30)
+
+        response = self.client.get("/api/vendor/me")
+
+        self.assertEqual(response.status_code, 200)
+        club = response.data["data"]["club"]
+        self.assertEqual(club["lifetime_points"], 100)
+        self.assertEqual(club["available_points"], 70)
+        self.assertEqual(club["transaction_count"], 2)
+        self.assertEqual(club["totals_by_type"]["earn"], 100)
+        self.assertEqual(club["totals_by_type"]["spend"], 30)
+        self.assertIsNotNone(club["member_since"])
+
+    def test_the_profile_carries_only_the_callers_own_club_summary(self):
+        self.award(reference_id="1")
+        self.award(vendor=self.other_vendor, reference_id="1")
+
+        response = self.client.get("/api/vendor/me")
+
+        club = response.data["data"]["club"]
+        self.assertEqual(club["available_points"], 100)
+        self.assertEqual(club["transaction_count"], 1)
