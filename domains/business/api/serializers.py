@@ -173,7 +173,7 @@ class BusinessSocialLinkSerializer(ImmutableKeySerializer):
     class Meta:
         model = BusinessSocialLink
         fields = [
-            "id", "key", "title", "social_media_id", "social_media",
+            "id", "business", "key", "title", "social_media_id", "social_media",
             "url", "icon_id", "icon", "visibility", "status",
             "position", "created_at", "updated_at",
         ]

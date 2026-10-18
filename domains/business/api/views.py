@@ -34,8 +34,6 @@ class AdminBusinessBase(APIView):
 
     def queryset(self, request):
         queryset = self.model.objects.all()
-        if self.model is BusinessSocialLink:
-            queryset = queryset.select_related("logo_file__status")
         search = request.query_params.get("search")
         if search and self.search_fields:
             query = Q()
@@ -144,7 +142,7 @@ class ProfileDetail(AdminBusinessDetail, ProfileList):
 class PhoneList(AdminBusinessListCreate):
     model, serializer_class = BusinessPhone, BusinessPhoneSerializer
     search_fields = ("key", "title", "number", "extension")
-    filter_fields = ("visibility", "status")
+    filter_fields = ("business", "visibility", "status")
     ordering_fields = AdminBusinessBase.ordering_fields + ("position", "title", "key")
 
 class PhoneDetail(AdminBusinessDetailDeletable, PhoneList): pass
@@ -152,7 +150,7 @@ class PhoneDetail(AdminBusinessDetailDeletable, PhoneList): pass
 class SocialLinkList(AdminBusinessListCreate):
     model, serializer_class = BusinessSocialLink, BusinessSocialLinkSerializer
     search_fields = ("key", "title", "url")
-    filter_fields = ("visibility", "status")
+    filter_fields = ("business", "visibility", "status")
     ordering_fields = AdminBusinessBase.ordering_fields + ("position", "title", "key")
 
     def queryset(self, request):
@@ -204,7 +202,7 @@ class SocialMediaIconDetail(APIView):
 class WorkingDayList(AdminBusinessListCreate):
     model, serializer_class = BusinessWorkingDay, BusinessWorkingDaySerializer
     search_fields = ("description",)
-    filter_fields = ("weekday", "is_open")
+    filter_fields = ("vendor", "weekday", "is_open")
     ordering_fields = AdminBusinessBase.ordering_fields + ("weekday",)
 
 class WorkingDayDetail(AdminBusinessDetailDeletable, WorkingDayList): pass

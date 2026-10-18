@@ -199,6 +199,58 @@ class BusinessAPITests(APITestCase):
     def test_admin_requires_authentication(self):
         self.assertEqual(self.client.get("/api/business/admin/phones").status_code, 401)
 
+    def test_admin_scopes_related_rows_to_the_requested_business(self):
+        # Phones and social links hang off a profile, so the admin list answers
+        # for one business at a time and the write records which one. Rows
+        # created before the field was writable stay unassigned rather than
+        # being handed to whichever business happens to be first.
+        from django.db import connection
+
+        self.authenticate()
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT setval(pg_get_serial_sequence('business_profile', 'id'), (SELECT COALESCE(MAX(id),0) FROM business_profile)+1)")
+        other = BusinessProfile.objects.create(business_name="Other", display_name="Other")
+
+        for resource, payload in (
+            ("phones", {"key": "mine", "title": "Mine", "number": "111"}),
+            ("social-links", {"key": "mine", "title": "Mine", "url": "https://example.com/mine"}),
+        ):
+            mine = self.client.post(f"/api/business/admin/{resource}", {**payload, "business": self.profile.id}, format="json")
+            self.client.post(f"/api/business/admin/{resource}", {**payload, "business": other.id}, format="json")
+            unassigned = self.client.post(f"/api/business/admin/{resource}", payload, format="json")
+
+            self.assertEqual(mine.status_code, 201)
+            self.assertEqual(mine.data["data"]["business"], self.profile.id)
+            self.assertIsNone(unassigned.data["data"]["business"])
+
+            listed = self.client.get(f"/api/business/admin/{resource}", {"business": self.profile.id})
+            self.assertEqual(listed.status_code, 200)
+            self.assertEqual(listed.data["data"]["count"], 1)
+            self.assertEqual([row["key"] for row in listed.data["data"]["results"]], ["mine"])
+
+    def test_admin_scopes_working_days_to_the_requested_vendor(self):
+        # Working days belong to a vendor, and the profile page reads the set
+        # belonging to its own vendor.
+        self.authenticate()
+        status, _ = VendorStatus.objects.get_or_create(id=1, defaults={"name": "Active", "is_active": True})
+        vendor = Vendor.objects.create(phone="+989120000000", national_id="1200000000", status=status)
+        other = Vendor.objects.create(phone="+989130000000", national_id="1300000000", status=status)
+
+        created = self.client.post("/api/business/admin/working-days", {
+            "vendor": vendor.id, "weekday": 0, "is_open": True, "opens_at": "09:00", "closes_at": "17:00",
+        }, format="json")
+        self.client.post("/api/business/admin/working-days", {
+            "vendor": other.id, "weekday": 0, "is_open": False,
+        }, format="json")
+
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(created.data["data"]["vendor"], vendor.id)
+
+        listed = self.client.get("/api/business/admin/working-days", {"vendor": vendor.id})
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual(listed.data["data"]["count"], 1)
+        self.assertEqual(listed.data["data"]["results"][0]["vendor"], vendor.id)
+
     @patch("domains.business.api.views.CacheService")
     def test_public_filters_private_inactive_and_notes(self, cache_class):
         cache_class.return_value.get_public.return_value = None
