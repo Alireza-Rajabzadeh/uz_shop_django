@@ -373,8 +373,9 @@ Mounted at `/api/vendors-club/admin/`, staff-authenticated
   `code` is immutable, so it is not accepted on update; retire an activity with
   `is_active=false`, never by deleting it.
 - `GET /api/vendors-club/admin/memberships` — every membership with its
-  balances and transaction count. Optional `search` (vendor code, phone, and
-  name), `has_points`, and `ordering`.
+  balances and transaction count. Optional `vendor_id` (one vendor's
+  membership), `search` (vendor code, phone, and name), `has_points`, and
+  `ordering`.
 - `GET /api/vendors-club/admin/memberships/<id>` — the membership plus its ten
   most recent movements.
 - `POST /api/vendors-club/admin/memberships/<id>/resync` — rebuild that

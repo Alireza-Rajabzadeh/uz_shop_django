@@ -70,10 +70,14 @@ class AdminClubService:
         )
 
     @staticmethod
-    def list_memberships(search=None, has_points=None, ordering=None):
+    def list_memberships(
+        vendor_id=None, search=None, has_points=None, ordering=None
+    ):
         memberships = VendorClubMembership.objects.select_related(
             "vendor"
         ).annotate(transaction_count=Count("transactions"))
+        if vendor_id:
+            memberships = memberships.filter(vendor_id=vendor_id)
         if search:
             memberships = memberships.filter(
                 Q(vendor__vendor_code__icontains=search)

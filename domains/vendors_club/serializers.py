@@ -139,6 +139,9 @@ class VendorClubMembershipDetailSerializer(VendorClubMembershipSerializer):
 
 
 class VendorClubMembershipQuerySerializer(serializers.Serializer):
+    """The filter vocabulary `GET /vendors-club/admin/memberships` takes."""
+
+    vendor_id = serializers.IntegerField(required=False, min_value=1)
     search = serializers.CharField(required=False, allow_blank=True)
     has_points = serializers.BooleanField(required=False)
     ordering = serializers.ChoiceField(

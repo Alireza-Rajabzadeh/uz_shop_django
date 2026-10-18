@@ -210,6 +210,25 @@ class AdminClubMembershipTests(AdminClubApiFixture):
         empty = self.client.get(f"{BASE}/memberships?search=NOPE")
         self.assertEqual(empty.data["data"]["count"], 0)
 
+    def test_it_filters_memberships_by_vendor(self):
+        self.award()
+        other = self.make_vendor(2, "Other", "Seller")
+        VendorClubMembership.objects.create(vendor=other)
+
+        mine = self.client.get(f"{BASE}/memberships?vendor_id={self.vendor.id}")
+        self.assertEqual(mine.data["data"]["count"], 1)
+        self.assertEqual(
+            mine.data["data"]["results"][0]["vendor_id"], self.vendor.id
+        )
+
+        nobody = self.client.get(f"{BASE}/memberships?vendor_id=999999")
+        self.assertEqual(nobody.data["data"]["count"], 0)
+
+    def test_it_rejects_a_non_positive_vendor_filter(self):
+        response = self.client.get(f"{BASE}/memberships?vendor_id=0")
+
+        self.assertEqual(response.status_code, 400)
+
     def test_it_filters_memberships_by_points(self):
         self.award()
         idle = self.make_vendor(2, "Idle", "Seller")
