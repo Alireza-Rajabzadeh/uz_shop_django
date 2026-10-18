@@ -64,6 +64,7 @@ domains/location/       Countries, states, and cities
 domains/marketplace/    BusinessOffer pricing, plus the marketplace basket, order, payment, and return flows
 domains/notifications/  Provider records, audit rows, and delivery workers
 domains/users/          Administrative users, auth, and permissions
+domains/vendors_club/   Vendor loyalty activities, point ledger, and balances
 locale/                 Django translations
 ```
 
@@ -258,13 +259,109 @@ Pipeline:
    `digikala` queue (concurrency one). There is no per-job cap on unique imported
    products.
 
+## Vendors Club Domain
+
+`domains.vendors_club` owns the vendor loyalty ledger: the activities a vendor
+can complete, the points they earn, and the balances those points produce. It
+is deliberately not the customer club, and it has no levels, badges, rewards,
+or redemption.
+
+Tables are prefixed `vendors_club_`:
+
+- `VendorClubActivity` — a point-earning action. `code` is the stable contract
+  callers award against and is created once; `name`, `description`, and
+  `points` stay editable. Retire an activity with `is_active=False`, never by
+  deleting it — ledger rows point at it for the life of the program.
+- `VendorClubMembership` — one per vendor (`OneToOne`), holding
+  `lifetime_points`, `available_points`, and `last_synced_at`. The two balances
+  are a **cache of the ledger**, never the source of truth.
+- `VendorClubPointTransaction` — the immutable ledger. `transaction_type` is
+  `earn` / `spend` / `adjustment` / `reversal`, stored as its own code snapshot
+  (no foreign key), so the audit trail never moves with reference data. Rows are
+  only ever inserted; a correction is a new row.
+- `VendorClubPointTransactionType` — reference rows for the four movement
+  types, seeded by `vendors_club.0002` and by `VendorsClubSeeder`.
+
+### Point-Awarding Flow
+
+Only `domains.vendors_club.services.PointsService` writes the ledger or the
+balances. No other domain may touch `VendorClubMembership` or insert a
+`VendorClubPointTransaction` directly; it calls the service instead:
+
+```python
+from domains.vendors_club.services import AwardStatus, PointsService
+
+result = PointsService.award_points(
+    vendor=order.business.vendor,
+    activity_code="first.order",
+    reference_type="marketplace_order",
+    reference_id=str(order.id),
+    description="First order completed",
+)
+if result.status == AwardStatus.AWARDED:
+    ...
+```
+
+- Eligibility is centralized: `award_points` returns `AwardStatus.NOT_FOUND`
+  for an unknown activity and `AwardStatus.INACTIVE` for a retired one, and
+  awards nothing in either case. Callers never pre-check activity state.
+- Idempotency is a database guarantee, not caller bookkeeping: the partial unique
+  index `vendors_club_point_tx_earn_unique` allows one `earn` per `(membership,
+  activity, reference_type, reference_id)`, so a repeated trigger returns
+  `AwardStatus.DUPLICATE` rather than double-awarding. Pass a stable
+  `reference_type`/`reference_id` for every automatic award; an award with no
+  reference is not deduplicated.
+- The insert and the balance update commit in one `transaction.atomic()`. The
+  membership is locked with `select_for_update()` and balances move through
+  `F()` expressions, so concurrent awards add up instead of overwriting.
+
+### Balances And Reconciliation
+
+- Awards update the balances incrementally; the award path never rebuilds the
+  full history.
+- `sync_points(membership)` rebuilds one membership's balances from the ledger;
+  `sync_points()` rebuilds every membership. `last_synced_at` is stamped only
+  after the recomputed balances commit.
+- `get_membership(vendor)` returns the membership, creating it on first use,
+  and rebuilds the balances when the cached snapshot is older than
+  `VENDORS_CLUB_SYNC_INTERVAL_SECONDS` (default `86400`; `0` reconciles on every
+  read). `force_sync=True` rebuilds regardless.
+- `PointsService.LIFETIME_DIRECTION` / `AVAILABLE_DIRECTION` are the single
+  source of truth for each type's sign and are read by both the incremental and
+  the reconcile path. Only `earn` (lifetime +, available +) is produced today;
+  `spend` (available −), `adjustment` (available +), and `reversal` (both −) are
+  mapped so reconciliation stays correct when their workflows arrive.
+- Reconciliation also runs as the Celery task
+  `reconcile_vendor_club_memberships(membership_id=None)`: with an id it
+  reconciles that membership, without one it reconciles every membership past
+  the interval. There is no beat schedule; due reconciliations also happen
+  inline on `get_membership`, so the task is the handle for a future periodic
+  job.
+
+### Vendor API
+
+- `GET /api/vendor/club/membership` — the caller's membership and balances.
+- `GET /api/vendor/club/transactions` — the caller's own ledger, newest first,
+  paginated.
+- Both use `VendorJWTAuthentication` and are read-only and own-scope. There is
+  deliberately no vendor write path, no endpoint that awards or edits points,
+  and no endpoint for internal activities or transactions.
+
+### Deferred
+
+- `spend` and `reversal` workflows are not implemented; only the model and the
+  direction rules support them. `adjustment` is modelled as an available-points
+  credit only — a debit would need a sign or direction field on the transaction.
+- Nothing grants points automatically yet: the order and product flows award
+  nothing until a caller invokes `PointsService.award_points`.
+
 ## Migrations, Seeds, And Tests
 
 - Create migrations for every model or persisted-invariant change.
 - Never edit an applied migration to change current behavior; add a new migration.
 - Pair data normalization with database constraints when introducing canonical formats.
 - Keep seeders idempotent and clearly development-only.
-- The seed command creates location, canonical categories, catalog/inventory reference data, marketplace pricing-strategy reference data, and customer fixtures, but no generated test catalog, admin account, stock, product variants, or notification provider.
+- The seed command creates location, canonical categories, catalog/inventory reference data, marketplace pricing-strategy reference data, vendor club activities and point-transaction types, and customer fixtures, but no generated test catalog, admin account, stock, product variants, or notification provider.
 - Canonical category IDs start at `1001`; category seeding updates those IDs without deleting pre-existing categories.
 
 Run focused tests while developing, then broader tests for shared infrastructure or cross-domain changes. Important suites include:
@@ -281,6 +378,7 @@ python manage.py test domains.marketplace.tests
 python manage.py test domains.files.tests
 python manage.py test domains.location.tests
 python manage.py test domains.users.tests
+python manage.py test domains.vendors_club
 ```
 
 Confirmed-request tests require Redis. Mock external delivery boundaries, not domain rules or database invariants.
