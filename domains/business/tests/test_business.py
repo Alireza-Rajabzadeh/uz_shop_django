@@ -325,14 +325,14 @@ class BusinessCategoryAPITests(APITestCase):
 
     def test_get_empty_categories(self):
         self.authenticate()
-        response = self.client.get("/api/business/admin/categories")
+        response = self.client.get(f"/api/business/admin/profile/{self.profile.id}/categories")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["data"], [])
 
     def test_put_replaces_categories(self):
         self.authenticate()
         response = self.client.put(
-            "/api/business/admin/categories",
+            f"/api/business/admin/profile/{self.profile.id}/categories",
             {"category_ids": [self.cat1.id, self.cat2.id]},
             format="json",
         )
@@ -342,12 +342,12 @@ class BusinessCategoryAPITests(APITestCase):
     def test_put_removes_old_adds_new(self):
         self.authenticate()
         self.client.put(
-            "/api/business/admin/categories",
+            f"/api/business/admin/profile/{self.profile.id}/categories",
             {"category_ids": [self.cat1.id]},
             format="json",
         )
         response = self.client.put(
-            "/api/business/admin/categories",
+            f"/api/business/admin/profile/{self.profile.id}/categories",
             {"category_ids": [self.cat2.id, self.cat3.id]},
             format="json",
         )
@@ -358,12 +358,12 @@ class BusinessCategoryAPITests(APITestCase):
     def test_put_empty_list_clears_all(self):
         self.authenticate()
         self.client.put(
-            "/api/business/admin/categories",
+            f"/api/business/admin/profile/{self.profile.id}/categories",
             {"category_ids": [self.cat1.id]},
             format="json",
         )
         response = self.client.put(
-            "/api/business/admin/categories",
+            f"/api/business/admin/profile/{self.profile.id}/categories",
             {"category_ids": []},
             format="json",
         )
@@ -373,35 +373,58 @@ class BusinessCategoryAPITests(APITestCase):
     def test_put_invalid_category_id(self):
         self.authenticate()
         response = self.client.put(
-            "/api/business/admin/categories",
+            f"/api/business/admin/profile/{self.profile.id}/categories",
             {"category_ids": [9999]},
             format="json",
         )
         self.assertEqual(response.status_code, 400)
 
-    def test_put_no_business_profile(self):
+    def test_put_unknown_profile(self):
+        # The profile is named by the route, so a missing one is a plain 404
+        # rather than a fallback to whichever business happens to be first.
         self.authenticate()
         BusinessProfile.objects.all().delete()
         response = self.client.put(
-            "/api/business/admin/categories",
+            f"/api/business/admin/profile/{self.profile.id}/categories",
             {"category_ids": [self.cat1.id]},
             format="json",
         )
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 404)
+
+    def test_categories_are_scoped_to_the_profile(self):
+        from django.db import connection
+
+        self.authenticate()
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT setval(pg_get_serial_sequence('business_profile', 'id'), (SELECT COALESCE(MAX(id),0) FROM business_profile)+1)")
+        other = BusinessProfile.objects.create(business_name="Other", display_name="Other")
+        BusinessCategory.objects.create(business=other, category=self.cat2)
+
+        mine = self.client.put(
+            f"/api/business/admin/profile/{self.profile.id}/categories",
+            {"category_ids": [self.cat1.id]},
+            format="json",
+        )
+        theirs = self.client.get(f"/api/business/admin/profile/{other.id}/categories")
+
+        self.assertEqual(mine.status_code, 200)
+        self.assertEqual([row["category"] for row in mine.data["data"]], [self.cat1.id])
+        self.assertEqual([row["category"] for row in theirs.data["data"]], [self.cat2.id])
+        self.assertEqual(BusinessCategory.objects.filter(business=other).count(), 1)
 
     def test_get_requires_authentication(self):
-        response = self.client.get("/api/business/admin/categories")
+        response = self.client.get(f"/api/business/admin/profile/{self.profile.id}/categories")
         self.assertEqual(response.status_code, 401)
 
     def test_put_idempotent(self):
         self.authenticate()
         self.client.put(
-            "/api/business/admin/categories",
+            f"/api/business/admin/profile/{self.profile.id}/categories",
             {"category_ids": [self.cat1.id, self.cat2.id]},
             format="json",
         )
         response = self.client.put(
-            "/api/business/admin/categories",
+            f"/api/business/admin/profile/{self.profile.id}/categories",
             {"category_ids": [self.cat1.id, self.cat2.id]},
             format="json",
         )
@@ -412,7 +435,7 @@ class BusinessCategoryAPITests(APITestCase):
         self.authenticate()
         child = Category.objects.create(name="Smartphones", parent=self.cat1, status=self.cat_status)
         response = self.client.put(
-            "/api/business/admin/categories",
+            f"/api/business/admin/profile/{self.profile.id}/categories",
             {"category_ids": [child.id]},
             format="json",
         )
@@ -422,7 +445,7 @@ class BusinessCategoryAPITests(APITestCase):
         self.authenticate()
         child = Category.objects.create(name="Smartphones", parent=self.cat1, status=self.cat_status)
         response = self.client.put(
-            "/api/business/admin/categories",
+            f"/api/business/admin/profile/{self.profile.id}/categories",
             {"category_ids": [self.cat1.id, child.id]},
             format="json",
         )

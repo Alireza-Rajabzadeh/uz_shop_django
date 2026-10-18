@@ -1,7 +1,7 @@
 from django.urls import path
 
 from .views import (
-    AdminBusinessCategoryView,
+    AdminBusinessProfileCategoryView,
     PhoneDetail, PhoneList, ProfileDetail, ProfileList, PublicBusinessView,
     PublicSocialMediaListView, SocialLinkDetail, SocialLinkList,
     SocialMediaDetail, SocialMediaIconDetail, SocialMediaIconList, SocialMediaList,
@@ -13,6 +13,7 @@ urlpatterns = [
     path("public/social-medias", PublicSocialMediaListView.as_view(), name="business-public-social-medias"),
     path("admin/profile", ProfileList.as_view(), name="business-profile-list"),
     path("admin/profile/<int:pk>", ProfileDetail.as_view(), name="business-profile-detail"),
+    path("admin/profile/<int:pk>/categories", AdminBusinessProfileCategoryView.as_view(), name="business-profile-categories"),
     path("admin/phones", PhoneList.as_view(), name="business-phone-list"),
     path("admin/phones/<int:pk>", PhoneDetail.as_view(), name="business-phone-detail"),
     path("admin/social-links", SocialLinkList.as_view(), name="business-social-link-list"),
@@ -23,5 +24,4 @@ urlpatterns = [
     path("admin/social-medias/<int:pk>/icons/<int:icon_pk>", SocialMediaIconDetail.as_view(), name="business-social-media-icon-detail"),
     path("admin/working-days", WorkingDayList.as_view(), name="business-working-day-list"),
     path("admin/working-days/<int:pk>", WorkingDayDetail.as_view(), name="business-working-day-detail"),
-    path("admin/categories", AdminBusinessCategoryView.as_view(), name="business-categories"),
 ]

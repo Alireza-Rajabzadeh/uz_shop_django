@@ -210,45 +210,29 @@ class WorkingDayList(AdminBusinessListCreate):
 class WorkingDayDetail(AdminBusinessDetailDeletable, WorkingDayList): pass
 
 
-class AdminBusinessCategoryView(APIView):
+class AdminBusinessProfileCategoryView(APIView):
+    """The catalog categories one business profile is registered under.
+
+    Only root categories may be registered, and PUT replaces the whole set.
+    The rows always belonged to a profile; the route names the one to read or
+    replace instead of assuming the first profile in the table.
+    """
+
     authentication_classes = [AdminJWTAuthentication]
     permission_classes = [AdminModelPermissions]
     model = BusinessCategory
 
-    def get(self, request):
-        business = BusinessProfile.objects.first()
-        if not business:
-            return api_response(data=[])
-        categories = BusinessCategory.objects.filter(business=business).select_related("category")
-        return api_response(data=BusinessCategorySerializer(categories, many=True).data)
+    def get(self, request, pk):
+        business = get_object_or_404(BusinessProfile, pk=pk)
+        return api_response(
+            data=BusinessCategorySerializer(BusinessService.profile_categories(business), many=True).data
+        )
 
-    @transaction.atomic
-    def put(self, request):
-        business = BusinessProfile.objects.first()
-        if not business:
-            return api_response(False, "Business profile not found.", status_code=400)
-
+    def put(self, request, pk):
+        business = get_object_or_404(BusinessProfile, pk=pk)
         serializer = BusinessCategoryUpsertSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        category_ids = serializer.validated_data["category_ids"]
-
-        existing_ids = set(
-            BusinessCategory.objects.filter(business=business)
-            .values_list("category_id", flat=True)
+        categories = BusinessService.replace_profile_categories(
+            business, serializer.validated_data["category_ids"]
         )
-        new_ids = set(category_ids)
-
-        to_remove = existing_ids - new_ids
-        to_add = new_ids - existing_ids
-
-        if to_remove:
-            BusinessCategory.objects.filter(business=business, category_id__in=to_remove).delete()
-
-        if to_add:
-            BusinessCategory.objects.bulk_create([
-                BusinessCategory(business=business, category_id=cid)
-                for cid in to_add
-            ])
-
-        categories = BusinessCategory.objects.filter(business=business).select_related("category")
         return api_response(data=BusinessCategorySerializer(categories, many=True).data)
