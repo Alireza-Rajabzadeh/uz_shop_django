@@ -4,6 +4,7 @@ from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.db.models import F, Q, Sum
 from django.utils import timezone
+from django.utils.translation import gettext as _
 
 from ..models import (
     VendorClubActivity,
@@ -13,6 +14,20 @@ from ..models import (
 
 
 DEFAULT_SYNC_INTERVAL_SECONDS = 24 * 60 * 60
+
+
+class LedgerError(Exception):
+    """A hand-entered movement the ledger's rules refuse.
+
+    Raised by `PointsService.record_transaction` for input the caller can fix —
+    an unknown type, a missing half of a reference, or a movement that would
+    take a balance below zero. The admin API turns it into a 400; a database
+    constraint violation would have surfaced as a 500 instead.
+    """
+
+    def __init__(self, message):
+        self.message = message
+        super().__init__(message)
 
 
 class AwardStatus:
@@ -77,9 +92,9 @@ class PointsService:
     truth for that sign, and both the incremental update on award and the full
     reconciliation read from them, so the two paths can never disagree.
 
-    Only `EARN` is produced today. `SPEND`, `ADJUSTMENT`, and `REVERSAL` are
-    mapped carefully so reconciliation stays correct if and when the
-    workflows that write them are added:
+    Only `EARN` is produced by an automatic award. The admin API's manual path,
+    `record_transaction`, can write any of the four, so all the mappings below
+    are live; the table is still the single place their signs are defined:
 
     ============  ============  =============
     type          lifetime      available
@@ -180,6 +195,78 @@ class PointsService:
             membership=membership,
             transaction=entry,
         )
+
+    @classmethod
+    @transaction.atomic
+    def record_transaction(
+        cls,
+        *,
+        vendor,
+        transaction_type,
+        points,
+        activity=None,
+        reference_type=None,
+        reference_id=None,
+        description="",
+    ):
+        """Record one hand-entered movement and move the balances by it.
+
+        The administrative counterpart to `award_points`: the caller names the
+        type and the amount instead of an activity, which is what a manual
+        correction, a goodwill grant, or an offline spend needs.
+
+        Every rule the automatic path obeys still holds — the row is only ever
+        inserted, the membership is locked, and the balances move through the
+        same direction tables, so `sync_points` rebuilds the same numbers. A
+        movement that would take either balance below zero is refused with
+        `LedgerError` rather than violating the table's non-negative
+        constraints. A repeat of an identified `earn` is refused too, by the
+        same partial unique index that makes automatic awards idempotent.
+        """
+        if transaction_type not in cls.TransactionType.values:
+            raise LedgerError(_("Unknown point transaction type."))
+        if points is None or points <= 0:
+            raise LedgerError(_("Points must be a positive whole number."))
+        if (reference_type is None) != (reference_id is None):
+            raise LedgerError(_("A reference needs both a type and an id."))
+
+        lifetime_delta, available_delta = cls._deltas(transaction_type, points)
+        membership, _created = (
+            VendorClubMembership.objects.select_for_update().get_or_create(
+                vendor=vendor
+            )
+        )
+        if (
+            membership.lifetime_points + lifetime_delta < 0
+            or membership.available_points + available_delta < 0
+        ):
+            raise LedgerError(
+                _("This movement would take the vendor's points below zero.")
+            )
+
+        try:
+            # Nested atomic creates a savepoint, so a rejected duplicate rolls
+            # back only this insert and leaves the outer transaction usable.
+            with transaction.atomic():
+                entry = VendorClubPointTransaction.objects.create(
+                    membership=membership,
+                    activity=activity,
+                    transaction_type=transaction_type,
+                    points=points,
+                    reference_type=reference_type,
+                    reference_id=reference_id,
+                    description=description,
+                )
+        except IntegrityError as exc:
+            raise LedgerError(
+                _("An identical award has already been recorded.")
+            ) from exc
+
+        cls._apply(entry)
+        membership.refresh_from_db(
+            fields=["lifetime_points", "available_points"]
+        )
+        return entry
 
     @classmethod
     def _apply(cls, entry):

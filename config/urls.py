@@ -50,4 +50,5 @@ urlpatterns = [
     path("api/order/", include("domains.order.urls")),
     path("api/marketplace/", include("domains.marketplace.api.urls")),
     path("api/packages/", include("domains.packages.urls")),
+    path("api/vendors-club/", include("domains.vendors_club.urls")),
 ]

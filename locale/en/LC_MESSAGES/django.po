@@ -1814,6 +1814,59 @@ msgstr "Business profile already exists."
 msgid "This action is not available for this order."
 msgstr "This action is not available for this order."
 
+#: domains/vendors_club/admin_views.py:55
+msgid "Activity not found."
+msgstr "Activity not found."
+
+#: domains/vendors_club/admin_views.py:62
+msgid "Membership not found."
+msgstr "Membership not found."
+
+#: domains/vendors_club/admin_views.py:88
+msgid "Activity created."
+msgstr "Activity created."
+
+#: domains/vendors_club/admin_views.py:113
+msgid "Activity updated."
+msgstr "Activity updated."
+
+#: domains/vendors_club/admin_views.py:161
+msgid "Balances rebuilt from the ledger."
+msgstr "Balances rebuilt from the ledger."
+
+#: domains/vendors_club/admin_views.py:189
+msgid "Point movement recorded."
+msgstr "Point movement recorded."
+
+#: domains/vendors_club/admin_views.py:201
+msgid "Transaction not found."
+msgstr "Transaction not found."
+
+#: domains/vendors_club/serializers.py:253
+msgid "Must be on or after the start date."
+msgstr "Must be on or after the start date."
+
+#: domains/vendors_club/serializers.py:289
+#: domains/vendors_club/services/points.py:231
+msgid "A reference needs both a type and an id."
+msgstr "A reference needs both a type and an id."
+
+#: domains/vendors_club/services/points.py:227
+msgid "Unknown point transaction type."
+msgstr "Unknown point transaction type."
+
+#: domains/vendors_club/services/points.py:229
+msgid "Points must be a positive whole number."
+msgstr "Points must be a positive whole number."
+
+#: domains/vendors_club/services/points.py:244
+msgid "This movement would take the vendor's points below zero."
+msgstr "This movement would take the vendor's points below zero."
+
+#: domains/vendors_club/services/points.py:262
+msgid "An identical award has already been recorded."
+msgstr "An identical award has already been recorded."
+
 #: domains/wishlist/admin_views.py:42 domains/wishlist/services.py:77
 #, fuzzy
 #| msgid "Address not found."

@@ -117,6 +117,7 @@ Root namespaces:
 - `/api/files/`
 - `/api/order/`
 - `/api/marketplace/`
+- `/api/vendors-club/`
 - `/api/notifications/`
 
 Return `core.responses.api_response` envelopes:
@@ -358,11 +359,53 @@ if result.status == AwardStatus.AWARDED:
   ledger, not a window function: SQL applies filters before window functions,
   so a `Window` would report a balance drawn only from the filtered subset.
 
+### Admin API
+
+Mounted at `/api/vendors-club/admin/`, staff-authenticated
+(`AdminJWTAuthentication`) and gated by `AdminModelPermissions` — reads need
+`vendors_club.view_*`, writes `add_*` / `change_*` — or by
+`CustomActionPermission` for the resync action. Queries live in
+`AdminClubService` (`domains/vendors_club/services/admin.py`).
+
+- `GET|POST /api/vendors-club/admin/activities` — list (search over code and
+  name, `is_active`, `ordering`) / create.
+- `GET|PATCH /api/vendors-club/admin/activities/<id>` — retrieve / update.
+  `code` is immutable, so it is not accepted on update; retire an activity with
+  `is_active=false`, never by deleting it.
+- `GET /api/vendors-club/admin/memberships` — every membership with its
+  balances and transaction count. Optional `search` (vendor code, phone, and
+  name), `has_points`, and `ordering`.
+- `GET /api/vendors-club/admin/memberships/<id>` — the membership plus its ten
+  most recent movements.
+- `POST /api/vendors-club/admin/memberships/<id>/resync` — rebuild that
+  membership's cached balances from its ledger
+  (`PointsService.sync_points`); needs `change_vendorclubmembership`. The
+  response carries a `repaired` flag.
+- `GET|POST /api/vendors-club/admin/transactions` — the whole ledger, newest
+  first. Filters: `vendor_id`, `vendor_code`, `transaction_type`,
+  `activity_id`, `activity_code`, `reference_type`, `reference_id`, `search`,
+  `created_from`, `created_to`, `ordering`. `POST` records a hand-entered
+  movement.
+- `GET /api/vendors-club/admin/transactions/<id>` — one ledger row.
+- `GET /api/vendors-club/admin/overview` — program totals: member count, summed
+  balances, ledger count, activity counts, per-type totals, and the top five
+  activities by earned points.
+
+`POST .../transactions` is the only admin write that reaches the ledger, and it
+goes through `PointsService.record_transaction()` — the manual counterpart to
+`award_points`, where the caller names the type and the amount instead of an
+activity. It locks the membership and applies the same direction tables, and
+refuses with `LedgerError` (surfaced as a 400) a movement that would take
+either balance below zero or repeat an identified `earn`. Balances are summed
+from the cached rows for the overview; `sync_points()` is what repairs drift.
+
 ### Deferred
 
 - `spend` and `reversal` workflows are not implemented; only the model and the
   direction rules support them. `adjustment` is modelled as an available-points
   credit only — a debit would need a sign or direction field on the transaction.
+  The admin's manual movement path can record any of the four by hand, but
+  nothing produces them automatically.
 - Nothing grants points automatically yet: the order and product flows award
   nothing until a caller invokes `PointsService.award_points`.
 
