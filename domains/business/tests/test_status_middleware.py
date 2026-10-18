@@ -11,6 +11,7 @@ server-side allowlist is what makes that cache safe to trust.
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from core.middleware.business_status import _is_auth_path
 from domains.business.enums.BusinessStatusEnum import BusinessStatusEnum
 from domains.business.models import BusinessProfile
 from domains.vendor.models import Vendor, VendorStatus
@@ -186,7 +187,7 @@ class BusinessStatusMiddlewareTests(APITestCase):
 
     def test_anonymous_write_is_answered_by_dr_f_not_the_gate(self):
         self.client.credentials()
-        response = self.client.post("/api/vendor/products/create", {}, format="json")
+        response = self.client.post("/api/vendor/products", {}, format="json")
         self.assertEqual(response.status_code, 401)
         self.assertNotEqual(response.status_code, 403)
 
@@ -208,6 +209,48 @@ class BusinessStatusMiddlewareTests(APITestCase):
         self.as_vendor(self.vendorless_vendor)
         response = self.client.post("/api/vendor/products/create", {}, format="json")
         self.assertNotEqual(response.status_code, 403)
+
+    # --- auth entry points -------------------------------------------------
+
+    def test_pending_vendor_may_reach_login(self):
+        # The panel attaches whatever token it still holds, so signing in
+        # again while an older one is in local storage must not be gated:
+        # the request that issues a fresh session is not business data. The
+        # panel shows the pending notice only *after* the session exists.
+        self.as_vendor(self.pending_vendor)
+        response = self.client.post(
+            "/api/vendor/login",
+            {"phone": self.pending_vendor.phone, "password": "wrong-password"},
+            format="json",
+        )
+        self.assertNotEqual(response.status_code, 403)
+
+    def test_banned_vendor_may_reach_login(self):
+        self.as_vendor(self.banned_vendor)
+        response = self.client.post(
+            "/api/vendor/login",
+            {"phone": self.banned_vendor.phone, "password": "wrong-password"},
+            format="json",
+        )
+        self.assertNotEqual(response.status_code, 403)
+
+    def test_auth_entry_points_are_never_gated(self):
+        for path in (
+            "/api/vendor/login/confirmation",
+            "/api/vendor/register",
+            "/api/vendor/register/confirmation",
+            "/api/vendor/password/forgot",
+            "/api/vendor/password/forgot/confirmation",
+        ):
+            with self.subTest(path=path):
+                self.as_vendor(self.pending_vendor)
+                response = self.client.post(path, {}, format="json")
+                self.assertNotEqual(response.status_code, 403)
+
+    def test_auth_path_matching_ignores_a_trailing_slash(self):
+        self.assertTrue(_is_auth_path("/api/vendor/login"))
+        self.assertTrue(_is_auth_path("/api/vendor/login/"))
+        self.assertFalse(_is_auth_path("/api/vendor/products"))
 
     # --- exposure ----------------------------------------------------------
 

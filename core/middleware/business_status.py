@@ -14,8 +14,10 @@ differs per status is therefore the allowlist, not the HTTP method.
 
 The check fails open wherever it is not certain: a missing or undecodable
 bearer token passes (DRF still owns authentication and answers 401
-itself), non-vendor principals pass by construction, and a vendor with no
-business yet passes so the registration write can run.
+itself), non-vendor principals pass by construction, a vendor with no
+business yet passes so the registration write can run, and the account
+entry points (login, register, password recovery) pass so a session can
+always be established or recovered.
 
 Denials answer 403 in the house envelope with the codes
 `business_banned` / `business_confirmation_await` — account state, not
@@ -67,8 +69,35 @@ BUSINESS_REFERENCE_PATHS = frozenset(
     }
 )
 
+# Authentication entry points are never gated by the business lifecycle.
+# A vendor whose business an admin just banned or sent back for
+# confirmation still has to be able to sign in — and to sign in again while
+# the panel is still holding an older token, which is the case that made
+# this list necessary: the panel attaches whatever token it has, the token
+# decodes, and the gate used to refuse the very request that issues a fresh
+# session. The gate then applies to everything that session asks for.
+#
+# These are account operations, not business data: login, registration, and
+# password recovery are the paths by which a principal obtains a session at
+# all, so they are decided by path alone and never by the token's vendor.
+AUTH_PATHS = frozenset(
+    {
+        "/api/vendor/login",
+        "/api/vendor/login/confirmation",
+        "/api/vendor/register",
+        "/api/vendor/register/confirmation",
+        "/api/vendor/password/forgot",
+        "/api/vendor/password/forgot/confirmation",
+    }
+)
+
 CODE_BANNED = "business_banned"
 CODE_CONFIRMATION_AWAIT = "business_confirmation_await"
+
+
+def _is_auth_path(path):
+    """Auth paths pass regardless of a trailing slash."""
+    return path.rstrip("/") in AUTH_PATHS
 
 
 def _deny(message, code):
@@ -98,6 +127,12 @@ class BusinessStatusMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
+        # Auth entry points are decided before any status lookup: a login
+        # must work for every lifecycle state, including the re-login that
+        # carries a stale token from the state it is trying to escape.
+        if _is_auth_path(request.path):
+            return self.get_response(request)
+
         status_id = self._vendor_business_status_id(request)
         if status_id is None:
             return self.get_response(request)
