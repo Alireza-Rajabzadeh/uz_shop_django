@@ -65,6 +65,13 @@ class AdminBusinessListCreate(AdminBusinessBase):
 
 
 class AdminBusinessDetail(AdminBusinessBase):
+    """Read and partial-update one row.
+
+    Deleting is opted into separately: a business profile is the record a
+    vendor's business *is*, so it deliberately has no delete, while the rows
+    hanging off it keep theirs.
+    """
+
     def get_object(self, pk):
         return get_object_or_404(self.model, pk=pk)
 
@@ -76,6 +83,10 @@ class AdminBusinessDetail(AdminBusinessBase):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return api_response(data=serializer.data)
+
+
+class AdminBusinessDetailDeletable(AdminBusinessDetail):
+    """A detail view whose row may be removed outright."""
 
     def delete(self, request, pk):
         self.get_object(pk).delete()
@@ -124,7 +135,11 @@ class ProfileList(AdminBusinessListCreate):
     model, serializer_class = BusinessProfile, BusinessProfileSerializer
     search_fields = ("business_name", "display_name", "legal_name", "email")
 
-class ProfileDetail(AdminBusinessDetail, ProfileList): pass
+class ProfileDetail(AdminBusinessDetail, ProfileList):
+    """A business profile is never deleted: it is the vendor's business.
+
+    Ban or retire a business by moving its status instead.
+    """
 
 class PhoneList(AdminBusinessListCreate):
     model, serializer_class = BusinessPhone, BusinessPhoneSerializer
@@ -132,7 +147,7 @@ class PhoneList(AdminBusinessListCreate):
     filter_fields = ("visibility", "status")
     ordering_fields = AdminBusinessBase.ordering_fields + ("position", "title", "key")
 
-class PhoneDetail(AdminBusinessDetail, PhoneList): pass
+class PhoneDetail(AdminBusinessDetailDeletable, PhoneList): pass
 
 class SocialLinkList(AdminBusinessListCreate):
     model, serializer_class = BusinessSocialLink, BusinessSocialLinkSerializer
@@ -145,7 +160,7 @@ class SocialLinkList(AdminBusinessListCreate):
         return queryset.select_related("social_media", "icon__file__status")
 
 
-class SocialLinkDetail(AdminBusinessDetail, SocialLinkList): pass
+class SocialLinkDetail(AdminBusinessDetailDeletable, SocialLinkList): pass
 
 
 class SocialMediaList(AdminBusinessListCreate):
@@ -159,7 +174,7 @@ class SocialMediaList(AdminBusinessListCreate):
         return queryset.prefetch_related("icons__file__status")
 
 
-class SocialMediaDetail(AdminBusinessDetail, SocialMediaList): pass
+class SocialMediaDetail(AdminBusinessDetailDeletable, SocialMediaList): pass
 
 
 class SocialMediaIconList(APIView):
@@ -192,7 +207,7 @@ class WorkingDayList(AdminBusinessListCreate):
     filter_fields = ("weekday", "is_open")
     ordering_fields = AdminBusinessBase.ordering_fields + ("weekday",)
 
-class WorkingDayDetail(AdminBusinessDetail, WorkingDayList): pass
+class WorkingDayDetail(AdminBusinessDetailDeletable, WorkingDayList): pass
 
 
 class AdminBusinessCategoryView(APIView):

@@ -187,6 +187,15 @@ class BusinessAPITests(APITestCase):
         deleted = self.client.delete(f"/api/business/admin/phones/{created.data['data']['id']}")
         self.assertEqual(deleted.status_code, 200)
 
+    def test_admin_cannot_delete_a_business_profile(self):
+        # A profile is the vendor's business rather than a disposable row: ban
+        # or retire it by moving its status. The rows hanging off it (phones,
+        # social links, working days) keep their delete.
+        self.authenticate()
+        deleted = self.client.delete(f"/api/business/admin/profile/{self.profile.id}")
+        self.assertEqual(deleted.status_code, 405)
+        self.assertTrue(BusinessProfile.objects.filter(id=self.profile.id).exists())
+
     def test_admin_requires_authentication(self):
         self.assertEqual(self.client.get("/api/business/admin/phones").status_code, 401)
 
