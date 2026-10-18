@@ -78,6 +78,7 @@ from .views.orders import (
 )
 from .views.club import (
     VendorClubMembershipView,
+    VendorClubSummaryView,
     VendorClubTransactionListView,
 )
 from .admin_views import (
@@ -189,8 +190,9 @@ urlpatterns = [
         "orders/<int:order_id>/returns/<int:return_request_id>/actions/<str:action_code>",
         VendorOrderReturnAction.as_view(),
     ),
-    # Vendor club: the seller's own membership and point ledger
+    # Vendor club: the seller's own membership, summary, and point ledger
     path("club/membership", VendorClubMembershipView.as_view()),
+    path("club/summary", VendorClubSummaryView.as_view()),
     path("club/transactions", VendorClubTransactionListView.as_view()),
     # File upload
     path("files/upload", VendorFileUploadView.as_view()),

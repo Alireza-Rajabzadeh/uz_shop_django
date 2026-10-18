@@ -341,11 +341,20 @@ if result.status == AwardStatus.AWARDED:
 ### Vendor API
 
 - `GET /api/vendor/club/membership` — the caller's membership and balances.
+- `GET /api/vendor/club/summary` — the same balances plus aggregates over the
+  caller's ledger: `transaction_count`, `totals_by_type`, `last_activity_at`,
+  `member_since`, and `last_synced_at`.
 - `GET /api/vendor/club/transactions` — the caller's own ledger, newest first,
-  paginated.
-- Both use `VendorJWTAuthentication` and are read-only and own-scope. There is
+  paginated. Each row carries `lifetime_points_after` and
+  `available_points_after`, the balances the movement produced. Optional
+  filters: `transaction_type`, `activity` (code), `created_from`, `created_to`,
+  and an `ordering` allowlist (`created_at`, `points`, and their negatives).
+- All use `VendorJWTAuthentication` and are read-only and own-scope. There is
   deliberately no vendor write path, no endpoint that awards or edits points,
   and no endpoint for internal activities or transactions.
+- The running balance is a correlated subquery over the membership's full
+  ledger, not a window function: SQL applies filters before window functions,
+  so a `Window` would report a balance drawn only from the filtered subset.
 
 ### Deferred
 
