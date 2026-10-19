@@ -36,6 +36,7 @@ class MarketplaceReturnFlowTests(MarketplaceCheckoutFixture):
         self.supply = InventorySupply.objects.create(
             variant=variant,
             warehouse=self.warehouse,
+            business=self.business,
             quantity=10,
             remaining_quantity=10,
             unit_buy_price="40.00",

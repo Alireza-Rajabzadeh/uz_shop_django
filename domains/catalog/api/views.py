@@ -42,7 +42,6 @@ from domains.catalog.services import (
     BrandService, CategoryService, DetailService, ProductFileService, ProductService,
     VariantAttributeService,
 )
-from domains.inventory.services import InventoryService
 from domains.users.auth import AdminJWTAuthentication
 
 
@@ -52,7 +51,6 @@ detail_service = DetailService()
 product_service = ProductService()
 product_file_service = ProductFileService()
 variant_attribute_service = VariantAttributeService()
-inventory_service = InventoryService()
 
 
 # ─────────────────────── Categories ───────────────────────
@@ -939,10 +937,11 @@ class ProductVariantFormOptions(APIView):
             product = product_service.get_product(product_id)
         except Exception:
             raise NotFound(_("Product not found."))
-        try:
-            warehouse = inventory_service.get_default_warehouse()
-        except InventoryService.ValidationError as exc:
-            raise ValidationError(exc.errors) from exc
+        # Creating a variant is a catalog operation: it defines the sellable
+        # option combination and nothing else. Stock is added afterwards in the
+        # business-scoped inventory workspace, so this endpoint deliberately
+        # carries no warehouse and no inventory strategy — a single global
+        # "default warehouse" no longer exists to resolve.
         return api_response(True, "", {
             "product": {
                 "id": product.id,
@@ -951,7 +950,6 @@ class ProductVariantFormOptions(APIView):
                 "category_name": (lambda c: c.name if c else None)(product.categories.order_by("id").first()),
             },
             "inventory_strategies": [],
-            "default_warehouse": inventory_service.serialize_warehouse(warehouse),
             "attributes": product_service.get_variant_form_options(
                 product, request.query_params.get("search")
             ),

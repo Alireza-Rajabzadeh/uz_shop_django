@@ -1,4 +1,5 @@
 from core.management.seeders.base import BaseSeeder
+from domains.business.models import BusinessProfile
 from domains.inventory.models import InventoryType, Warehouse, WarehouseStatus
 from domains.inventory.enums.InventoryTypeEnum import InventoryTypeEnum
 from domains.inventory.enums.WarehouseStatusEnum import WarehouseStatusEnum
@@ -43,12 +44,22 @@ class InventorySeeder(BaseSeeder):
         city = City.objects.order_by("id").first()
         if city is None:
             raise RuntimeError("Seed location data before creating the default warehouse.")
+        # Warehouse.business is NOT NULL; inventory.0022 seeds profile id=1 in
+        # every database, so the default warehouse belongs to it.
+        business, _ = BusinessProfile.objects.get_or_create(
+            id=1,
+            defaults={
+                "business_name": "Migrated Business",
+                "display_name": "Migrated",
+            },
+        )
         available = WarehouseStatus.objects.get(id=WarehouseStatusEnum.AVAILABLE.value)
         Warehouse.objects.filter(is_default=True).exclude(code="WH-00001").update(is_default=False)
         Warehouse.objects.update_or_create(
             code="WH-00001",
             defaults={
                 "name": "Warehouse Tehran",
+                "business": business,
                 "city": city,
                 "address": "Tehran, Iran",
                 "lat": "35.689200",

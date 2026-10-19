@@ -128,10 +128,14 @@ class VendorInventoryPricingTests(TestCase):
     def test_inventory_overview_ignores_unowned_default_warehouse(self):
         """Defaults are unique per business, so an unrelated default must not
         make the lookup ambiguous and fail the whole listing."""
+        other_business = BusinessProfile.objects.create(
+            business_name="Other Overview Business",
+            display_name="Other Overview Business",
+        )
         Warehouse.objects.create(
             code="WH-ORPHAN",
             name="Unowned Warehouse",
-            business=None,
+            business=other_business,
             city=self.warehouse.city,
             address="Orphan address",
             lat="0",

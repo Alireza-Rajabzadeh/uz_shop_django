@@ -53,9 +53,14 @@ class SupplyConsumptionFixture(TestCase):
         country = Country.objects.create(name="Consume Country", code="CN", phone_code="+1")
         state = State.objects.create(name="Consume State", country=country)
         city = City.objects.create(name="Consume City", state=state)
+        self.business, _ = BusinessProfile.objects.get_or_create(
+            id=1,
+            defaults={"business_name": "Consume Business", "display_name": "Consume Business"},
+        )
         self.warehouse = Warehouse.objects.create(
             code="WH-CONSUME",
             name="Consume Warehouse",
+            business=self.business,
             city=city,
             address="Consume address",
             lat="0",
@@ -82,15 +87,12 @@ class SupplyConsumptionFixture(TestCase):
         self.supply = InventorySupply.objects.create(
             variant=self.variant,
             warehouse=self.warehouse,
+            business=self.business,
             quantity=5,
             remaining_quantity=5,
             unit_buy_price="100.00",
             supplied_at=timezone.make_aware(datetime(2026, 1, 10, 12, 0)),
             received_at=timezone.make_aware(datetime(2026, 1, 11, 12, 0)),
-        )
-        self.business, _ = BusinessProfile.objects.get_or_create(
-            id=1,
-            defaults={"business_name": "Consume Business", "display_name": "Consume Business"},
         )
         self.inventory = Inventory.objects.create(
             business=self.business,

@@ -5,6 +5,7 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
+from domains.business.models import BusinessProfile
 from domains.catalog.models import Category, CategoryStatus, Product, ProductStatus, ProductVariants, VariantAttribute, VariantOption
 from domains.inventory.models import Warehouse, WarehouseStatus
 from domains.location.models import City, Country, State
@@ -18,9 +19,14 @@ class InventoryAPITests(APITestCase):
         state = State.objects.create(name="Inventory State", country=country)
         self.city = City.objects.create(name="Inventory City", state=state)
         self.warehouse_status = WarehouseStatus.objects.create(name="available-for-tests")
+        self.business, _ = BusinessProfile.objects.get_or_create(
+            id=1,
+            defaults={"business_name": "Inventory Business", "display_name": "Inventory Business"},
+        )
         self.warehouse = Warehouse.objects.create(
             code="WH-TEST",
             name="Default Test Warehouse",
+            business=self.business,
             city=self.city,
             address="Test address",
             lat="0",
@@ -88,17 +94,23 @@ class InventoryAPITests(APITestCase):
 
         staff = User.objects.create_user(username="inventory-staff", is_staff=True)
         self.client.force_authenticate(staff)
-        self.assertEqual(self.client.get("/api/inventory/variants").status_code, 403)
+        self.assertEqual(
+            self.client.get(f"/api/inventory/variants?business_id={self.business.id}").status_code,
+            403,
+        )
 
         view_permission = Permission.objects.filter(codename="view_inventory").order_by("id").first()
         staff.user_permissions.add(view_permission)
         staff = User.objects.get(pk=staff.pk)
         self.client.force_authenticate(staff)
-        self.assertEqual(self.client.get("/api/inventory/variants").status_code, 200)
+        self.assertEqual(
+            self.client.get(f"/api/inventory/variants?business_id={self.business.id}").status_code,
+            200,
+        )
 
         self.assertEqual(
             self.client.patch(
-                f"/api/inventory/variants/{variant.id}",
+                f"/api/inventory/variants/{variant.id}?business_id={self.business.id}",
                 {"inventory": {"quantity": 10, "sellable": 8, "min_stock": 0}},
                 format="json",
             ).status_code,
@@ -111,7 +123,7 @@ class InventoryAPITests(APITestCase):
         self.client.force_authenticate(staff)
         self.assertEqual(
             self.client.patch(
-                f"/api/inventory/variants/{variant.id}",
+                f"/api/inventory/variants/{variant.id}?business_id={self.business.id}",
                 {"inventory": {"quantity": 10, "sellable": 8, "min_stock": 0}},
                 format="json",
             ).status_code,
@@ -146,9 +158,15 @@ class InventoryAPITests(APITestCase):
             "postal_code": "12345",
             "status": self.warehouse_status.id,
         }
-        created = self.client.post("/api/inventory/warehouses", payload, format="json")
+        created = self.client.post(
+            f"/api/inventory/warehouses?business_id={self.business.id}",
+            payload,
+            format="json",
+        )
         self.assertEqual(created.status_code, 201)
 
         self.assertEqual(self.create_variant().status_code, 201)
-        response = self.client.delete(f"/api/inventory/warehouses/{self.warehouse.id}")
+        response = self.client.delete(
+            f"/api/inventory/warehouses/{self.warehouse.id}?business_id={self.business.id}"
+        )
         self.assertEqual(response.status_code, 400)

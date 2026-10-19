@@ -71,6 +71,7 @@ class InventoryService:
     def search_variants(
         self,
         *,
+        business=None,
         search=None,
         product=None,
         category=None,
@@ -88,7 +89,7 @@ class InventoryService:
         ).prefetch_related(
             "product__categories", "selections__attribute", "selections__option"
         ).annotate(primary_category_name=Subquery(primary_category))
-        queryset = self.annotate_variant_summaries(queryset)
+        queryset = self.annotate_variant_summaries(queryset, business=business)
         if search:
             queryset = queryset.filter(Q(sku__icontains=search) | Q(product__name__icontains=search))
         if product is not None:
@@ -124,12 +125,13 @@ class InventoryService:
         field = ordering_map.get(requested.lstrip("-"), "sku")
         return queryset.order_by(f"-{field}" if descending else field, "id")
 
-    def serialize_variant_overview(self, variant, default_warehouse):
+    def serialize_variant_overview(self, variant, default_warehouse=None, business=None):
         primary_category = variant.product.categories.order_by("id").first()
-        inv = Inventory.objects.filter(variant=variant, warehouse=default_warehouse).first()
-        min_stock = inv.min_stock if inv else 0
-        inv_type = self._detect_inventory_type(variant)
-        inventory_type = self._get_inventory_type(variant)
+        # min_stock is summed per scope by annotate_variant_summaries, so the
+        # aggregate scope and a named business share one source of truth.
+        min_stock = getattr(variant, "min_stock", 0) or 0
+        inv_type = self._detect_inventory_type(variant, business=business)
+        inventory_type = self._get_inventory_type(variant, business=business)
         type_data = {
             "id": inventory_type.id,
             "code": inventory_type.code,
@@ -159,11 +161,17 @@ class InventoryService:
                 min_stock > 0
                 and 0 < variant.available_item_count <= min_stock
             ),
-            "default_warehouse": self.serialize_warehouse(default_warehouse),
+            "default_warehouse": (
+                self.serialize_warehouse(default_warehouse)
+                if default_warehouse is not None
+                else None
+            ),
         }
 
-    def search_warehouses(self, *, search=None, status=None, city=None, ordering=None):
+    def search_warehouses(self, *, business=None, search=None, status=None, city=None, ordering=None):
         queryset = Warehouse.objects.select_related("status", "city__state__country")
+        if business is not None:
+            queryset = queryset.filter(business=business)
         if search:
             queryset = queryset.filter(Q(name__icontains=search) | Q(code__icontains=search))
         if status is not None:
@@ -246,13 +254,19 @@ class InventoryService:
                 "warehouse": [_('This warehouse cannot be deleted while it contains stock.')]
             }) from exc
 
-    def annotate_variant_summaries(self, queryset):
+    def annotate_variant_summaries(self, queryset, business=None):
         # Inventory.quantity/sellable/reserved are the single source of truth
         # for a variant's stock. Serialized rows are re-derived from their units
         # by _sync_inventory_summary on every unit mutation, so the unit rows
         # must not be added on top of them: that counted serialized stock twice
         # (and counted `changed_type` residue as if it were still stock).
-        inventory_sub = Inventory.objects.filter(variant_id=OuterRef("pk")).values("variant_id")
+        #
+        # `business` narrows every stock aggregate to one business; when it is
+        # None the sums span every business (the aggregate scope).
+        inventory_scope = Inventory.objects.all()
+        if business is not None:
+            inventory_scope = inventory_scope.filter(business=business)
+        inventory_sub = inventory_scope.filter(variant_id=OuterRef("pk")).values("variant_id")
         return queryset.annotate(
             inv_quantity=Coalesce(
                 Subquery(inventory_sub.annotate(value=Sum("quantity")).values("value")[:1]),
@@ -276,7 +290,7 @@ class InventoryService:
             reserved_item_count=F("inv_reserved"),
             min_stock=Coalesce(
                 Subquery(
-                    Inventory.objects.filter(
+                    inventory_scope.filter(
                         variant_id=OuterRef("pk"), warehouse__is_default=True
                     ).values("variant_id").annotate(value=Sum("min_stock")).values("value")[:1]
                 ),
@@ -350,10 +364,13 @@ class InventoryService:
                 "inventory": [_('Inventory must satisfy 0 <= reserved <= sellable <= quantity.')]
             })
         if inv is None:
-            from domains.business.models import BusinessProfile
-            business = business or BusinessProfile.objects.get(id=1)
+            owner = business or warehouse.business
+            if owner is None:
+                raise self.ValidationError({
+                    "business": [_('Inventory must belong to a business.')]
+                })
             inv = Inventory.objects.create(
-                business=business,
+                business=owner,
                 warehouse=warehouse,
                 variant=variant,
                 inventory_type_id=1,
@@ -380,13 +397,16 @@ class InventoryService:
             inventories = inventories.filter(business=business)
         inventory = inventories.first()
         if inventory is None:
-            # Resolve the warehouse with the caller's business (which may be
-            # unset), mirroring _apply_normal. Only the row itself needs the
-            # singleton fallback, because Inventory.business is NOT NULL.
+            # Resolve the warehouse with the caller's business, then take the
+            # business from that warehouse so the row cannot contradict it.
             warehouse = self.get_default_warehouse(business=business, lock=True)
-            from domains.business.models import BusinessProfile
+            owner = business or warehouse.business
+            if owner is None:
+                raise self.ValidationError({
+                    "business": [_('Inventory must belong to a business.')]
+                })
             inventory = Inventory.objects.create(
-                business=business or BusinessProfile.objects.get(id=1),
+                business=owner,
                 warehouse=warehouse,
                 variant=variant,
                 inventory_type_id=2,
@@ -860,18 +880,18 @@ class InventoryService:
         }
 
     @transaction.atomic
-    def adjust_variant_stock(self, variant, *, inventory=None, serial_items=None):
+    def adjust_variant_stock(self, variant, *, inventory=None, serial_items=None, business=None):
         variant = type(variant).objects.select_for_update().select_related(
             "product"
         ).prefetch_related(
             "product__categories", "selections__attribute", "selections__option"
         ).get(pk=variant.pk)
-        inv_type = self._detect_inventory_type(variant)
+        inv_type = self._detect_inventory_type(variant, business=business)
         if inv_type == "serialized":
-            self._apply_serialized_snapshot(variant, serial_items)
+            self._apply_serialized_snapshot(variant, serial_items, business=business)
         else:
-            warehouse = self.get_default_warehouse(lock=True)
-            self._apply_normal(variant, warehouse, inventory)
+            warehouse = self.get_default_warehouse(business=business, lock=True)
+            self._apply_normal(variant, warehouse, inventory, business=business)
         return type(variant).objects.select_related(
             "product"
         ).prefetch_related(

@@ -38,10 +38,15 @@ class SerializedUnitAttributeTests(APITestCase):
         country = Country.objects.create(name="UA Country", code="UC", phone_code="+1")
         state = State.objects.create(name="UA State", country=country)
         city = City.objects.create(name="UA City", state=state)
+        self.business, _ = BusinessProfile.objects.get_or_create(
+            id=1,
+            defaults={"business_name": "Attribute Business", "display_name": "Attribute Business"},
+        )
         self.warehouse_status = WarehouseStatus.objects.create(name="available-for-attributes")
         self.warehouse = Warehouse.objects.create(
             code="WH-ATTR",
             name="Attribute Warehouse",
+            business=self.business,
             city=city,
             address="Test address",
             lat="0",
@@ -94,13 +99,15 @@ class SerializedUnitAttributeTests(APITestCase):
         return variant.id, detail["serial_items"][0]["id"]
 
     def get_detail(self, variant_id):
-        response = self.client.get(f"/api/inventory/variants/{variant_id}")
+        response = self.client.get(
+            f"/api/inventory/variants/{variant_id}?business_id={self.business.id}"
+        )
         self.assertEqual(response.status_code, 200, response.data)
         return response.data["data"]
 
     def patch_snapshot(self, variant_id, serial_items):
         return self.client.patch(
-            f"/api/inventory/variants/{variant_id}",
+            f"/api/inventory/variants/{variant_id}?business_id={self.business.id}",
             {"serial_items": serial_items},
             format="json",
         )

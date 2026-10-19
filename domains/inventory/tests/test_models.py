@@ -31,9 +31,14 @@ class InventorySupplyModelTests(TestCase):
         state = State.objects.create(name="Supply State", country=country)
         city = City.objects.create(name="Supply City", state=state)
         warehouse_status = WarehouseStatus.objects.create(name="available-supply-tests")
+        self.business, _ = BusinessProfile.objects.get_or_create(
+            id=1,
+            defaults={"business_name": "Supply Business", "display_name": "Supply Business"},
+        )
         self.warehouse = Warehouse.objects.create(
             code="WH-SUPPLY",
             name="Supply Warehouse",
+            business=self.business,
             city=city,
             address="Supply address",
             lat="0",
@@ -56,6 +61,7 @@ class InventorySupplyModelTests(TestCase):
         defaults = {
             "variant": self.variant,
             "warehouse": self.warehouse,
+            "business": self.business,
             "quantity": 5,
             "remaining_quantity": None,
             "unit_buy_price": "100.00",
@@ -107,12 +113,17 @@ class InventorySupplyConsumptionTargetTests(TestCase):
         OrderSeeder().run()
         MarketplaceOrderSeeder().run()
 
+        self.business, _ = BusinessProfile.objects.get_or_create(
+            id=1,
+            defaults={"business_name": "Target Business", "display_name": "Target Business"},
+        )
         country = Country.objects.create(name="Target Country", code="TC", phone_code="+1")
         state = State.objects.create(name="Target State", country=country)
         city = City.objects.create(name="Target City", state=state)
         self.warehouse = Warehouse.objects.create(
             code="WH-TARGET",
             name="Target Warehouse",
+            business=self.business,
             city=city,
             address="Target address",
             lat="0",
@@ -134,6 +145,7 @@ class InventorySupplyConsumptionTargetTests(TestCase):
         self.supply = InventorySupply.objects.create(
             variant=self.variant,
             warehouse=self.warehouse,
+            business=self.business,
             quantity=5,
             remaining_quantity=5,
             unit_buy_price="100.00",

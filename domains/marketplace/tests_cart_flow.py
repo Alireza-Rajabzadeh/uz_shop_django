@@ -48,25 +48,6 @@ class MarketplaceCartServiceTests(TestCase):
         country = Country.objects.create(name="Mkt Country", code="MC", phone_code="+98")
         state = State.objects.create(name="Mkt State", country=country)
         city = City.objects.create(name="Mkt City", state=state)
-        self.warehouse = Warehouse.objects.create(
-            code="WH-MKTCART",
-            name="Mkt Warehouse",
-            city=city,
-            address="Mkt address",
-            lat="0",
-            lng="0",
-            is_default=True,
-            status=WarehouseStatus.objects.create(name="available-mkt-cart"),
-        )
-        self.category = Category.objects.create(
-            name="Mkt Cart Category",
-            status=CategoryStatus.objects.create(name="mkt-cart-active"),
-        )
-        self.active_status = ProductStatus.objects.create(name="active")
-        self.attribute = VariantAttribute.objects.create(name="Mkt Color")
-        self.option = VariantOption.objects.create(
-            attribute=self.attribute, name="White", sku_code="MKTWH"
-        )
         vendor_status = VendorStatus.objects.create(name="active", title="Active")
         vendor = Vendor.objects.create(
             phone="+9990000014",
@@ -83,6 +64,26 @@ class MarketplaceCartServiceTests(TestCase):
                 "business_name": "Mkt Cart Business",
                 "display_name": "Mkt Cart Business",
             },
+        )
+        self.warehouse = Warehouse.objects.create(
+            code="WH-MKTCART",
+            name="Mkt Warehouse",
+            business=self.business,
+            city=city,
+            address="Mkt address",
+            lat="0",
+            lng="0",
+            is_default=True,
+            status=WarehouseStatus.objects.create(name="available-mkt-cart"),
+        )
+        self.category = Category.objects.create(
+            name="Mkt Cart Category",
+            status=CategoryStatus.objects.create(name="mkt-cart-active"),
+        )
+        self.active_status = ProductStatus.objects.create(name="active")
+        self.attribute = VariantAttribute.objects.create(name="Mkt Color")
+        self.option = VariantOption.objects.create(
+            attribute=self.attribute, name="White", sku_code="MKTWH"
         )
 
     def make_variant(self, price="100.00", discount_value=None, available=8):

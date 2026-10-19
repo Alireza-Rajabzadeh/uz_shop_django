@@ -37,18 +37,21 @@ class InventoryReportingService:
         self.pricing_service = InventoryPricingService()
 
     @staticmethod
-    def _get_offer_price(variant):
-        from domains.marketplace.models import BusinessOffer
-        offer = BusinessOffer.objects.filter(
-            variant=variant, is_active=True
-        ).first()
+    def _get_offer_price(variant, business=None):
+        offers = BusinessOffer.objects.filter(variant=variant, is_active=True)
+        if business is not None:
+            offers = offers.filter(business=business)
+        offer = offers.first()
         return getattr(offer, "price", None)
 
     # ───────────────────────── shared query builders ─────────────────────────
 
     @staticmethod
-    def _received_supplies_queryset():
-        return InventorySupply.objects.filter(received_at__isnull=False).annotate(
+    def _received_supplies_queryset(business=None):
+        queryset = InventorySupply.objects.filter(received_at__isnull=False)
+        if business is not None:
+            queryset = queryset.filter(business=business)
+        return queryset.annotate(
             extra_cost_total=Coalesce(
                 Sum("costs__amount"),
                 Decimal("0"),
@@ -63,12 +66,15 @@ class InventoryReportingService:
             output_field=IntegerField(),
         )
 
-    def _consumption_stats_by_variant(self, variant_ids):
+    def _consumption_stats_by_variant(self, variant_ids, business=None):
+        consumptions = InventorySupplyConsumption.objects.filter(
+            order_item__variant_id__in=variant_ids
+        )
+        if business is not None:
+            consumptions = consumptions.filter(supply__business=business)
         return {
             row["order_item__variant_id"]: row
-            for row in InventorySupplyConsumption.objects.filter(
-                order_item__variant_id__in=variant_ids
-            ).values("order_item__variant_id").annotate(
+            for row in consumptions.values("order_item__variant_id").annotate(
                 consumed_quantity=Sum(self._effective_quantity_expression()),
                 total_cogs=Sum(
                     ExpressionWrapper(
@@ -81,12 +87,14 @@ class InventoryReportingService:
 
     # ─────────────────────────── summary report ───────────────────────────
 
-    def get_summary(self):
+    def get_summary(self, business=None):
         money = Decimal("0.01")
         # Value decomposes linearly so the costs JOIN cannot double-count:
         #   SUM(remaining × unit_buy_price)
         # + SUM(remaining × extra_cost / quantity)   -- NULL rows are skipped by SUM
         received_supplies = InventorySupply.objects.filter(received_at__isnull=False)
+        if business is not None:
+            received_supplies = received_supplies.filter(business=business)
         supply_totals = received_supplies.aggregate(
             remaining_quantity_total=Sum("remaining_quantity"),
             base_value=Sum(
@@ -105,7 +113,10 @@ class InventoryReportingService:
         base_value = supply_totals["base_value"] or Decimal("0")
         extra_value = supply_totals["extra_value"] or Decimal("0")
         inventory_cost_value = (base_value + extra_value).quantize(money)
-        consumption_totals = InventorySupplyConsumption.objects.aggregate(
+        consumptions = InventorySupplyConsumption.objects.all()
+        if business is not None:
+            consumptions = consumptions.filter(supply__business=business)
+        consumption_totals = consumptions.aggregate(
             total_cogs=Sum(
                 ExpressionWrapper(
                     self._effective_quantity_expression() * F("unit_cost"),
@@ -114,7 +125,7 @@ class InventoryReportingService:
             ),
         )
         total_cogs = consumption_totals["total_cogs"] or Decimal("0")
-        estimated_revenue = self._estimate_revenue().quantize(money)
+        estimated_revenue = self._estimate_revenue(business).quantize(money)
         estimated_profit = estimated_revenue - total_cogs.quantize(money)
         return {
             "inventory_cost_value": inventory_cost_value,
@@ -124,11 +135,14 @@ class InventoryReportingService:
             "estimated_profit": estimated_profit.quantize(money),
         }
 
-    def _estimate_revenue(self):
+    def _estimate_revenue(self, business=None):
         # Sold units valued at the current suggested price of their variant
         # (catalog price as fallback); unpriced variants contribute nothing.
+        consumptions = InventorySupplyConsumption.objects.all()
+        if business is not None:
+            consumptions = consumptions.filter(supply__business=business)
         per_variant = list(
-            InventorySupplyConsumption.objects.values("order_item__variant_id")
+            consumptions.values("order_item__variant_id")
             .annotate(effective_quantity=Sum(self._effective_quantity_expression()))
             .order_by()
         )
@@ -141,7 +155,7 @@ class InventoryReportingService:
             variant = variants.get(row["order_item__variant_id"])
             if variant is None:
                 continue
-            suggested_price = self.pricing_service.get_suggested_price(variant)
+            suggested_price = self.pricing_service.get_suggested_price(variant, business=business)
             unit_revenue = (
                 suggested_price
                 if suggested_price is not None
@@ -155,7 +169,7 @@ class InventoryReportingService:
     # ─────────────────────────── variant report ───────────────────────────
 
     def search_variants_for_report(
-        self, *, search=None, category_id=None, strategy=None, ordering=None
+        self, *, business=None, search=None, category_id=None, strategy=None, ordering=None
     ):
         queryset = ProductVariants.objects.select_related("product")
         if search:
@@ -172,22 +186,35 @@ class InventoryReportingService:
                 raise self.ValidationError({
                     "strategy": [_('Unsupported pricing cost strategy.')]
                 })
-            queryset = queryset.filter(pk__in=BusinessOffer.objects.filter(
+            strategy_offers = BusinessOffer.objects.filter(
                 cost_strategy__code=strategy, is_active=True
-            ).values_list("variant_id", flat=True))
+            )
+            if business is not None:
+                strategy_offers = strategy_offers.filter(business=business)
+            queryset = queryset.filter(pk__in=strategy_offers.values_list(
+                "variant_id", flat=True
+            ))
 
         scoped_consumptions = InventorySupplyConsumption.objects.filter(
             order_item__variant=OuterRef("pk")
         )
+        if business is not None:
+            scoped_consumptions = scoped_consumptions.filter(supply__business=business)
+        remaining_filter = Q(
+            inventory_supplies__received_at__isnull=False,
+            inventory_supplies__remaining_quantity__gt=0,
+        )
+        if business is not None:
+            remaining_filter &= Q(inventory_supplies__business=business)
+        offer_filter = {"variant": OuterRef("pk"), "is_active": True}
+        if business is not None:
+            offer_filter["business"] = business
         effective = self._effective_quantity_expression()
         queryset = queryset.annotate(
             remaining_quantity_total=Coalesce(
                 Sum(
                     "inventory_supplies__remaining_quantity",
-                    filter=Q(
-                        inventory_supplies__received_at__isnull=False,
-                        inventory_supplies__remaining_quantity__gt=0,
-                    ),
+                    filter=remaining_filter,
                 ),
                 0,
                 output_field=IntegerField(),
@@ -221,8 +248,7 @@ class InventoryReportingService:
             current_price_annotation=Coalesce(
                 Subquery(
                     BusinessOffer.objects.filter(
-                        variant=OuterRef("pk"),
-                        is_active=True,
+                        **offer_filter,
                     ).values("price")[:1],
                     output_field=DecimalField(max_digits=15, decimal_places=2),
                 ),
@@ -244,20 +270,23 @@ class InventoryReportingService:
         field = ordering_map.get(requested.lstrip("-"), "sku")
         return queryset.order_by(f"-{field}" if descending else field, "id")
 
-    def variant_report_rows(self, variants):
+    def variant_report_rows(self, variants, business=None):
         """Batched money fields for one page of report variants."""
         variant_ids = [variant.id for variant in variants]
         supplies_by_variant = defaultdict(list)
-        for supply in self._received_supplies_queryset().filter(
+        for supply in self._received_supplies_queryset(business).filter(
             variant_id__in=variant_ids
         ).order_by("variant_id", "-supplied_at", "-id"):
             supplies_by_variant[supply.variant_id].append(supply)
-        consumption_stats = self._consumption_stats_by_variant(variant_ids)
+        consumption_stats = self._consumption_stats_by_variant(variant_ids, business)
+        offer_queryset = BusinessOffer.objects.filter(
+            variant_id__in=variant_ids, is_active=True
+        )
+        if business is not None:
+            offer_queryset = offer_queryset.filter(business=business)
         configs = {
             offer.variant_id: offer
-            for offer in BusinessOffer.objects.filter(
-                variant_id__in=variant_ids, is_active=True
-            )
+            for offer in offer_queryset
         }
         rows = {}
         money = Decimal("0.01")
@@ -298,15 +327,15 @@ class InventoryReportingService:
                 ),
                 "total_consumed_quantity": stats.get("consumed_quantity", 0) or 0,
                 "total_cogs": (stats.get("total_cogs") or Decimal("0")).quantize(money),
-                "current_price": self._get_offer_price(variant),
+                "current_price": self._get_offer_price(variant, business),
                 "suggested_price": suggested_price,
             }
         return rows
 
     # ─────────────────────────── supply report ────────────────────────────
 
-    def search_supplies_for_report(self, *, search=None, ordering=None):
-        queryset = self._received_supplies_queryset().select_related(
+    def search_supplies_for_report(self, *, business=None, search=None, ordering=None):
+        queryset = self._received_supplies_queryset(business).select_related(
             "variant__product", "warehouse"
         )
         if search:

@@ -16,9 +16,7 @@ class Warehouse(models.Model):
     name = models.CharField(max_length=100)
     business = models.ForeignKey(
         "business.BusinessProfile",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="warehouses",
     )
     city = models.ForeignKey(

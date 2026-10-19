@@ -41,7 +41,7 @@ class InventorySupplyService:
         # mirror InventoryCostService formulas and are derived in
         # serialize_supply_row from persisted columns.
         queryset = InventorySupply.objects.select_related(
-            "variant__product", "warehouse"
+            "variant__product", "warehouse", "business"
         ).annotate(
             extra_cost_total=Coalesce(
                 Sum("costs__amount"),
@@ -129,9 +129,15 @@ class InventorySupplyService:
         costs=None,
     ):
         validated_costs = self._validate_cost_rows(costs or [])
+        business = warehouse.business
+        if business is None:
+            raise self.ValidationError({
+                "warehouse": [_('The warehouse must belong to a business.')]
+            })
         supply = InventorySupply.objects.create(
             variant=variant,
             warehouse=warehouse,
+            business=business,
             quantity=quantity,
             unit_buy_price=unit_buy_price,
             supplied_at=supplied_at,
@@ -187,6 +193,9 @@ class InventorySupplyService:
                 values["quantity"] = new_quantity
         for field, value in values.items():
             setattr(supply, field, value)
+        if "warehouse" in values:
+            # The supply's business always mirrors its warehouse's.
+            supply.business = supply.warehouse.business
         supply.save()
         if cost_rows is not None:
             validated_costs = self._validate_cost_rows(cost_rows)
@@ -223,7 +232,9 @@ class InventorySupplyService:
             raise self.ValidationError({
                 "receive": [_('This supply has already been received.')]
             })
-        inv_type = self.inventory_service._detect_inventory_type(supply.variant)
+        inv_type = self.inventory_service._detect_inventory_type(
+            supply.variant, business=supply.business
+        )
         has_inventory = Inventory.objects.filter(variant=supply.variant).exists()
         try:
             if inv_type == "serialized" or (not has_inventory and serial_items is not None):
@@ -249,10 +260,13 @@ class InventorySupplyService:
         return self.get_supply(supply.id)
 
     def _receive_serialized_supply(self, supply, serial_items):
-        from domains.business.models import BusinessProfile
         from domains.inventory.models import InventoryUnitAttribute
 
-        business = supply.business or BusinessProfile.objects.get(id=1)
+        business = supply.business or supply.warehouse.business
+        if business is None:
+            raise self.ValidationError({
+                "warehouse": [_('The warehouse must belong to a business.')]
+            })
         inventory, _ = Inventory.objects.select_for_update().get_or_create(
             business=business,
             warehouse=supply.warehouse,
@@ -509,6 +523,8 @@ class InventorySupplyService:
                 "product_name": variant.product.name,
             },
             "warehouse": {"id": warehouse.id, "code": warehouse.code, "name": warehouse.name},
+            "business_id": supply.business_id,
+            "business_name": supply.business.business_name,
             "quantity": supply.quantity,
             "remaining_quantity": supply.remaining_quantity,
             "unit_buy_price": unit_buy_price,

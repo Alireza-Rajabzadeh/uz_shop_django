@@ -7,6 +7,10 @@ class Inventory(models.Model):
         db_table = "inventory_inventory"
         permissions = [
             ("adjust_stock", "Can adjust stock"),
+            (
+                "view_all_business",
+                "Can view inventory across all businesses",
+            ),
         ]
         constraints = [
             models.UniqueConstraint(

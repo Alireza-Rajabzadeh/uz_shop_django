@@ -163,7 +163,7 @@ class InventoryVariantRowSerializer(serializers.Serializer):
     available = serializers.IntegerField()
     min_stock = serializers.IntegerField()
     low_stock = serializers.BooleanField()
-    default_warehouse = WarehouseContextSerializer()
+    default_warehouse = WarehouseContextSerializer(allow_null=True)
 
 
 class WarehouseQuerySerializer(serializers.Serializer):
@@ -179,7 +179,6 @@ class WarehouseWriteSerializer(ClosedSerializer):
         queryset=BusinessProfile.objects.all(),
         source="business",
         required=False,
-        allow_null=True,
     )
     city = serializers.PrimaryKeyRelatedField(queryset=Warehouse._meta.get_field("city").remote_field.model.objects.all())
     address = serializers.CharField()
@@ -252,6 +251,8 @@ class SupplyListSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     variant = SupplyVariantContextSerializer()
     warehouse = SupplyWarehouseContextSerializer()
+    business_id = serializers.IntegerField()
+    business_name = serializers.CharField(allow_blank=True)
     quantity = serializers.IntegerField()
     remaining_quantity = serializers.IntegerField()
     unit_buy_price = serializers.DecimalField(max_digits=15, decimal_places=2)

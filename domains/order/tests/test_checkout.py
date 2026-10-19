@@ -61,9 +61,26 @@ class CheckoutFixture(TestCase):
         country = Country.objects.create(name="Co", code="CX", phone_code="+98")
         state = State.objects.create(name="St", country=country)
         self.city = City.objects.create(name="Ci", state=state)
+        vendor = Vendor.objects.create(
+            phone="+9990000003",
+            first_name="Checkout",
+            last_name="Vendor",
+            national_id="0000000003",
+            vendor_code="VEN-CO-001",
+            status=VendorStatus.objects.create(name="active", title="Active"),
+        )
+        self.business, _ = BusinessProfile.objects.get_or_create(
+            id=1,
+            defaults={
+                "vendor": vendor,
+                "business_name": "Checkout Business",
+                "display_name": "Checkout Business",
+            },
+        )
         self.warehouse = Warehouse.objects.create(
             code="WH-CO",
             name="Checkout Warehouse",
+            business=self.business,
             city=self.city,
             address="Test address",
             lat="0",
@@ -82,23 +99,6 @@ class CheckoutFixture(TestCase):
         attribute = VariantAttribute.objects.create(name="Checkout Color")
         self.option = VariantOption.objects.create(
             attribute=attribute, name="Black", sku_code="COBLK"
-        )
-
-        vendor = Vendor.objects.create(
-            phone="+9990000003",
-            first_name="Checkout",
-            last_name="Vendor",
-            national_id="0000000003",
-            vendor_code="VEN-CO-001",
-            status=VendorStatus.objects.create(name="active", title="Active"),
-        )
-        self.business, _ = BusinessProfile.objects.get_or_create(
-            id=1,
-            defaults={
-                "vendor": vendor,
-                "business_name": "Checkout Business",
-                "display_name": "Checkout Business",
-            },
         )
 
         self.channel = PaymentChannel.objects.create(

@@ -62,9 +62,26 @@ class MarketplaceCheckoutFixture(APITestCase):
         country = Country.objects.create(name="MkCo", code="MX", phone_code="+98")
         state = State.objects.create(name="MkSt", country=country)
         self.city = City.objects.create(name="MkCi", state=state)
+        vendor = Vendor.objects.create(
+            phone="+9990000005",
+            first_name="MkCo",
+            last_name="Vendor",
+            national_id="0000000005",
+            vendor_code="VEN-MKCO-001",
+            status=VendorStatus.objects.create(name="active", title="Active"),
+        )
+        self.business, _ = BusinessProfile.objects.get_or_create(
+            id=1,
+            defaults={
+                "vendor": vendor,
+                "business_name": "MkCo Business",
+                "display_name": "MkCo Business",
+            },
+        )
         self.warehouse = Warehouse.objects.create(
             code="WH-MKCO",
             name="Marketplace Warehouse",
+            business=self.business,
             city=self.city,
             address="Test address",
             lat="0",
@@ -83,23 +100,6 @@ class MarketplaceCheckoutFixture(APITestCase):
         attribute = VariantAttribute.objects.create(name="MkCo Color")
         self.option = VariantOption.objects.create(
             attribute=attribute, name="Black", sku_code="MKCOBLK"
-        )
-
-        vendor = Vendor.objects.create(
-            phone="+9990000005",
-            first_name="MkCo",
-            last_name="Vendor",
-            national_id="0000000005",
-            vendor_code="VEN-MKCO-001",
-            status=VendorStatus.objects.create(name="active", title="Active"),
-        )
-        self.business, _ = BusinessProfile.objects.get_or_create(
-            id=1,
-            defaults={
-                "vendor": vendor,
-                "business_name": "MkCo Business",
-                "display_name": "MkCo Business",
-            },
         )
 
         method, _ = BusinessPaymentMethod.objects.get_or_create(

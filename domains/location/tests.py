@@ -4,6 +4,7 @@ from django.test import override_settings
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from domains.business.models import BusinessProfile
 from domains.customer.models import Customer, CustomerStatus
 from domains.location.models import City, Country, State
 
@@ -260,9 +261,13 @@ class LocationCRUDAPITests(APITestCase):
             city=self.tehran_city, postal_code="123", address_line1="Street",
         )
         warehouse_status = WarehouseStatus.objects.create(name="loc-active")
+        business, _ = BusinessProfile.objects.get_or_create(
+            id=1,
+            defaults={"business_name": "Location Business", "display_name": "Location Business"},
+        )
         Warehouse.objects.create(
-            code="LOC-WH", name="Location WH", city=self.tehran_city, address="Street",
-            lat=35, lng=51, status=warehouse_status,
+            code="LOC-WH", name="Location WH", business=business, city=self.tehran_city,
+            address="Street", lat=35, lng=51, status=warehouse_status,
         )
         self.authenticate("view_city", "delete_city")
         detail = self.client.get(f"/cities/{self.tehran_city.id}").data["data"]

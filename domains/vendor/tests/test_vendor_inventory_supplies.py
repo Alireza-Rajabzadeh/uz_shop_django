@@ -177,16 +177,6 @@ class VendorSupplyOverviewTests(TestCase):
             unit_buy_price="50.00",
             supplied_at=timezone.now(),
         )
-        # Legacy rows created through the admin tier never got a business.
-        InventorySupply.objects.create(
-            business=None,
-            variant=self.variant,
-            warehouse=self.warehouse,
-            quantity=2,
-            remaining_quantity=2,
-            unit_buy_price="50.00",
-            supplied_at=timezone.now(),
-        )
 
         response = self._get()
 

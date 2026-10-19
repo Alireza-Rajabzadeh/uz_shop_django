@@ -523,9 +523,17 @@ class ProductService(BaseService):
         selections=(),
         inventory=None,
         serial_items=None,
-        inventory_submitted=True,
+        inventory_submitted=False,
         **variant_data,
     ):
+        """Create a variant and its option combination.
+
+        Stock is deliberately not part of variant creation: a variant is a
+        catalog object, while stock is added afterwards in the business-scoped
+        inventory workspace. A caller that does submit inventory must say so
+        with ``inventory_submitted=True`` (the API serializer derives it from
+        the presence of ``inventory`` / ``serial_items``).
+        """
         selections = self._validate_variant_selections(selections)
         combination_key = self._build_combination_key(selections)
         sku = self._build_sku(product, selections)

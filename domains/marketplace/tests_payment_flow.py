@@ -111,6 +111,7 @@ class MarketplacePaymentFlowTests(MarketplaceCheckoutFixture):
         InventorySupply.objects.create(
             variant=order.items.get().variant,
             warehouse=self.warehouse,
+            business=self.business,
             quantity=10,
             remaining_quantity=10,
             unit_buy_price="40.00",

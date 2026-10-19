@@ -4,6 +4,7 @@ from rest_framework.permissions import BasePermission, DjangoModelPermissions
 from rest_framework.views import APIView
 
 from core.responses import api_response
+from domains.business.models import BusinessProfile
 from domains.catalog.models import ProductVariants
 from domains.inventory.enums.InventorySupplyCostTypeEnum import InventorySupplyCostTypeEnum
 from domains.inventory.models import Warehouse, WarehouseStatus
@@ -16,6 +17,14 @@ from domains.inventory.services import (
 from domains.inventory.services.price_history_mongo import get_price_history as mongo_price_history
 from domains.users.auth import AdminJWTAuthentication
 
+from .scope import (
+    ADJUST_STOCK,
+    VIEW_INVENTORY,
+    is_aggregate,
+    require_business,
+    resolve_business,
+    scope_permits,
+)
 from .serializers import (
     InventoryReportSummarySerializer,
     InventoryVariantQuerySerializer,
@@ -52,16 +61,33 @@ pricing_service = InventoryPricingService()
 reporting_service = InventoryReportingService()
 
 
-class InventoryActionPermission(BasePermission):
+class InventoryLookupPermission(BasePermission):
+    """Reference-data reads that are the same for every business."""
+
     def has_permission(self, request, view):
-        permissions = ["inventory.view_inventory"]
-        if request.method == "PATCH":
-            permissions.append("inventory.adjust_stock")
         return bool(
             request.user
             and request.user.is_authenticated
-            and request.user.has_perms(permissions)
+            and request.user.has_perms([VIEW_INVENTORY])
         )
+
+
+class InventoryScopePermission(BasePermission):
+    """Scope-aware permission for inventory reads and stock writes.
+
+    A named business is a plain ``view_inventory`` scope. An aggregate read
+    additionally requires ``view_all_business``; an aggregate write is refused.
+    """
+
+    def has_permission(self, request, view):
+        if not (request.user and request.user.is_authenticated):
+            return False
+        if not scope_permits(request):
+            return False
+        permissions = [VIEW_INVENTORY]
+        if request.method == "PATCH":
+            permissions.append(ADJUST_STOCK)
+        return request.user.has_perms(permissions)
 
 
 class WarehouseModelPermissions(DjangoModelPermissions):
@@ -77,24 +103,43 @@ class WarehouseModelPermissions(DjangoModelPermissions):
     def _queryset(self, view):
         return view.model._default_manager.all()
 
+    def has_permission(self, request, view):
+        if not super().has_permission(request, view):
+            return False
+        if getattr(view, "business_scoped", True) and not scope_permits(request):
+            return False
+        return True
+
 
 class InventoryAPIView(APIView):
     authentication_classes = [AdminJWTAuthentication]
-    permission_classes = [InventoryActionPermission]
+    permission_classes = [InventoryScopePermission]
 
 
 class InventoryVariantList(InventoryAPIView):
     def get(self, request):
         query = InventoryVariantQuerySerializer(data=request.query_params)
         query.is_valid(raise_exception=True)
+        business = resolve_business(request)
         try:
-            warehouse = inventory_service.get_default_warehouse()
+            # The aggregate scope has no single default warehouse to report;
+            # each row keeps its own stock totals.
+            warehouse = (
+                inventory_service.get_default_warehouse(business=business)
+                if business is not None
+                else None
+            )
         except InventoryService.ValidationError as exc:
             raise ValidationError(exc.errors) from exc
-        variants = inventory_service.search_variants(**query.validated_data)
+        variants = inventory_service.search_variants(
+            business=business, **query.validated_data
+        )
         paginator = PageNumberPagination()
         page = paginator.paginate_queryset(variants, request, view=self)
-        rows = [inventory_service.serialize_variant_overview(item, warehouse) for item in page]
+        rows = [
+            inventory_service.serialize_variant_overview(item, warehouse, business=business)
+            for item in page
+        ]
         data = paginator.get_paginated_response(InventoryVariantRowSerializer(rows, many=True).data).data
         return api_response(True, "", data)
 
@@ -111,23 +156,29 @@ class VariantInventoryDetail(InventoryAPIView):
         return variant
 
     def get(self, request, variant_id):
+        business = resolve_business(request)
         try:
-            details = inventory_service.get_variant_details(self.get_object(variant_id))
+            details = inventory_service.get_variant_details(
+                self.get_object(variant_id), business=business
+            )
         except InventoryService.ValidationError as exc:
             raise ValidationError(exc.errors) from exc
         return api_response(True, "", InventoryVariantDetailSerializer(details).data)
 
     def patch(self, request, variant_id):
         variant = self.get_object(variant_id)
+        business = require_business(request)
         serializer = VariantStockWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        inv_type = inventory_service._detect_inventory_type(variant)
+        inv_type = inventory_service._detect_inventory_type(variant, business=business)
         expected = "inventory" if inv_type == "normal" else "serial_items"
         if expected not in serializer.validated_data:
             raise ValidationError({expected: [f"This field is required for {inv_type} inventory."]})
         try:
-            variant = inventory_service.adjust_variant_stock(variant, **serializer.validated_data)
-            details = inventory_service.get_variant_details(variant)
+            variant = inventory_service.adjust_variant_stock(
+                variant, business=business, **serializer.validated_data
+            )
+            details = inventory_service.get_variant_details(variant, business=business)
         except InventoryService.ValidationError as exc:
             raise ValidationError(exc.errors) from exc
         return api_response(True, "Stock updated.", InventoryVariantDetailSerializer(details).data)
@@ -147,17 +198,28 @@ class WarehouseListCreate(WarehouseAPIView):
     def get(self, request):
         query = WarehouseQuerySerializer(data=request.query_params)
         query.is_valid(raise_exception=True)
-        warehouses = inventory_service.search_warehouses(**query.validated_data)
+        business = resolve_business(request)
+        warehouses = inventory_service.search_warehouses(
+            business=business, **query.validated_data
+        )
         paginator = PageNumberPagination()
         page = paginator.paginate_queryset(warehouses, request, view=self)
         data = paginator.get_paginated_response(WarehouseSerializer(page, many=True).data).data
         return api_response(True, "", data)
 
     def post(self, request):
+        business = require_business(request)
         serializer = WarehouseWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        data = dict(serializer.validated_data)
+        body_business = data.pop("business", None)
+        if body_business is not None and body_business.pk != business.pk:
+            raise ValidationError({
+                "business_id": ["Warehouse business must match the selected scope."]
+            })
+        data["business"] = business
         try:
-            warehouse = inventory_service.create_warehouse(**serializer.validated_data)
+            warehouse = inventory_service.create_warehouse(**data)
         except InventoryService.ValidationError as exc:
             self.service_error(exc)
         return api_response(True, "Warehouse created.", WarehouseSerializer(warehouse).data, status_code=201)
@@ -166,7 +228,10 @@ class WarehouseListCreate(WarehouseAPIView):
 class WarehouseDetail(WarehouseAPIView):
     def get_object(self, warehouse_id):
         warehouse = inventory_service.get_warehouse(warehouse_id)
-        if warehouse is None:
+        business = resolve_business(self.request)
+        if warehouse is None or (
+            business is not None and warehouse.business_id != business.id
+        ):
             raise NotFound("Warehouse not found.")
         return warehouse
 
@@ -177,8 +242,12 @@ class WarehouseDetail(WarehouseAPIView):
         warehouse = self.get_object(warehouse_id)
         serializer = WarehouseWriteSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
+        data = dict(serializer.validated_data)
+        body_business = data.pop("business", None)
+        if body_business is not None and body_business.pk != warehouse.business_id:
+            raise ValidationError({"business_id": ["Warehouse business cannot be changed."]})
         try:
-            warehouse = inventory_service.update_warehouse(warehouse, **serializer.validated_data)
+            warehouse = inventory_service.update_warehouse(warehouse, **data)
         except InventoryService.ValidationError as exc:
             self.service_error(exc)
         return api_response(True, "Warehouse updated.", WarehouseSerializer(warehouse).data)
@@ -193,36 +262,64 @@ class WarehouseDetail(WarehouseAPIView):
 
 class LookupAPIView(APIView):
     authentication_classes = [AdminJWTAuthentication]
-    permission_classes = [InventoryActionPermission]
+    permission_classes = [InventoryLookupPermission]
 
 
 class WarehouseStatusOptions(WarehouseAPIView):
+    # Reference data shared by every business, so it carries no business scope.
+    business_scoped = False
+
     def get(self, request):
         return api_response(True, "", OptionSerializer(WarehouseStatus.objects.order_by("id"), many=True).data)
 
 
-class SupplyActionPermission(BasePermission):
+class InventoryBusinessOptions(LookupAPIView):
+    """Business choices for the inventory scope selector.
+
+    Gated by ``inventory.view_inventory`` rather than
+    ``business.view_businessprofile`` so an inventory operator can pick a scope
+    without holding the business module's read permission.
+    """
+
+    def get(self, request):
+        businesses = BusinessProfile.objects.order_by("id")
+        return api_response(True, "", [
+            {
+                "id": business.id,
+                "name": business.display_name or business.business_name,
+            }
+            for business in businesses
+        ])
+
+
+class SupplyScopePermission(BasePermission):
+    """Scope-aware permission for supply reads and writes."""
+
     def has_permission(self, request, view):
-        permissions = ["inventory.view_inventory"]
+        if not (request.user and request.user.is_authenticated):
+            return False
+        if not scope_permits(request):
+            return False
+        permissions = [VIEW_INVENTORY]
         if request.method in ("POST", "PATCH", "DELETE"):
-            permissions.append("inventory.adjust_stock")
-        return bool(
-            request.user
-            and request.user.is_authenticated
-            and request.user.has_perms(permissions)
-        )
+            permissions.append(ADJUST_STOCK)
+        return request.user.has_perms(permissions)
 
 
 class SupplyAPIView(APIView):
     authentication_classes = [AdminJWTAuthentication]
-    permission_classes = [SupplyActionPermission]
+    permission_classes = [SupplyScopePermission]
 
 
 class SupplyListCreate(SupplyAPIView):
     def get(self, request):
         query = SupplyQuerySerializer(data=request.query_params)
         query.is_valid(raise_exception=True)
-        supplies = supply_service.search_supplies(**query.validated_data)
+        business = resolve_business(request)
+        supplies = supply_service.search_supplies(
+            business_id=business.id if business is not None else None,
+            **query.validated_data,
+        )
         paginator = PageNumberPagination()
         page = paginator.paginate_queryset(supplies, request, view=self)
         rows = [supply_service.serialize_supply_row(item) for item in page]
@@ -230,8 +327,14 @@ class SupplyListCreate(SupplyAPIView):
         return api_response(True, "", data)
 
     def post(self, request):
+        business = require_business(request)
         serializer = SupplyWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        warehouse = serializer.validated_data["warehouse"]
+        if warehouse.business_id != business.id:
+            raise ValidationError({
+                "warehouse_id": ["The warehouse must belong to the selected business."]
+            })
         try:
             supply = supply_service.create_supply(**serializer.validated_data)
         except InventorySupplyService.ValidationError as exc:
@@ -247,7 +350,10 @@ class SupplyListCreate(SupplyAPIView):
 class SupplyDetail(SupplyAPIView):
     def get_object(self, supply_id):
         supply = supply_service.get_supply(supply_id)
-        if supply is None:
+        business = resolve_business(self.request)
+        if supply is None or (
+            business is not None and supply.business_id != business.id
+        ):
             raise NotFound("Supply not found.")
         return supply
 
@@ -281,8 +387,9 @@ class SupplyDetail(SupplyAPIView):
 
 class SupplyReceive(SupplyAPIView):
     def post(self, request, supply_id):
+        business = require_business(request)
         supply = supply_service.get_supply(supply_id)
-        if supply is None:
+        if supply is None or supply.business_id != business.id:
             raise NotFound("Supply not found.")
         serializer = SupplyReceiveSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -311,7 +418,7 @@ class VariantPricingView(APIView):
     # GET uses view_inventory; PATCH additionally requires adjust_stock via
     # the shared InventoryActionPermission.
     authentication_classes = [AdminJWTAuthentication]
-    permission_classes = [InventoryActionPermission]
+    permission_classes = [InventoryScopePermission]
 
     def get_variant(self, variant_id):
         variant = ProductVariants.objects.filter(pk=variant_id).first()
@@ -321,26 +428,33 @@ class VariantPricingView(APIView):
 
     def get(self, request, variant_id):
         variant = self.get_variant(variant_id)
-        overview = pricing_service.get_variant_pricing_overview(variant)
+        business = require_business(request)
+        overview = pricing_service.get_variant_pricing_overview(variant, business=business)
         return api_response(True, "", VariantPricingOverviewSerializer(overview).data)
 
     def patch(self, request, variant_id):
         variant = self.get_variant(variant_id)
+        business = require_business(request)
         serializer = VariantPricingWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
-            pricing_service.update_variant_pricing(variant, **serializer.validated_data)
+            pricing_service.update_variant_pricing(
+                variant, business=business, **serializer.validated_data
+            )
         except InventoryPricingService.ValidationError as exc:
             raise ValidationError(exc.errors) from exc
-        overview = pricing_service.get_variant_pricing_overview(variant)
+        overview = pricing_service.get_variant_pricing_overview(variant, business=business)
         return api_response(True, "Pricing updated.", VariantPricingOverviewSerializer(overview).data)
 
 
 class PricingApplyPermission(BasePermission):
     def has_permission(self, request, view):
+        # Pricing is single-business: applying a price always names a business.
+        if is_aggregate(request):
+            return False
         permissions = [
-            "inventory.view_inventory",
-            "inventory.adjust_stock",
+            VIEW_INVENTORY,
+            ADJUST_STOCK,
             "catalog.change_productvariants",
         ]
         return bool(
@@ -358,15 +472,16 @@ class VariantPricingApplyView(APIView):
         variant = ProductVariants.objects.filter(pk=variant_id).first()
         if variant is None:
             raise NotFound("Variant not found.")
+        business = require_business(request)
         serializer = VariantPriceApplySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
             variant, history = pricing_service.apply_price(
-                variant, **serializer.validated_data
+                variant, business=business, **serializer.validated_data
             )
         except InventoryPricingService.ValidationError as exc:
             raise ValidationError(exc.errors) from exc
-        overview = pricing_service.get_variant_pricing_overview(variant)
+        overview = pricing_service.get_variant_pricing_overview(variant, business=business)
         return api_response(
             True,
             "Price applied.",
@@ -379,27 +494,33 @@ class VariantPricingApplyView(APIView):
 
 class VariantPricingHistoryView(APIView):
     authentication_classes = [AdminJWTAuthentication]
-    permission_classes = [InventoryActionPermission]
+    permission_classes = [InventoryScopePermission]
 
     def get(self, request, variant_id):
         variant = ProductVariants.objects.filter(pk=variant_id).first()
         if variant is None:
             raise NotFound("Variant not found.")
-        history = mongo_price_history(variant_id)
+        business = resolve_business(request)
+        history = mongo_price_history(
+            variant_id, business.id if business is not None else None
+        )
         return api_response(True, "", history)
 
 
 class PricingListView(APIView):
     authentication_classes = [AdminJWTAuthentication]
-    permission_classes = [InventoryActionPermission]
+    permission_classes = [InventoryScopePermission]
 
     def get(self, request):
         query = PricingQuerySerializer(data=request.query_params)
         query.is_valid(raise_exception=True)
-        variants = pricing_service.search_pricing(**query.validated_data)
+        business = require_business(request)
+        variants = pricing_service.search_pricing(
+            business=business, **query.validated_data
+        )
         paginator = PageNumberPagination()
         page = paginator.paginate_queryset(variants, request, view=self)
-        overview_map = pricing_service.get_pricing_overview_map(page)
+        overview_map = pricing_service.get_pricing_overview_map(page, business=business)
         rows = [pricing_service.serialize_pricing_row(variant, overview_map[variant.id]) for variant in page]
         data = paginator.get_paginated_response(PricingListRowSerializer(rows, many=True).data).data
         return api_response(True, "", data)
@@ -414,24 +535,28 @@ class PricingStrategyOptions(LookupAPIView):
 
 class InventoryReportSummaryView(APIView):
     authentication_classes = [AdminJWTAuthentication]
-    permission_classes = [InventoryActionPermission]
+    permission_classes = [InventoryScopePermission]
 
     def get(self, request):
-        summary = reporting_service.get_summary()
+        business = resolve_business(request)
+        summary = reporting_service.get_summary(business=business)
         return api_response(True, "", InventoryReportSummarySerializer(summary).data)
 
 
 class InventoryReportVariantListView(APIView):
     authentication_classes = [AdminJWTAuthentication]
-    permission_classes = [InventoryActionPermission]
+    permission_classes = [InventoryScopePermission]
 
     def get(self, request):
         query = ReportVariantQuerySerializer(data=request.query_params)
         query.is_valid(raise_exception=True)
-        variants = reporting_service.search_variants_for_report(**query.validated_data)
+        business = resolve_business(request)
+        variants = reporting_service.search_variants_for_report(
+            business=business, **query.validated_data
+        )
         paginator = PageNumberPagination()
         page = paginator.paginate_queryset(variants, request, view=self)
-        rows = reporting_service.variant_report_rows(page)
+        rows = reporting_service.variant_report_rows(page, business=business)
         data = paginator.get_paginated_response(
             ReportVariantRowSerializer([rows[variant.id] for variant in page], many=True).data
         ).data
@@ -440,12 +565,15 @@ class InventoryReportVariantListView(APIView):
 
 class InventoryReportSupplyListView(APIView):
     authentication_classes = [AdminJWTAuthentication]
-    permission_classes = [InventoryActionPermission]
+    permission_classes = [InventoryScopePermission]
 
     def get(self, request):
         query = ReportSupplyQuerySerializer(data=request.query_params)
         query.is_valid(raise_exception=True)
-        supplies = reporting_service.search_supplies_for_report(**query.validated_data)
+        business = resolve_business(request)
+        supplies = reporting_service.search_supplies_for_report(
+            business=business, **query.validated_data
+        )
         paginator = PageNumberPagination()
         page = paginator.paginate_queryset(supplies, request, view=self)
         rows = [reporting_service.serialize_supply_report_row(supply) for supply in page]

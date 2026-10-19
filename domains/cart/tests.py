@@ -98,9 +98,29 @@ class CartAPITests(APITestCase):
         state = State.objects.create(name="Cart State", country=country)
         self.city = City.objects.create(name="Cart City", state=state)
         self.warehouse_status = WarehouseStatus.objects.create(name="available-for-tests")
+        # inventory.0022 seeds the singleton profile with id=1 in every test
+        # database, so this must attach to it rather than insert a new row.
+        vendor_status = VendorStatus.objects.create(name="active", title="Active")
+        vendor = Vendor.objects.create(
+            phone="+9990000002",
+            first_name="Cart",
+            last_name="Vendor",
+            national_id="0000000002",
+            vendor_code="VEN-CART-001",
+            status=vendor_status,
+        )
+        self.business, _ = BusinessProfile.objects.get_or_create(
+            id=1,
+            defaults={
+                "vendor": vendor,
+                "business_name": "Cart Business",
+                "display_name": "Cart Business",
+            },
+        )
         self.warehouse = Warehouse.objects.create(
             code="WH-CART",
             name="Default Cart Warehouse",
+            business=self.business,
             city=self.city,
             address="Test address",
             lat="0",
@@ -118,25 +138,6 @@ class CartAPITests(APITestCase):
         self.attribute = VariantAttribute.objects.create(name="Cart Color")
         self.option = VariantOption.objects.create(
             attribute=self.attribute, name="Black", sku_code="CARTBLK"
-        )
-        vendor_status = VendorStatus.objects.create(name="active", title="Active")
-        vendor = Vendor.objects.create(
-            phone="+9990000002",
-            first_name="Cart",
-            last_name="Vendor",
-            national_id="0000000002",
-            vendor_code="VEN-CART-001",
-            status=vendor_status,
-        )
-        # inventory.0022 seeds the singleton profile with id=1 in every test
-        # database, so this must attach to it rather than insert a new row.
-        self.business, _ = BusinessProfile.objects.get_or_create(
-            id=1,
-            defaults={
-                "vendor": vendor,
-                "business_name": "Cart Business",
-                "display_name": "Cart Business",
-            },
         )
 
     def make_product(self, status):

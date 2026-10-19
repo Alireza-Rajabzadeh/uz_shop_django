@@ -184,8 +184,21 @@ The seed command does not provision notification provider statuses or a default 
 - Preserve database constraints, row locking, and atomic replacement workflows when changing aggregate writes.
 - Inventory type changes require an inactive marketplace offer; `InventoryService.inventory_type_change_gate(variant, business)` reports the rule without raising.
 - Converting serialized → normal moves live units to the `changed_type` state. They keep the audit trail but are never sellable and are excluded from stock totals. Purge them manually with `python manage.py purge_changed_type_units --older-than-days 90` (`--dry-run` previews); there is deliberately no beat schedule, so the 90-day retention window stays an operator decision.
+- Creating a variant is a catalog operation and does not touch a warehouse. `ProductService.add_variant_to_product` applies stock only when the caller submits it (`inventory_submitted=True`, derived by the API serializer from the presence of `inventory` / `serial_items`); the catalog `variant-form-options` response carries no `default_warehouse`. Stock is added afterwards through the business-scoped inventory services.
 
 Current catalog endpoints are administrative and permission-controlled. They are not a public storefront contract.
+
+### Inventory Business Scope
+
+Inventory is a business-level feature: stock, warehouses, supplies, pricing, and reports all belong to exactly one `BusinessProfile`.
+
+- Access is a global `inventory.*` permission set plus a runtime business scope, not per-business RBAC. The scope is the `business_id` query parameter; the literal `all` (or omitting the parameter on an aggregate-capable read) selects the cross-business aggregate.
+- `inventory.view_all_business` gates the aggregate. Aggregate reads also require `inventory.view_inventory`. Writes never aggregate: a warehouse, supply, or price must name one business, and a write in aggregate scope is refused.
+- `domains/inventory/api/scope.py` owns the vocabulary: `resolve_business` (may return `None` for aggregate), `require_business` (raises for aggregate/unset), `is_aggregate`, and `scope_permits`. Use these instead of re-deriving the query parameter in a view.
+- `Warehouse.business` and `InventorySupply.business` are `NOT NULL` `PROTECT` foreign keys, matching `Inventory.business`. A supply's business always mirrors its warehouse's. `VariantPriceHistory` also carries its business so two businesses applying a price for one variant stay distinguishable; the Mongo `price_history` collection stores `business_id` the same way.
+- Pricing is deliberately single-business: `BusinessOffer` is unique on `(business, variant)`, so a price cannot be applied across the aggregate, and `InventoryPricingService` requires an explicit business rather than falling back to a singleton profile.
+- `GET /api/inventory/businesses` lists `{id, name}` for the scope selector behind `inventory.view_inventory` (not `business.view_businessprofile`), so an inventory operator can pick a scope without the business module's read permission.
+- The vendor API resolves its business from the authenticated vendor and does not use `scope.py`; the vendor warehouse/supply serializers keep `business_id` optional so that path is unchanged.
 
 ## Marketplace Domain
 

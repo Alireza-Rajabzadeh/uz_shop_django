@@ -14,6 +14,7 @@ COLLECTION = "price_history"
 def log_price_change(
     *,
     variant_id: int,
+    business_id: int,
     sku: str,
     product_name: str,
     old_price: Decimal,
@@ -26,6 +27,7 @@ def log_price_change(
     try:
         doc = {
             "variant_id": variant_id,
+            "business_id": business_id,
             "sku": sku,
             "product_name": product_name,
             "old_price": float(old_price),
@@ -41,11 +43,16 @@ def log_price_change(
         logger.exception("Failed to log price change to MongoDB for variant %s", variant_id)
 
 
-def get_price_history(variant_id: int, limit: int = 50) -> list[dict]:
+def get_price_history(variant_id: int, business_id: int | None = None, limit: int = 50) -> list[dict]:
     try:
+        query: dict = {"variant_id": variant_id}
+        # Pricing is per business; without a scope the whole variant's trail is
+        # returned, which only the aggregate view requests.
+        if business_id is not None:
+            query["business_id"] = business_id
         cursor = (
             get_collection(COLLECTION)
-            .find({"variant_id": variant_id})
+            .find(query)
             .sort("created_at", -1)
             .limit(limit)
         )

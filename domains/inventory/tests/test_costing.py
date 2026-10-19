@@ -4,6 +4,7 @@ from decimal import Decimal
 from django.test import TestCase
 from django.utils import timezone
 
+from domains.business.models import BusinessProfile
 from domains.catalog.models import Category, CategoryStatus, Product, ProductStatus, ProductVariants
 from domains.inventory.models import InventorySupply, Warehouse, WarehouseStatus
 from domains.inventory.services import InventoryCostService
@@ -17,9 +18,14 @@ class InventoryCostingTests(TestCase):
         state = State.objects.create(name="Cost State", country=country)
         city = City.objects.create(name="Cost City", state=state)
         warehouse_status = WarehouseStatus.objects.create(name="available-cost-tests")
+        self.business, _ = BusinessProfile.objects.get_or_create(
+            id=1,
+            defaults={"business_name": "Cost Business", "display_name": "Cost Business"},
+        )
         self.warehouse = Warehouse.objects.create(
             code="WH-COST",
             name="Cost Warehouse",
+            business=self.business,
             city=city,
             address="Cost address",
             lat="0",
@@ -40,6 +46,7 @@ class InventoryCostingTests(TestCase):
         self.supply = InventorySupply.objects.create(
             variant=self.variant,
             warehouse=self.warehouse,
+            business=self.business,
             quantity=10,
             unit_buy_price="100.00",
             supplied_at=timezone.make_aware(datetime(2026, 1, 10)),
@@ -61,6 +68,7 @@ class InventoryCostingTests(TestCase):
         supply = InventorySupply.objects.create(
             variant=self.variant,
             warehouse=self.warehouse,
+            business=self.business,
             quantity=3,
             unit_buy_price=Decimal("33.33"),
             supplied_at=timezone.make_aware(datetime(2026, 2, 1)),

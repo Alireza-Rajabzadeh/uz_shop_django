@@ -42,6 +42,7 @@ class InventoryTypeConversionTests(TestCase):
         self.warehouse = Warehouse.objects.create(
             code="WH-CONV",
             name="Conversion Warehouse",
+            business=self.business,
             city=city,
             address="Address",
             lat="0",

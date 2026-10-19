@@ -110,10 +110,14 @@ class VendorVariantFormOptionsTests(TestCase):
 
     def test_form_options_scope_the_warehouse_to_the_business(self):
         """An unrelated default warehouse must not make the lookup ambiguous."""
+        other_business = BusinessProfile.objects.create(
+            business_name="Other Form Options Business",
+            display_name="Other Form Options Business",
+        )
         Warehouse.objects.create(
             code="WH-FORMOPT-ORPHAN",
             name="Unowned Warehouse",
-            business=None,
+            business=other_business,
             city=self.warehouse.city,
             address="Orphan address",
             lat="0",

@@ -1,6 +1,7 @@
 from django.contrib.auth.models import User
 from rest_framework.test import APITestCase
 
+from domains.business.models import BusinessProfile
 from domains.catalog.models import (
     Category,
     CategoryStatus,
@@ -36,9 +37,14 @@ class ProductVariantWorkflowTests(APITestCase):
         state = State.objects.create(name="Variant State", country=country)
         city = City.objects.create(name="Variant City", state=state)
         warehouse_status = WarehouseStatus.objects.create(name="variant-available")
+        business, _ = BusinessProfile.objects.get_or_create(
+            id=1,
+            defaults={"business_name": "Variant Business", "display_name": "Variant Business"},
+        )
         Warehouse.objects.create(
             code="WH-VARIANT",
             name="Variant Warehouse",
+            business=business,
             city=city,
             address="Test",
             lat="0",

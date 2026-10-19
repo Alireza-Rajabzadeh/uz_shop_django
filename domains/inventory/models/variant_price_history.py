@@ -34,6 +34,11 @@ class VariantPriceHistory(models.Model):
         on_delete=models.PROTECT,
         related_name="price_history",
     )
+    business = models.ForeignKey(
+        "business.BusinessProfile",
+        on_delete=models.PROTECT,
+        related_name="variant_price_history",
+    )
     old_price = models.DecimalField(max_digits=15, decimal_places=2)
     new_price = models.DecimalField(max_digits=15, decimal_places=2)
     cost_basis = models.DecimalField(max_digits=17, decimal_places=2)

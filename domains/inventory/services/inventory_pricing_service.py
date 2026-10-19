@@ -6,7 +6,6 @@ from django.db.models import DecimalField, IntegerField, OuterRef, Q, Subquery, 
 from django.db.models.functions import Coalesce
 from django.utils.translation import gettext as _
 
-from domains.business.models import BusinessProfile
 from domains.catalog.models import ProductVariants
 from domains.inventory.enums.VariantCostStrategyEnum import VariantCostStrategyEnum
 from domains.inventory.enums.VariantPriceHistorySourceEnum import (
@@ -65,26 +64,22 @@ class InventoryPricingService:
     def _resolve_config_business(self, business):
         """Business that owns a newly created configuration offer.
 
-        The vendor view passes its own business. The admin pricing endpoint has
-        no business context, so it falls back to the singleton profile and
-        refuses to guess when the database holds more than one.
+        Pricing is per business, so every caller must name one — the admin
+        views resolve it from the request scope and the vendor view from the
+        authenticated vendor. There is deliberately no singleton fallback:
+        guessing here would attach a vendor's configuration to another
+        business.
         """
-        if business is not None:
-            return business
-        businesses = BusinessProfile.objects.order_by("id")
-        count = businesses.count()
-        if count == 1:
-            return businesses.first()
-        if count > 1:
+        if business is None:
             raise self.ValidationError({
                 "pricing": [
                     _(
-                        "Multiple business profiles exist, so the business "
-                        "that owns this pricing configuration must be identified."
+                        "A business must be selected to store the pricing "
+                        "configuration."
                     )
                 ]
             })
-        return None
+        return business
 
     def _strategy_row(self, code):
         """Resolve a validated strategy code to its PricingStrategy row.
@@ -130,15 +125,6 @@ class InventoryPricingService:
             # inactive, so it is never visible to customers until the vendor
             # presses Active.
             business = self._resolve_config_business(business)
-            if business is None:
-                raise self.ValidationError({
-                    "pricing": [
-                        _(
-                            "No business profile exists, so the pricing "
-                            "configuration cannot be stored."
-                        )
-                    ]
-                })
             values = {
                 "business": business,
                 "variant": variant,
@@ -160,15 +146,16 @@ class InventoryPricingService:
         return offer
 
     @transaction.atomic
-    def apply_price(self, variant, *, price=None):
+    def apply_price(self, variant, *, price=None, business=None):
         variant = (
             ProductVariants.objects.select_for_update()
             .select_related("product")
             .get(pk=variant.pk)
         )
-        offer = BusinessOffer.objects.filter(
-            variant=variant
-        ).select_for_update().first()
+        offers = BusinessOffer.objects.filter(variant=variant)
+        if business is not None:
+            offers = offers.filter(business=business)
+        offer = offers.select_for_update().first()
         if offer is None:
             raise self.ValidationError({
                 "pricing": [
@@ -179,7 +166,7 @@ class InventoryPricingService:
                 ]
             })
 
-        overview = self.get_variant_pricing_overview(variant)
+        overview = self.get_variant_pricing_overview(variant, business=business)
         cost_basis = overview["cost_basis"]
         suggested_price = overview["suggested_price"]
         if cost_basis is None or suggested_price is None:
@@ -206,6 +193,7 @@ class InventoryPricingService:
         offer.save(update_fields=["price"])
         history = VariantPriceHistory.objects.create(
             variant=variant,
+            business=business,
             old_price=old_price,
             new_price=new_price,
             cost_basis=cost_basis,
@@ -219,6 +207,7 @@ class InventoryPricingService:
         )
         log_price_change(
             variant_id=variant.id,
+            business_id=business.id,
             sku=variant.sku,
             product_name=variant.product.name,
             old_price=old_price,
@@ -230,10 +219,11 @@ class InventoryPricingService:
         )
         return variant, history
 
-    def get_price_history(self, variant):
-        return VariantPriceHistory.objects.filter(variant=variant).order_by(
-            "-created_at", "-id"
-        )
+    def get_price_history(self, variant, business=None):
+        queryset = VariantPriceHistory.objects.filter(variant=variant)
+        if business is not None:
+            queryset = queryset.filter(business=business)
+        return queryset.order_by("-created_at", "-id")
 
     @staticmethod
     def strategy_codes():
@@ -241,14 +231,17 @@ class InventoryPricingService:
 
     # ───────────────────── cost basis calculation ─────────────────────
 
-    def _received_supplies_with_remaining(self, variant):
+    def _received_supplies_with_remaining(self, variant, business=None):
         # Newest first; a single JOIN aggregate avoids per-supply cost queries.
         # Landed-unit math mirrors InventoryCostService formulas.
-        return InventorySupply.objects.filter(
+        queryset = InventorySupply.objects.filter(
             variant=variant,
             received_at__isnull=False,
             remaining_quantity__gt=0,
-        ).annotate(
+        )
+        if business is not None:
+            queryset = queryset.filter(business=business)
+        return queryset.annotate(
             extra_cost_total=Coalesce(
                 Sum("costs__amount"),
                 Decimal("0"),
@@ -273,7 +266,7 @@ class InventoryPricingService:
         # Supply rows are always loaded: costs are derived from received
         # supplies, so they must render even before any pricing config exists.
         return self.get_variant_pricing(variant, business=business), list(
-            self._received_supplies_with_remaining(variant)
+            self._received_supplies_with_remaining(variant, business=business)
         )
 
     def _calculate_basis(self, strategy, rows):
@@ -288,22 +281,22 @@ class InventoryPricingService:
             return self._landed_unit_cost(rows[-1])
         return self._landed_unit_cost(rows[0])
 
-    def get_cost_basis(self, variant):
-        config, rows = self._pricing_context(variant)
+    def get_cost_basis(self, variant, business=None):
+        config, rows = self._pricing_context(variant, business=business)
         if config is None or not rows:
             return None
         return self._calculate_basis(config.cost_strategy.code, rows)
 
-    def get_suggested_price(self, variant):
-        config, rows = self._pricing_context(variant)
+    def get_suggested_price(self, variant, business=None):
+        config, rows = self._pricing_context(variant, business=business)
         if config is None or not rows:
             return None
         basis = self._calculate_basis(config.cost_strategy.code, rows)
         profit = Decimal(config.expected_profit_percentage)
         return basis * (Decimal("1") + profit / Decimal("100"))
 
-    def get_pricing_summary(self, variant):
-        config, rows = self._pricing_context(variant)
+    def get_pricing_summary(self, variant, business=None):
+        config, rows = self._pricing_context(variant, business=business)
         if config is None:
             return None
         basis = self._calculate_basis(config.cost_strategy.code, rows) if rows else None
@@ -413,6 +406,7 @@ class InventoryPricingService:
     def search_pricing(
         self,
         *,
+        business=None,
         search=None,
         category_id=None,
         strategy=None,
@@ -434,15 +428,19 @@ class InventoryPricingService:
                 raise self.ValidationError({
                     "strategy": [_('Unsupported pricing cost strategy.')]
                 })
-            queryset = queryset.filter(pk__in=BusinessOffer.objects.filter(
-                cost_strategy__code=strategy
-            ).values_list("variant_id", flat=True))
+            strategy_offers = BusinessOffer.objects.filter(cost_strategy__code=strategy)
+            if business is not None:
+                strategy_offers = strategy_offers.filter(business=business)
+            queryset = queryset.filter(pk__in=strategy_offers.values_list(
+                "variant_id", flat=True
+            ))
         if has_pricing is not None:
             # Pricing config lives on any offer, active or draft, so "has
             # pricing" must not silently drop variants that are not listed yet.
-            configured_ids = BusinessOffer.objects.all().values_list(
-                "variant_id", flat=True
-            )
+            configured_ids = BusinessOffer.objects.all()
+            if business is not None:
+                configured_ids = configured_ids.filter(business=business)
+            configured_ids = configured_ids.values_list("variant_id", flat=True)
             queryset = (
                 queryset.filter(pk__in=configured_ids)
                 if has_pricing
@@ -453,6 +451,11 @@ class InventoryPricingService:
             inventory_supplies__received_at__isnull=False,
             inventory_supplies__remaining_quantity__gt=0,
         )
+        if business is not None:
+            remaining_filter &= Q(inventory_supplies__business=business)
+        offer_filter = {"variant": OuterRef("pk")}
+        if business is not None:
+            offer_filter["business"] = business
         queryset = queryset.annotate(
             remaining_quantity_total=Coalesce(
                 Sum(
@@ -465,7 +468,7 @@ class InventoryPricingService:
             current_price_annotation=Coalesce(
                 Subquery(
                     BusinessOffer.objects.filter(
-                        variant=OuterRef("pk"),
+                        **offer_filter,
                     ).values("price")[:1],
                     output_field=DecimalField(max_digits=15, decimal_places=2),
                 ),
@@ -484,21 +487,25 @@ class InventoryPricingService:
         field = ordering_map.get(requested.lstrip("-"), "sku")
         return queryset.order_by(f"-{field}" if descending else field, "id")
 
-    def get_pricing_overview_map(self, variants):
+    def get_pricing_overview_map(self, variants, business=None):
         """Batch overview for one page of variants (constant query count)."""
         variant_ids = [variant.id for variant in variants]
+        offers_queryset = BusinessOffer.objects.filter(variant_id__in=variant_ids)
+        if business is not None:
+            offers_queryset = offers_queryset.filter(business=business)
         offers = {
             offer.variant_id: offer
-            for offer in BusinessOffer.objects.filter(
-                variant_id__in=variant_ids,
-            )
+            for offer in offers_queryset
         }
         rows_by_variant = defaultdict(list)
-        supplies = InventorySupply.objects.filter(
+        supplies_queryset = InventorySupply.objects.filter(
             variant_id__in=variant_ids,
             received_at__isnull=False,
             remaining_quantity__gt=0,
-        ).annotate(
+        )
+        if business is not None:
+            supplies_queryset = supplies_queryset.filter(business=business)
+        supplies = supplies_queryset.annotate(
             extra_cost_total=Coalesce(
                 Sum("costs__amount"),
                 Decimal("0"),
