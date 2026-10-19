@@ -6,7 +6,10 @@ derived from ``model``, so an admin needs ``marketplace.view_marketplaceorder``
 rather than the shop's own order permission to see this list.
 """
 
+from core.responses import api_response
+from domains.business.models import BusinessProfile
 from domains.order.admin_views import (
+    AdminAPIView,
     AdminOrderActions,
     AdminOrderDetail,
     AdminOrderExecuteAction,
@@ -23,6 +26,31 @@ from ..models import (
 from ..services.order_service import MarketplaceOrderService
 from ..services.return_service import MarketplaceReturnRequestService
 from .serializers import AdminMarketplaceOrderStatusSerializer
+
+
+class MarketplaceAdminBusinessList(AdminAPIView):
+    """Business choices for the marketplace order filter.
+
+    Gated by ``marketplace.view_marketplaceorder`` through ``model`` rather
+    than ``business.view_businessprofile``, so an order operator can filter the
+    list without holding the business module's read permission.
+    """
+
+    model = MarketplaceOrder
+
+    def get(self, request):
+        businesses = BusinessProfile.objects.order_by("id")
+        return api_response(
+            True,
+            "",
+            [
+                {
+                    "id": business.id,
+                    "name": business.display_name or business.business_name,
+                }
+                for business in businesses
+            ],
+        )
 
 
 class MarketplaceAdminOrderList(AdminOrderList):

@@ -372,14 +372,21 @@ class BaseOrderService(BaseCheckoutService):
         return [self._customer_order_payload(order) for order in orders]
 
     def list_orders_admin(self, *, include_returns=False, **filters):
+        select_related = ["status", "customer"]
+        # The shop order has no business owner; the marketplace order does.
+        if hasattr(self.order_model, "business"):
+            select_related.append("business")
         queryset = self._scoped_orders().select_related(
-            "status", "customer"
+            *select_related
         ).prefetch_related("status__status_actions__order_action")
         if include_returns:
             queryset = queryset.prefetch_related("return_requests")
         status = filters.get("status")
         if status:
             queryset = queryset.filter(status__name=status)
+        business_id = filters.get("business")
+        if business_id and hasattr(self.order_model, "business"):
+            queryset = queryset.filter(business_id=business_id)
         if filters.get("in_progress"):
             queryset = queryset.filter(status__name__in=self.IN_PROGRESS_STATUSES)
         if filters.get("has_active_returns"):
@@ -457,6 +464,9 @@ class BaseOrderService(BaseCheckoutService):
             ),
             "created_at": order.created_at.isoformat(),
         }
+        business = self._business_ref(order)
+        if business is not None:
+            payload["business"] = business
         if include_returns:
             returns = sorted(
                 order.return_requests.all(),
@@ -473,10 +483,28 @@ class BaseOrderService(BaseCheckoutService):
             }
         return payload
 
+    @staticmethod
+    def _business_ref(order):
+        """The owning business of an order, or ``None`` for the shop flow.
+
+        Only the marketplace order carries a ``business``; the shop order has
+        no owner, so its rows and payloads simply omit the field.
+        """
+        business = getattr(order, "business", None)
+        if business is None:
+            return None
+        return {
+            "id": business.id,
+            "name": business.display_name or business.business_name,
+        }
+
     def get_order_admin(self, order_id, *, include_returns=True):
+        select_related = ["status", "customer__status"]
+        if hasattr(self.order_model, "business"):
+            select_related.append("business")
         try:
             order = (
-                self._scoped_orders().select_related("status", "customer__status")
+                self._scoped_orders().select_related(*select_related)
                 .prefetch_related("status__status_actions__order_action")
                 .get(id=order_id)
             )
@@ -488,6 +516,9 @@ class BaseOrderService(BaseCheckoutService):
             "name": order.status.name,
             "fa_name": order.status.fa_name,
         }
+        business = self._business_ref(order)
+        if business is not None:
+            payload["business"] = business
         payload["available_actions"] = self._status_actions_payload(
             order, actor="admin"
         )

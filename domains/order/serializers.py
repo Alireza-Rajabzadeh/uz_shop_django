@@ -128,6 +128,8 @@ class AdminOrderListQuerySerializer(serializers.Serializer):
     in_progress = serializers.BooleanField(required=False, default=False)
     has_active_returns = serializers.BooleanField(required=False, default=False)
     has_returns = serializers.BooleanField(required=False, default=False)
+    # Marketplace orders only: restrict the list to one seller's business.
+    business = serializers.IntegerField(required=False, min_value=1)
     search = serializers.CharField(required=False, allow_blank=True)
     created_from = serializers.DateField(required=False)
     created_to = serializers.DateField(required=False)

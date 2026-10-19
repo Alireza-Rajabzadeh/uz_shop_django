@@ -51,4 +51,5 @@ urlpatterns = [
         admin_views.MarketplaceAdminReturnAction.as_view(),
     ),
     path("admin/statuses", admin_views.MarketplaceAdminOrderStatusList.as_view()),
+    path("admin/businesses", admin_views.MarketplaceAdminBusinessList.as_view()),
 ]
