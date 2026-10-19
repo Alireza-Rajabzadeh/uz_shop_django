@@ -420,6 +420,7 @@ class VendorInventoryOverviewView(VendorInventoryAPIView):
         variant_service = VariantService()
 
         variants = inventory_service.search_variants(
+            business=business,
             search=search or None,
             category=None,
         ).filter(
@@ -428,18 +429,16 @@ class VendorInventoryOverviewView(VendorInventoryAPIView):
         if strategy in {"normal", "serialized"}:
             variants = [
                 variant for variant in variants
-                if inventory_service._detect_inventory_type(variant) == strategy
+                if inventory_service._detect_inventory_type(variant, business=business) == strategy
             ]
         else:
             variants = list(variants)
 
-        # Scope to this business: defaults are unique per business, and other
-        # businesses (or an unowned warehouse) must not make this ambiguous.
-        try:
-            default_warehouse = inventory_service.get_default_warehouse(business=business)
-        except InventoryService.ValidationError as exc:
-            from rest_framework.exceptions import ValidationError
-            raise ValidationError(exc.errors) from exc
+        # A read tolerates a missing default warehouse: a business that has not
+        # been stocked yet has none, and its overview is then simply empty. The
+        # lookup is business-scoped so an unowned default cannot make it
+        # ambiguous.
+        default_warehouse = inventory_service.find_default_warehouse(business=business)
 
         variant_ids = [variant.id for variant in variants]
         offers = {
@@ -451,7 +450,7 @@ class VendorInventoryOverviewView(VendorInventoryAPIView):
 
         result = []
         for v in variants:
-            overview = inventory_service.serialize_variant_overview(v, default_warehouse)
+            overview = inventory_service.serialize_variant_overview(v, default_warehouse, business=business)
             offer = offers.get(v.id)
             discounted = variant_service.calculate_discounted_price(v, offer)
             result.append({

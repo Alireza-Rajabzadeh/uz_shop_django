@@ -84,7 +84,16 @@ class InventoryService:
         primary_category = Category.objects.filter(
             products=OuterRef("product_id")
         ).order_by("id").values("name")[:1]
-        queryset = ProductVariants.objects.select_related(
+        # An inventory list shows the records a scope actually has, not the
+        # whole catalog: a variant enters a business's inventory only once an
+        # Inventory row exists for it (a received supply or a stock
+        # adjustment). The aggregate scope spans every business's rows.
+        records = Inventory.objects.all()
+        if business is not None:
+            records = records.filter(business=business)
+        queryset = ProductVariants.objects.filter(
+            pk__in=records.values("variant_id")
+        ).select_related(
             "product"
         ).prefetch_related(
             "product__categories", "selections__attribute", "selections__option"
@@ -311,6 +320,19 @@ class InventoryService:
                 "inventory": [_('Inventory setup requires exactly one default warehouse.')]
             })
         return warehouses[0]
+
+    def find_default_warehouse(self, *, business=None):
+        """The scope's default warehouse, or ``None`` when there is not one.
+
+        Reads must tolerate a missing default warehouse: a business that has not
+        been stocked yet has no warehouse either, and its inventory list is a
+        valid empty list rather than an error. Writes keep using
+        ``get_default_warehouse``, which requires exactly one.
+        """
+        queryset = Warehouse.objects.select_related("status")
+        if business is not None:
+            queryset = queryset.filter(business=business)
+        return queryset.filter(is_default=True).order_by("id").first()
 
     @transaction.atomic
     def apply_variant_inventory(

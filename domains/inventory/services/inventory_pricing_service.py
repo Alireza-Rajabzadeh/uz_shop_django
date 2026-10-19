@@ -12,6 +12,7 @@ from domains.inventory.enums.VariantPriceHistorySourceEnum import (
     VariantPriceHistorySourceEnum,
 )
 from domains.inventory.models import (
+    Inventory,
     InventorySupply,
     VariantPriceHistory,
 )
@@ -413,7 +414,14 @@ class InventoryPricingService:
         has_pricing=None,
         ordering=None,
     ):
-        queryset = ProductVariants.objects.select_related("product")
+        # Pricing lists the scope's inventory records, not the whole catalog: a
+        # variant is priced only after it has been stocked.
+        records = Inventory.objects.all()
+        if business is not None:
+            records = records.filter(business=business)
+        queryset = ProductVariants.objects.filter(
+            pk__in=records.values("variant_id")
+        ).select_related("product")
         if search:
             queryset = queryset.filter(
                 Q(sku__icontains=search) | Q(product__name__icontains=search)

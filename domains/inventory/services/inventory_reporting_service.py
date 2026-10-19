@@ -17,6 +17,7 @@ from domains.marketplace.models import BusinessOffer
 
 from domains.catalog.models import ProductVariants
 from domains.inventory.models import (
+    Inventory,
     InventorySupply,
     InventorySupplyConsumption,
 )
@@ -171,7 +172,14 @@ class InventoryReportingService:
     def search_variants_for_report(
         self, *, business=None, search=None, category_id=None, strategy=None, ordering=None
     ):
-        queryset = ProductVariants.objects.select_related("product")
+        # Reports cover the scope's inventory records, not the whole catalog: a
+        # variant only appears once an Inventory row exists for it.
+        records = Inventory.objects.all()
+        if business is not None:
+            records = records.filter(business=business)
+        queryset = ProductVariants.objects.filter(
+            pk__in=records.values("variant_id")
+        ).select_related("product")
         if search:
             queryset = queryset.filter(
                 Q(sku__icontains=search) | Q(product__name__icontains=search)

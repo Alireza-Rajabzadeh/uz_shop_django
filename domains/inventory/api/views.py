@@ -1,3 +1,4 @@
+from django.db.models import Q
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import BasePermission, DjangoModelPermissions
@@ -43,6 +44,7 @@ from .serializers import (
     SupplyListSerializer,
     SupplyQuerySerializer,
     SupplyReceiveSerializer,
+    SupplyVariantContextSerializer,
     SupplyWriteSerializer,
     VariantPriceApplySerializer,
     VariantPriceHistorySerializer,
@@ -121,16 +123,14 @@ class InventoryVariantList(InventoryAPIView):
         query = InventoryVariantQuerySerializer(data=request.query_params)
         query.is_valid(raise_exception=True)
         business = resolve_business(request)
-        try:
-            # The aggregate scope has no single default warehouse to report;
-            # each row keeps its own stock totals.
-            warehouse = (
-                inventory_service.get_default_warehouse(business=business)
-                if business is not None
-                else None
-            )
-        except InventoryService.ValidationError as exc:
-            raise ValidationError(exc.errors) from exc
+        # A read never requires a default warehouse: the aggregate scope has no
+        # single one to report, and a business that has not been stocked yet has
+        # no warehouse either. The column is informational, so it is null then.
+        warehouse = (
+            inventory_service.find_default_warehouse(business=business)
+            if business is not None
+            else None
+        )
         variants = inventory_service.search_variants(
             business=business, **query.validated_data
         )
@@ -290,6 +290,35 @@ class InventoryBusinessOptions(LookupAPIView):
             }
             for business in businesses
         ])
+
+
+class InventoryVariantOptions(LookupAPIView):
+    """Catalog variants for the supply form's picker.
+
+    Supply is the entry point into inventory — a variant is stocked first and
+    priced afterwards — so this picker must offer variants that have no
+    Inventory row yet, unlike the records-only ``/inventory/variants`` list. It
+    is a lightweight, searchable, paginated projection of the catalog and is
+    deliberately business-independent: it names no stock.
+    """
+
+    def get(self, request):
+        search = request.query_params.get("search", "").strip()
+        variants = ProductVariants.objects.select_related("product").order_by("sku", "id")
+        if search:
+            variants = variants.filter(
+                Q(sku__icontains=search) | Q(product__name__icontains=search)
+            )
+        paginator = PageNumberPagination()
+        page = paginator.paginate_queryset(variants, request, view=self)
+        rows = [
+            {"id": variant.id, "sku": variant.sku, "product_name": variant.product.name}
+            for variant in page
+        ]
+        data = paginator.get_paginated_response(
+            SupplyVariantContextSerializer(rows, many=True).data
+        ).data
+        return api_response(True, "", data)
 
 
 class SupplyScopePermission(BasePermission):

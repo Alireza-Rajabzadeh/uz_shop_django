@@ -6,6 +6,7 @@ from .views import (
     InventoryReportSummaryView,
     InventoryReportVariantListView,
     InventoryVariantList,
+    InventoryVariantOptions,
     PricingListView,
     PricingStrategyOptions,
     SupplyCostTypeOptions,
@@ -24,6 +25,7 @@ from .views import (
 
 urlpatterns = [
     path("businesses", InventoryBusinessOptions.as_view()),
+    path("variant-options", InventoryVariantOptions.as_view()),
     path("variants", InventoryVariantList.as_view()),
     path("variants/<int:variant_id>", VariantInventoryDetail.as_view()),
     path("variants/<int:variant_id>/pricing", VariantPricingView.as_view()),

@@ -6,8 +6,8 @@ from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from domains.business.models import BusinessProfile
-from domains.catalog.models import Category, CategoryStatus, Product, ProductStatus, ProductVariants, VariantAttribute, VariantOption
-from domains.inventory.models import Warehouse, WarehouseStatus
+from domains.catalog.models import Category, CategoryStatus, Product, ProductStatus, ProductVariantStatus, ProductVariants, VariantAttribute, VariantOption
+from domains.inventory.models import Inventory, Warehouse, WarehouseStatus
 from domains.location.models import City, Country, State
 
 
@@ -170,3 +170,109 @@ class InventoryAPITests(APITestCase):
             f"/api/inventory/warehouses/{self.warehouse.id}?business_id={self.business.id}"
         )
         self.assertEqual(response.status_code, 400)
+
+
+class InventoryRecordScopeTests(APITestCase):
+    """Inventory lists read the scope's records, not the whole catalog.
+
+    A variant enters a scope only once an ``Inventory`` row exists for it (a
+    received supply or a stock adjustment), so an unstocked variant stays out of
+    the list. The supply form therefore needs a separate, records-free options
+    source to open that first supply.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_superuser(username="inventory-scope", password="password")
+        self.client.force_authenticate(self.user)
+        country = Country.objects.create(name="Scope Country", code="SC", phone_code="+1")
+        state = State.objects.create(name="Scope State", country=country)
+        city = City.objects.create(name="Scope City", state=state)
+        self.warehouse_status = WarehouseStatus.objects.create(name="scope-available")
+        self.business, _ = BusinessProfile.objects.get_or_create(
+            id=1,
+            defaults={"business_name": "Scope Business", "display_name": "Scope Business"},
+        )
+        self.warehouse = Warehouse.objects.create(
+            code="WH-SCOPE",
+            name="Scope Warehouse",
+            business=self.business,
+            city=city,
+            address="Scope address",
+            lat="0",
+            lng="0",
+            is_default=True,
+            status=self.warehouse_status,
+        )
+        category_status = CategoryStatus.objects.create(name="scope-active")
+        product_status = ProductStatus.objects.create(name="scope-pending")
+        variant_status = ProductVariantStatus.objects.create(name="scope-variant")
+        category = Category.objects.create(name="Scope Category", status=category_status)
+        self.product = Product.objects.create(name="Scope Product", status=product_status)
+        self.product.categories.add(category)
+        self.stocked = ProductVariants.objects.create(
+            product=self.product,
+            status=variant_status,
+            sku="SCOPE-STOCKED",
+            combination_key="S-BLK",
+        )
+        self.unstocked = ProductVariants.objects.create(
+            product=self.product,
+            status=variant_status,
+            sku="SCOPE-UNSTOCKED",
+            combination_key="S-WHT",
+        )
+        Inventory.objects.create(
+            business=self.business,
+            warehouse=self.warehouse,
+            variant=self.stocked,
+            inventory_type_id=1,
+            quantity=5,
+            sellable=5,
+            reserved=0,
+            min_stock=0,
+        )
+
+    def test_variant_list_returns_only_stocked_variants(self):
+        response = self.client.get(f"/api/inventory/variants?business_id={self.business.id}")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        ids = [row["variant"] for row in response.data["data"]["results"]]
+        self.assertEqual(ids, [self.stocked.id])
+
+    def test_variant_list_without_a_warehouse_is_empty_not_an_error(self):
+        Inventory.objects.all().delete()
+        self.warehouse.delete()
+
+        response = self.client.get(f"/api/inventory/variants?business_id={self.business.id}")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["data"]["count"], 0)
+
+    def test_variant_options_offer_unstocked_variants(self):
+        response = self.client.get("/api/inventory/variant-options")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        ids = [row["id"] for row in response.data["data"]["results"]]
+        self.assertIn(self.stocked.id, ids)
+        self.assertIn(self.unstocked.id, ids)
+
+    def test_variant_options_search_matches_sku(self):
+        response = self.client.get("/api/inventory/variant-options?search=SCOPE-UNSTOCKED")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        ids = [row["id"] for row in response.data["data"]["results"]]
+        self.assertEqual(ids, [self.unstocked.id])
+
+    def test_pricing_list_covers_only_stocked_variants(self):
+        response = self.client.get(f"/api/inventory/pricing?business_id={self.business.id}")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["data"]["count"], 1)
+
+    def test_report_variant_list_covers_only_stocked_variants(self):
+        response = self.client.get(
+            f"/api/inventory/reports/variants?business_id={self.business.id}"
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["data"]["count"], 1)

@@ -91,8 +91,22 @@ class VendorInventoryPricingTests(TestCase):
             combination_key="BLK-128",
         )
 
+    def _stock(self, *, variant=None, quantity=10, sellable=10):
+        """An Inventory row, which is what puts a variant in a scope's list."""
+        return Inventory.objects.create(
+            business=self.business,
+            warehouse=self.warehouse,
+            variant=variant or self.variant,
+            inventory_type_id=1,
+            quantity=quantity,
+            sellable=sellable,
+            reserved=0,
+            min_stock=0,
+        )
+
     def test_inventory_overview_reports_discounted_price(self):
         """GET /vendor/overview must price the row instead of raising."""
+        self._stock()
         BusinessOffer.objects.create(
             business=self.business,
             variant=self.variant,
@@ -116,6 +130,8 @@ class VendorInventoryPricingTests(TestCase):
 
     def test_inventory_overview_survives_variant_without_offer(self):
         """No offer means no discount, not an exception."""
+        self._stock()
+
         request = self.factory.get("/vendor/inventory/overview")
         force_authenticate(request, user=self.vendor)
         response = VendorInventoryOverviewView.as_view()(request)
@@ -125,9 +141,34 @@ class VendorInventoryPricingTests(TestCase):
         self.assertIsNone(row["price"])
         self.assertIsNone(row["discounted_price"])
 
+    def test_inventory_overview_lists_only_stocked_variants(self):
+        """A variant with no Inventory row stays out of the list.
+
+        The overview is the business's inventory records, not the catalog: a
+        variant enters it only once it has been stocked. A second variant in the
+        same business category proves the row is filtered by records, not by the
+        category scope alone.
+        """
+        self._stock()
+        unstocked = ProductVariants.objects.create(
+            product=self.product,
+            status=self.variant_status,
+            sku="OVW-SKU-2",
+            combination_key="WHT-128",
+        )
+
+        request = self.factory.get("/vendor/inventory/overview")
+        force_authenticate(request, user=self.vendor)
+        response = VendorInventoryOverviewView.as_view()(request)
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual([row["id"] for row in response.data["data"]], [self.variant.id])
+        self.assertNotEqual(unstocked.id, self.variant.id)
+
     def test_inventory_overview_ignores_unowned_default_warehouse(self):
         """Defaults are unique per business, so an unrelated default must not
         make the lookup ambiguous and fail the whole listing."""
+        self._stock()
         other_business = BusinessProfile.objects.create(
             business_name="Other Overview Business",
             display_name="Other Overview Business",
@@ -151,15 +192,21 @@ class VendorInventoryPricingTests(TestCase):
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(len(response.data["data"]), 1)
 
-    def test_inventory_overview_reports_missing_default_as_400(self):
-        """A service-level rule must surface as a 400, not a 500 traceback."""
+    def test_inventory_overview_tolerates_missing_default_warehouse(self):
+        """A business with no warehouse reads as empty, not as a 400.
+
+        The list is records-only, so a business that has not been stocked has no
+        rows; the default warehouse a row reports is informational, so its
+        absence must not fail the read.
+        """
         self.warehouse.delete()
 
         request = self.factory.get("/vendor/inventory/overview")
         force_authenticate(request, user=self.vendor)
         response = VendorInventoryOverviewView.as_view()(request)
 
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["data"], [])
 
     def test_variant_patch_persists_min_stock(self):
         """PATCH /vendor/variants/:id stores the submitted min_stock threshold."""
