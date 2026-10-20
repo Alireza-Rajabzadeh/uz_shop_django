@@ -107,6 +107,10 @@ class VariantStockWriteSerializer(ClosedSerializer):
         return attrs
 
 
+class VariantMarketplaceStatusWriteSerializer(ClosedSerializer):
+    is_active = serializers.BooleanField()
+
+
 class StrategySerializer(serializers.Serializer):
     id = serializers.IntegerField()
     code = serializers.CharField()
@@ -118,6 +122,11 @@ class InventoryTypeSerializer(serializers.Serializer):
     code = serializers.CharField()
     name = serializers.CharField()
     fa_name = serializers.CharField()
+
+
+class MarketplaceOfferStatusSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    is_active = serializers.BooleanField()
 
 
 class InventoryVariantDetailSerializer(serializers.Serializer):
@@ -134,6 +143,7 @@ class InventoryVariantDetailSerializer(serializers.Serializer):
     total_supply_quantity = serializers.IntegerField()
     inventory = NormalInventoryDetailSerializer(allow_null=True)
     serial_items = SerializedItemDetailSerializer(many=True, allow_null=True)
+    marketplace_offer = MarketplaceOfferStatusSerializer(allow_null=True)
 
 
 class InventoryVariantQuerySerializer(serializers.Serializer):

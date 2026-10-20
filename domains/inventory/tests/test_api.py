@@ -9,6 +9,7 @@ from domains.business.models import BusinessProfile
 from domains.catalog.models import Category, CategoryStatus, Product, ProductStatus, ProductVariantStatus, ProductVariants, VariantAttribute, VariantOption
 from domains.inventory.models import Inventory, Warehouse, WarehouseStatus
 from domains.location.models import City, Country, State
+from domains.marketplace.models import BusinessOffer, PricingStrategy
 
 
 class InventoryAPITests(APITestCase):
@@ -170,6 +171,134 @@ class InventoryAPITests(APITestCase):
             f"/api/inventory/warehouses/{self.warehouse.id}?business_id={self.business.id}"
         )
         self.assertEqual(response.status_code, 400)
+
+
+class InventoryMarketplaceStatusTests(APITestCase):
+    """The variant's status for one business is the offer's listing flag.
+
+    ``BusinessOffer.is_active`` is separate from the catalog-wide
+    ``ProductVariants.status``, so the admin detail exposes it, and the scoped
+    toggle refuses the aggregate scope and a missing offer.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_superuser(
+            username="offer-admin", password="password"
+        )
+        self.client.force_authenticate(self.user)
+        country = Country.objects.create(name="Offer Country", code="OC", phone_code="+1")
+        state = State.objects.create(name="Offer State", country=country)
+        city = City.objects.create(name="Offer City", state=state)
+        self.warehouse_status = WarehouseStatus.objects.create(name="offer-available")
+        self.business, _ = BusinessProfile.objects.get_or_create(
+            id=1,
+            defaults={
+                "business_name": "Offer Business",
+                "display_name": "Offer Business",
+            },
+        )
+        self.warehouse = Warehouse.objects.create(
+            code="WH-OFFER",
+            name="Offer Warehouse",
+            business=self.business,
+            city=city,
+            address="Offer address",
+            lat="0",
+            lng="0",
+            is_default=True,
+            status=self.warehouse_status,
+        )
+        category_status = CategoryStatus.objects.create(name="offer-active")
+        product_status = ProductStatus.objects.create(name="offer-pending")
+        category = Category.objects.create(name="Offer Category", status=category_status)
+        product = Product.objects.create(name="Offer Product", status=product_status)
+        product.categories.add(category)
+        attribute = VariantAttribute.objects.create(name="Offer Color")
+        option = VariantOption.objects.create(
+            attribute=attribute, name="Black", sku_code="OFRBLK"
+        )
+        response = self.client.post(
+            f"/api/catalog/products/{product.id}/variants",
+            {
+                "selections": [
+                    {"attribute_id": attribute.id, "option_id": option.id}
+                ],
+                "inventory": {"quantity": 5, "sellable": 5},
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.variant = ProductVariants.objects.get()
+        self.strategy, _ = PricingStrategy.objects.get_or_create(
+            code="latest", defaults={"name": "Latest", "fa_name": "آخرین"}
+        )
+
+    def create_offer(self, *, is_active=True):
+        return BusinessOffer.objects.create(
+            business=self.business,
+            variant=self.variant,
+            price=Decimal("100.00"),
+            cost_strategy=self.strategy,
+            is_active=is_active,
+        )
+
+    def status_url(self, *, business_id=None, variant_id=None):
+        scope = self.business.id if business_id is None else business_id
+        target = self.variant.id if variant_id is None else variant_id
+        return f"/api/inventory/variants/{target}/marketplace-status?business_id={scope}"
+
+    def test_detail_reports_the_business_offer_status(self):
+        self.create_offer(is_active=False)
+
+        response = self.client.get(
+            f"/api/inventory/variants/{self.variant.id}?business_id={self.business.id}"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data["data"]["marketplace_offer"],
+            {"id": BusinessOffer.objects.get().id, "is_active": False},
+        )
+
+    def test_detail_reports_no_offer_for_a_business_without_one(self):
+        response = self.client.get(
+            f"/api/inventory/variants/{self.variant.id}?business_id={self.business.id}"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.data["data"]["marketplace_offer"])
+
+    def test_toggle_flips_the_offer_listing_flag(self):
+        offer = self.create_offer(is_active=True)
+
+        response = self.client.patch(
+            self.status_url(), {"is_active": False}, format="json"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data["data"]["marketplace_offer_status"], "inactive"
+        )
+        offer.refresh_from_db()
+        self.assertFalse(offer.is_active)
+
+    def test_toggle_requires_an_existing_offer(self):
+        response = self.client.patch(
+            self.status_url(), {"is_active": False}, format="json"
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("is_active", response.data["errors"])
+
+    def test_toggle_refuses_the_aggregate_scope(self):
+        self.create_offer()
+
+        response = self.client.patch(
+            self.status_url(business_id="all"), {"is_active": False}, format="json"
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(BusinessOffer.objects.get().is_active)
 
 
 class InventoryRecordScopeTests(APITestCase):

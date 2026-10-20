@@ -14,6 +14,7 @@ from .views import (
     SupplyListCreate,
     SupplyReceive,
     VariantInventoryDetail,
+    VariantMarketplaceStatusView,
     VariantPricingApplyView,
     VariantPricingHistoryView,
     VariantPricingView,
@@ -28,6 +29,10 @@ urlpatterns = [
     path("variant-options", InventoryVariantOptions.as_view()),
     path("variants", InventoryVariantList.as_view()),
     path("variants/<int:variant_id>", VariantInventoryDetail.as_view()),
+    path(
+        "variants/<int:variant_id>/marketplace-status",
+        VariantMarketplaceStatusView.as_view(),
+    ),
     path("variants/<int:variant_id>/pricing", VariantPricingView.as_view()),
     path(
         "variants/<int:variant_id>/pricing/apply",

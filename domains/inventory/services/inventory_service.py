@@ -802,6 +802,16 @@ class InventoryService:
         inv_type = self._detect_inventory_type(variant, business=business)
         summary = self.get_summary(variant, business=business)
         inventory_type = self._get_inventory_type(variant, business=business)
+        # The marketplace listing flag is the variant's status *for one
+        # business* (BusinessOffer.is_active), separate from the catalog-wide
+        # ProductVariants.status. The aggregate scope has no single flag.
+        offer = None
+        if business is not None:
+            offer = (
+                BusinessOffer.objects.filter(variant=variant, business=business)
+                .only("id", "is_active")
+                .first()
+            )
         primary_category = variant.product.categories.order_by("id").first()
         total_supply_quantity = (
             InventorySupply.objects.filter(
@@ -831,6 +841,9 @@ class InventoryService:
                 "name": inventory_type.name,
                 "fa_name": inventory_type.fa_name,
             },
+            "marketplace_offer": (
+                {"id": offer.id, "is_active": offer.is_active} if offer else None
+            ),
         }
         if inv_type == "normal":
             inventories = Inventory.objects.select_related("warehouse__status").filter(

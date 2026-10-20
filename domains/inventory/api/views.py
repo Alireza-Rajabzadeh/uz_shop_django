@@ -16,6 +16,7 @@ from domains.inventory.services import (
     InventorySupplyService,
 )
 from domains.inventory.services.price_history_mongo import get_price_history as mongo_price_history
+from domains.marketplace.models import BusinessOffer
 from domains.users.auth import AdminJWTAuthentication
 
 from .scope import (
@@ -46,6 +47,7 @@ from .serializers import (
     SupplyReceiveSerializer,
     SupplyVariantContextSerializer,
     SupplyWriteSerializer,
+    VariantMarketplaceStatusWriteSerializer,
     VariantPriceApplySerializer,
     VariantPriceHistorySerializer,
     VariantPricingOverviewSerializer,
@@ -182,6 +184,37 @@ class VariantInventoryDetail(InventoryAPIView):
         except InventoryService.ValidationError as exc:
             raise ValidationError(exc.errors) from exc
         return api_response(True, "Stock updated.", InventoryVariantDetailSerializer(details).data)
+
+
+class VariantMarketplaceStatusView(InventoryAPIView):
+    """Toggle the variant's marketplace listing flag for one business.
+
+    ``BusinessOffer.is_active`` is the variant's status *for the selected
+    business*; the catalog-wide ``ProductVariants.status`` is a separate,
+    admin-owned lifecycle status changed from the catalog API. The offer must
+    already exist (pricing apply creates it), matching the vendor contract.
+    """
+
+    def patch(self, request, variant_id):
+        business = require_business(request)
+        serializer = VariantMarketplaceStatusWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        variant = ProductVariants.objects.filter(pk=variant_id).first()
+        if variant is None:
+            raise NotFound("Variant not found.")
+        offer = BusinessOffer.objects.filter(business=business, variant=variant).first()
+        if offer is None:
+            raise ValidationError({
+                "is_active": ["Create a BusinessOffer before updating marketplace status."]
+            })
+        is_active = serializer.validated_data["is_active"]
+        if offer.is_active != is_active:
+            offer.is_active = is_active
+            offer.save(update_fields=["is_active"])
+        return api_response(True, "Marketplace status updated.", {
+            "variant_id": variant.id,
+            "marketplace_offer_status": "active" if is_active else "inactive",
+        })
 
 
 class WarehouseAPIView(APIView):
