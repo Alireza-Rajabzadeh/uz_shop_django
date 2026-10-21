@@ -173,6 +173,11 @@ class InventoryVariantRowSerializer(serializers.Serializer):
     available = serializers.IntegerField()
     min_stock = serializers.IntegerField()
     low_stock = serializers.BooleanField()
+    price = serializers.CharField(allow_null=True)
+    offer_active = serializers.BooleanField()
+    discount_type = serializers.CharField(allow_null=True, allow_blank=True)
+    discount_value = serializers.CharField(allow_null=True)
+    suggested_price = serializers.CharField(allow_null=True)
     default_warehouse = WarehouseContextSerializer(allow_null=True)
 
 
@@ -425,6 +430,10 @@ class PricingListRowSerializer(serializers.Serializer):
     sku = serializers.CharField()
     product_name = serializers.CharField()
     current_price = serializers.DecimalField(max_digits=15, decimal_places=2)
+    discount_type = serializers.CharField(allow_null=True, allow_blank=True)
+    discount_value = serializers.DecimalField(
+        max_digits=12, decimal_places=2, allow_null=True
+    )
     cost_strategy = serializers.CharField(allow_null=True)
     expected_profit_percentage = serializers.DecimalField(
         max_digits=5, decimal_places=2, allow_null=True

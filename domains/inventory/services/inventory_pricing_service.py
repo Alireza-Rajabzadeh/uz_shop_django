@@ -374,6 +374,12 @@ class InventoryPricingService:
             "sku": variant.sku,
             "product_name": variant.product.name,
             "current_price": offer_price,
+            "discount_type": config.discount_type if config is not None else None,
+            "discount_value": (
+                self._quantized(config.discount_value)
+                if config is not None
+                else None
+            ),
             "latest_cost": self._quantized(latest_cost),
             "weighted_average_cost": self._quantized(weighted_average_cost),
             "fifo_next_cost": self._quantized(fifo_next_cost),
@@ -535,6 +541,8 @@ class InventoryPricingService:
             "sku": overview["sku"],
             "product_name": overview["product_name"],
             "current_price": overview["current_price"],
+            "discount_type": overview["discount_type"],
+            "discount_value": overview["discount_value"],
             "cost_strategy": overview["cost_strategy"],
             "expected_profit_percentage": overview["expected_profit_percentage"],
             "cost_basis": overview["cost_basis"],

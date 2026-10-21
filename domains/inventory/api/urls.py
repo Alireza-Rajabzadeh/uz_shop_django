@@ -2,6 +2,7 @@ from django.urls import path
 
 from .views import (
     InventoryBusinessOptions,
+    InventoryCategoryOptions,
     InventoryReportSupplyListView,
     InventoryReportSummaryView,
     InventoryReportVariantListView,
@@ -26,6 +27,7 @@ from .views import (
 
 urlpatterns = [
     path("businesses", InventoryBusinessOptions.as_view()),
+    path("categories", InventoryCategoryOptions.as_view()),
     path("variant-options", InventoryVariantOptions.as_view()),
     path("variants", InventoryVariantList.as_view()),
     path("variants/<int:variant_id>", VariantInventoryDetail.as_view()),

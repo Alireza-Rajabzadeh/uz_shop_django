@@ -6,7 +6,7 @@ from rest_framework.views import APIView
 
 from core.responses import api_response
 from domains.business.models import BusinessProfile
-from domains.catalog.models import ProductVariants
+from domains.catalog.models import Category, ProductVariants
 from domains.inventory.enums.InventorySupplyCostTypeEnum import InventorySupplyCostTypeEnum
 from domains.inventory.models import Warehouse, WarehouseStatus
 from domains.inventory.services import (
@@ -138,8 +138,31 @@ class InventoryVariantList(InventoryAPIView):
         )
         paginator = PageNumberPagination()
         page = paginator.paginate_queryset(variants, request, view=self)
+        # The marketplace price is per business; the aggregate scope has no
+        # single offer per variant, so it reports none.
+        offers = {}
+        pricing_overviews = {}
+        if business is not None:
+            offers = {
+                offer.variant_id: offer
+                for offer in BusinessOffer.objects.filter(
+                    business=business,
+                    variant_id__in=[item.id for item in page],
+                )
+            }
+            # The suggested price is part of the row preview, so reuse the
+            # pricing list's batched overview instead of recomputing per row.
+            pricing_overviews = pricing_service.get_pricing_overview_map(
+                page, business=business
+            )
         rows = [
-            inventory_service.serialize_variant_overview(item, warehouse, business=business)
+            inventory_service.serialize_variant_overview(
+                item,
+                warehouse,
+                business=business,
+                offer=offers.get(item.id),
+                pricing=pricing_overviews.get(item.id),
+            )
             for item in page
         ]
         data = paginator.get_paginated_response(InventoryVariantRowSerializer(rows, many=True).data).data
@@ -323,6 +346,64 @@ class InventoryBusinessOptions(LookupAPIView):
             }
             for business in businesses
         ])
+
+
+class InventoryCategoryOptions(APIView):
+    """Category choices for the inventory filter forms.
+
+    A named business answers with the root categories it is registered under
+    plus every descendant, so the filter can target a leaf category. The
+    aggregate scope does the same from every root. Options arrive in tree order
+    with a ``depth`` so the panel can indent children under their parent.
+    Products live in leaf categories, so ``search_variants`` still matches the
+    whole subtree of whatever the user picks.
+    """
+
+    authentication_classes = [AdminJWTAuthentication]
+    permission_classes = [InventoryScopePermission]
+
+    def get(self, request):
+        business = resolve_business(request)
+        if business is None:
+            root_ids = Category.objects.filter(
+                parent__isnull=True
+            ).values_list("id", flat=True)
+        else:
+            root_ids = business.categories.values_list("category_id", flat=True)
+        return api_response(True, "", self._tree(root_ids))
+
+    @staticmethod
+    def _tree(root_ids):
+        rows = list(
+            Category.objects.values("id", "name", "fa_name", "parent_id")
+        )
+        by_id = {row["id"]: row for row in rows}
+        children = {}
+        for row in rows:
+            children.setdefault(row["parent_id"], []).append(row)
+        for group in children.values():
+            group.sort(key=lambda row: row["id"])
+
+        options = []
+        visited = set()
+
+        def walk(category_id, depth):
+            if category_id in visited or category_id not in by_id:
+                return
+            visited.add(category_id)
+            row = by_id[category_id]
+            options.append({
+                "id": row["id"],
+                "name": row["name"],
+                "fa_name": row["fa_name"],
+                "depth": depth,
+            })
+            for child in children.get(category_id, []):
+                walk(child["id"], depth + 1)
+
+        for root_id in sorted(set(root_ids)):
+            walk(root_id, 0)
+        return options
 
 
 class InventoryVariantOptions(LookupAPIView):

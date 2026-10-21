@@ -104,7 +104,21 @@ class InventoryService:
         if product is not None:
             queryset = queryset.filter(product_id=product)
         if category is not None:
-            queryset = queryset.filter(product__categories__id=category).distinct()
+            # A business registers root categories while products live in leaf
+            # categories, so the filter covers the selected subtree.
+            category_ids = {category}
+            frontier = {category}
+            while frontier:
+                children = set(
+                    Category.objects.filter(parent_id__in=frontier).values_list(
+                        "id", flat=True
+                    )
+                ) - category_ids
+                category_ids.update(children)
+                frontier = children
+            queryset = queryset.filter(
+                product__categories__id__in=category_ids
+            ).distinct()
         if has_reserved is not None:
             queryset = (
                 queryset.filter(reserved_item_count__gt=0)
@@ -134,7 +148,7 @@ class InventoryService:
         field = ordering_map.get(requested.lstrip("-"), "sku")
         return queryset.order_by(f"-{field}" if descending else field, "id")
 
-    def serialize_variant_overview(self, variant, default_warehouse=None, business=None):
+    def serialize_variant_overview(self, variant, default_warehouse=None, business=None, offer=None, pricing=None):
         primary_category = variant.product.categories.order_by("id").first()
         # min_stock is summed per scope by annotate_variant_summaries, so the
         # aggregate scope and a named business share one source of truth.
@@ -169,6 +183,21 @@ class InventoryService:
             "low_stock": bool(
                 min_stock > 0
                 and 0 < variant.available_item_count <= min_stock
+            ),
+            # The marketplace price belongs to one business, so an aggregate
+            # read has no single offer to report.
+            "price": str(offer.price) if offer is not None else None,
+            "offer_active": bool(offer.is_active) if offer is not None else False,
+            "discount_type": offer.discount_type if offer is not None else None,
+            "discount_value": (
+                str(offer.discount_value)
+                if offer is not None and offer.discount_value is not None
+                else None
+            ),
+            "suggested_price": (
+                str(pricing["suggested_price"])
+                if pricing is not None and pricing.get("suggested_price") is not None
+                else None
             ),
             "default_warehouse": (
                 self.serialize_warehouse(default_warehouse)
