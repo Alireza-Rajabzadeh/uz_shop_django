@@ -26,6 +26,13 @@ class CartItem(models.Model):
         on_delete=models.CASCADE,
         related_name="cart_items",
     )
+    offer = models.ForeignKey(
+        "marketplace.BusinessOffer",
+        on_delete=models.SET_NULL,
+        related_name="cart_items",
+        null=True,
+        blank=True,
+    )
     quantity = models.PositiveIntegerField(default=1)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

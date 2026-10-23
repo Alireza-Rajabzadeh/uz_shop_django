@@ -1,5 +1,3 @@
-from decimal import Decimal
-
 from django.db.models import Prefetch
 
 from domains.catalog.models import Product, ProductDetails, ProductVariants
@@ -7,6 +5,11 @@ from domains.catalog.services.variant_service import VariantService
 from domains.files.services import FileService
 from domains.inventory.services import InventoryService
 from domains.marketplace.models import BusinessOffer
+from domains.marketplace.offer_selection import (
+    PREVIEW_LIMIT,
+    offer_summary,
+    public_offer_payload,
+)
 
 
 class StorefrontProductService:
@@ -37,6 +40,33 @@ class StorefrontProductService:
         })
         return payload
 
+    def get_variant_offers(self, slug, variant_id, *, page=1, page_size=20):
+        """Paginated seller offers for one variant.
+
+        Product detail only carries a short preview so a product with many
+        sellers does not inflate every response. This is the full list, using
+        the same deterministic ordering as ``attach_offers``.
+        """
+        product = self._get_product(slug)
+        variant = next(
+            (row for row in product.storefront_variants if row.id == variant_id),
+            None,
+        )
+        if variant is None:
+            raise Product.DoesNotExist
+        self._attach_offers([variant])
+        offers = list(getattr(variant, "_business_offers", []))
+        start = (page - 1) * page_size
+        return {
+            "count": len(offers),
+            "page": page,
+            "page_size": page_size,
+            "results": [
+                public_offer_payload(offer)
+                for offer in offers[start:start + page_size]
+            ],
+        }
+
     def _seo_payload(self, product):
         from domains.content.services import SEOService
         return SEOService.get_for("product", product.id)
@@ -47,7 +77,7 @@ class StorefrontProductService:
         from domains.content.services import LandingPageContentResolver
         return LandingPageContentResolver().resolve(json_description)
 
-    def get_content_items(self, ids):
+    def get_content_items(self, ids, *, include_unlisted=False):
         if not ids:
             return []
 
@@ -55,7 +85,7 @@ class StorefrontProductService:
             id__in=set(ids),
             status__name__iexact="active",
         )
-        items = self._content_items(products)
+        items = self._content_items(products, include_unlisted=include_unlisted)
         return [items[item_id] for item_id in ids if item_id in items]
 
     def _content_queryset(self):
@@ -78,7 +108,7 @@ class StorefrontProductService:
             )
         )
 
-    def _content_items(self, queryset):
+    def _content_items(self, queryset, *, include_unlisted=False):
         items = {}
         for product in queryset:
             category = self._primary_category(product)
@@ -89,6 +119,11 @@ class StorefrontProductService:
             except Product.DoesNotExist:
                 continue
             payload = self._base_payload(product)
+            if (
+                not include_unlisted
+                and payload["pricing"]["minimum_effective_price"] is None
+            ):
+                continue
             items[product.id] = {
                 "id": payload["id"],
                 "slug": payload["slug"],
@@ -120,7 +155,9 @@ class StorefrontProductService:
     def _suggestion_products(self, product, limit=15):
         from django.db.models import Q
         offer_ids = BusinessOffer.objects.filter(
-            Q(discount_type__isnull=False) & Q(discount_value__gt=0)
+            is_active=True,
+            discount_type__isnull=False,
+            discount_value__gt=0,
         ).values_list("variant_id", flat=True)
         queryset = (
             self._content_queryset()
@@ -185,34 +222,39 @@ class StorefrontProductService:
                 raise Product.DoesNotExist
 
     def _attach_offers(self, variants):
-        variant_ids = [v.id for v in variants]
-        offers = BusinessOffer.objects.filter(
-            variant_id__in=variant_ids,
-            is_active=True,
-        ).select_related("business")
-        offer_map = {}
-        for offer in offers:
-            offer_map.setdefault(offer.variant_id, []).append(offer)
-        for variant in variants:
-            variant._business_offers = offer_map.get(variant.id, [])
-            variant._business_offer = variant._business_offers[0] if variant._business_offers else None
+        from domains.marketplace.offer_selection import attach_offers
+
+        attach_offers(variants)
+
+    @staticmethod
+    def _available(variant):
+        return getattr(
+            variant, "_business_offer_available", variant.available_item_count
+        )
 
     def _base_payload(self, product):
         variants = product.storefront_variants
         self._attach_offers(variants)
+        listed_variants = [
+            row for row in variants if getattr(row, "_business_offer", None) is not None
+        ]
         default_variant = next(
-            (row for row in variants if row.available_item_count > 0),
-            variants[0] if variants else None,
+            (row for row in listed_variants if self._available(row) > 0),
+            listed_variants[0] if listed_variants else (variants[0] if variants else None),
         )
         effective_prices = [
-            self.variant_service.calculate_discounted_price(row) for row in variants
+            self.variant_service.calculate_discounted_price(row)
+            for row in listed_variants
         ]
-        prices = [
-            getattr(row._business_offer, "price", None) or Decimal("0")
-            for row in variants
+        prices = [row._business_offer.price for row in listed_variants]
+        listed_offers = [
+            offer
+            for row in listed_variants
+            for offer in getattr(row, "_business_offers", [])
         ]
         media = self._media_payload(product.storefront_media)
         primary_category = self._primary_category(product)
+        default_offer = getattr(default_variant, "_business_offer", None)
         return {
             "id": product.id,
             "slug": product.slug,
@@ -237,8 +279,9 @@ class StorefrontProductService:
                 "maximum_effective_price": max(effective_prices, default=None),
             },
             "availability": {
-                "in_stock": any(row.available_item_count > 0 for row in variants),
+                "in_stock": any(self._available(row) > 0 for row in listed_variants),
             },
+            "offers": offer_summary(listed_offers),
             "variant_options": self._variant_options(variants),
             "default_variant": (
                 {
@@ -247,7 +290,11 @@ class StorefrontProductService:
                     "effective_price": self.variant_service.calculate_discounted_price(
                         default_variant
                     ),
-                    "in_stock": default_variant.available_item_count > 0,
+                    "in_stock": self._available(default_variant) > 0,
+                    "selected_offer": (
+                        public_offer_payload(default_offer)
+                        if default_offer is not None else None
+                    ),
                 }
                 if default_variant else None
             ),
@@ -306,13 +353,22 @@ class StorefrontProductService:
 
     def _variant_payload(self, variant):
         offer = getattr(variant, "_business_offer", None)
+        offers = list(getattr(variant, "_business_offers", []))
         return {
             "id": variant.id,
             "price": getattr(offer, "price", None),
             "effective_price": self.variant_service.calculate_discounted_price(variant),
             "discount_type": getattr(offer, "discount_type", None),
             "discount_value": getattr(offer, "discount_value", None),
-            "in_stock": variant.available_item_count > 0,
+            "in_stock": self._available(variant) > 0,
+            "selected_offer": (
+                public_offer_payload(offer) if offer is not None else None
+            ),
+            "offer_summary": offer_summary(offers),
+            "offers": [
+                public_offer_payload(row)
+                for row in offers[:PREVIEW_LIMIT]
+            ],
             "selections": [
                 {
                     "attribute_id": row.attribute_id,

@@ -66,12 +66,17 @@ class BusinessPaymentService:
         return BusinessPaymentStatus.objects.get(name=name)
 
     @staticmethod
-    def has_available_channel():
+    def has_available_channel(business_id=None):
         methods = BusinessPaymentMethod.objects.filter(
             is_active=True
         ).prefetch_related("supported_channels__payment_channel")
         for method in methods:
             for support in method.supported_channels.all():
+                if (
+                    business_id is not None
+                    and support.payment_channel.business_id != business_id
+                ):
+                    continue
                 available, _ = BusinessPaymentService.method_availability(
                     method, support.payment_channel
                 )
@@ -108,7 +113,7 @@ class BusinessPaymentService:
 
     logo_payload = file_payload
 
-    def customer_methods_payload(self):
+    def customer_methods_payload(self, business_id=None):
         methods = BusinessPaymentMethod.objects.filter(
             is_active=True
         ).prefetch_related(
@@ -120,6 +125,11 @@ class BusinessPaymentService:
             reasons = []
             for support in method.supported_channels.all():
                 channel = support.payment_channel
+                if (
+                    business_id is not None
+                    and channel.business_id != business_id
+                ):
+                    continue
                 available, reason = self.method_availability(method, channel)
                 if not available:
                     if reason:
@@ -137,10 +147,10 @@ class BusinessPaymentService:
                 "icon": self.file_payload(method.icon_file),
                 "point_to_channel_field": method.point_to_channel_field,
                 "requires_documents": method.requires_documents,
-                "available": bool(channels) or method.code == "credit",
+                "available": bool(channels),
                 "reason": (
                     reasons[0] if reasons and not channels
-                    else "No available payment channel." if not channels and method.code != "credit"
+                    else "No available payment channel." if not channels
                     else None
                 ),
                 "channels": channels,
@@ -167,9 +177,12 @@ class BusinessPaymentService:
 
     @transaction.atomic
     def _expire_stale_order(self, business, customer, order_id):
+        filters = {"id": order_id, "customer": customer}
+        if hasattr(self.order_model, "business"):
+            filters["business"] = business
         order = self.order_model.objects.select_for_update().select_related(
             "status"
-        ).filter(id=order_id, customer=customer).first()
+        ).filter(**filters).first()
         if (
             order is None
             or order.status.name != "payment_pending"
@@ -186,9 +199,12 @@ class BusinessPaymentService:
         self, business, customer, order_id, *, payment_method_code,
         payment_channel_id, ref_number, resource_account_number, documents,
     ):
+        filters = {"id": order_id, "customer": customer}
+        if hasattr(self.order_model, "business"):
+            filters["business"] = business
         order = self.order_model.objects.select_for_update().select_related(
             "status"
-        ).filter(id=order_id, customer=customer).first()
+        ).filter(**filters).first()
         if order is None:
             raise self.NotFoundError("Order not found.")
         if order.status.name == "paid":

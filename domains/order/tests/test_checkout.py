@@ -159,19 +159,113 @@ class CheckoutFixture(TestCase):
         inventory.save(update_fields=["quantity", "sellable"])
         return variant, offer, inventory
 
-    def filled_cart(self, variant, quantity=1):
+    def filled_cart(self, variant, quantity=1, offer=None):
         # A customer owns at most one basket, so a fixture that fills twice
         # refills the same one instead of fighting the unique constraint.
         cart, _ = Cart.objects.get_or_create(
             customer=self.customer, defaults={"address_info": {"city_name": "Ci"}}
         )
         cart.items.all().delete()
-        cart.items.create(variant=variant, quantity=quantity)
+        cart.items.create(variant=variant, quantity=quantity, offer=offer)
         return cart
 
 
 class CheckoutTests(CheckoutFixture):
     # ───────────────────────── happy paths ─────────────────────────
+
+    def test_checkout_reserves_stock_from_the_offer_seller(self):
+        variant, offer, inventory = self.make_variant(
+            self.make_product(), price="100.00", available=8, quantity=10
+        )
+        second_business = BusinessProfile.objects.create(
+            vendor=None,
+            business_name="Checkout Second Business",
+            display_name="Checkout Second Business",
+        )
+        second_warehouse = Warehouse.objects.create(
+            code="WH-CO-2",
+            name="Checkout Second Warehouse",
+            business=second_business,
+            city=self.city,
+            address="Second test address",
+            lat="0",
+            lng="0",
+            is_default=True,
+            status=WarehouseStatus.objects.create(name="available-for-checkout-2"),
+        )
+        BusinessOffer.objects.create(
+            business=second_business,
+            variant=variant,
+            price=Decimal("80.00"),
+        )
+        second_inventory = Inventory.objects.create(
+            business=second_business,
+            variant=variant,
+            warehouse=second_warehouse,
+            quantity=2,
+            sellable=2,
+            reserved=0,
+            min_stock=0,
+        )
+        self.filled_cart(variant, quantity=1)
+
+        order = self.service.checkout_from_cart(self.customer)
+
+        item = order.items.get()
+        self.assertEqual(item.unit_price, Decimal("80.00"))
+        reservation = item.reservations.get()
+        self.assertEqual(reservation.linked_inventory_id, second_inventory.id)
+        second_inventory.refresh_from_db()
+        inventory.refresh_from_db()
+        self.assertEqual(second_inventory.reserved, 1)
+        self.assertEqual(inventory.reserved, 0)
+
+    def test_checkout_uses_the_pinned_cart_offer(self):
+        variant, pinned_offer, pinned_inventory = self.make_variant(
+            self.make_product(), price="100.00", available=8, quantity=10
+        )
+        second_business = BusinessProfile.objects.create(
+            vendor=None,
+            business_name="Checkout Pinned Business",
+            display_name="Checkout Pinned Business",
+        )
+        second_warehouse = Warehouse.objects.create(
+            code="WH-CO-PIN",
+            name="Checkout Pinned Warehouse",
+            business=second_business,
+            city=self.city,
+            address="Pinned checkout address",
+            lat="0",
+            lng="0",
+            is_default=True,
+            status=WarehouseStatus.objects.create(name="available-for-checkout-pin"),
+        )
+        BusinessOffer.objects.create(
+            business=second_business,
+            variant=variant,
+            price=Decimal("80.00"),
+        )
+        second_inventory = Inventory.objects.create(
+            business=second_business,
+            variant=variant,
+            warehouse=second_warehouse,
+            quantity=2,
+            sellable=2,
+            reserved=0,
+            min_stock=0,
+        )
+        self.filled_cart(variant, quantity=4, offer=pinned_offer)
+
+        order = self.service.checkout_from_cart(self.customer)
+
+        item = order.items.get()
+        self.assertEqual(item.unit_price, Decimal("100.00"))
+        reservation = item.reservations.get()
+        self.assertEqual(reservation.linked_inventory_id, pinned_inventory.id)
+        pinned_inventory.refresh_from_db()
+        second_inventory.refresh_from_db()
+        self.assertEqual(pinned_inventory.reserved, 4)
+        self.assertEqual(second_inventory.reserved, 0)
 
     def test_checkout_snapshots_offer_price_and_reserves_normal_stock(self):
         variant, offer, inventory = self.make_variant(self.make_product())

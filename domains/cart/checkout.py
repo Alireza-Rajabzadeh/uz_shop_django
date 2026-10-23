@@ -21,7 +21,13 @@ from domains.files.services import FileService
 from domains.inventory.services import InventoryService
 from domains.shipment.services import ShipmentCalculationService
 
-from .pricing import attach_offers, line_snapshot, summary_map, validate_item
+from .pricing import (
+    apply_pinned_offers,
+    attach_offers,
+    line_snapshot,
+    summary_map,
+    validate_item,
+)
 
 
 class CheckoutError(Exception):
@@ -77,7 +83,7 @@ class BaseCheckoutService:
     def cart_service(self):
         raise NotImplementedError("A checkout flow must say which basket it reads.")
 
-    def _has_payment_channel(self):
+    def _has_payment_channel(self, business=None):
         """May an order be created at all?"""
         return True
 
@@ -168,8 +174,12 @@ class BaseCheckoutService:
             .order_by("id")
         )
 
-    def _validate_lines(self, items):
+    def _attach_line_offers(self, items):
         attach_offers([item.variant for item in items])
+        apply_pinned_offers(items)
+
+    def _validate_lines(self, items):
+        self._attach_line_offers(items)
         summary = summary_map([item.variant for item in items])
         errors = []
         for item in items:
@@ -185,33 +195,34 @@ class BaseCheckoutService:
         The inventory service owns the reservation algorithm; this only maps
         its failure shape onto the contract this service exposes to views.
         """
+        offer = getattr(variant, "_business_offer", None)
         try:
-            return self.inventory_service.reserve_variant_stock(variant, quantity)
+            return self.inventory_service.reserve_variant_stock(
+                variant,
+                quantity,
+                business=offer.business if offer is not None else None,
+            )
         except InventoryService.ValidationError as exc:
             raise self.ValidationError(exc.errors) from exc
 
     # ───────────────────────── the sequence ─────────────────────────
 
-    @transaction.atomic
-    def checkout_from_cart(self, customer):
+    def _cart_for_checkout(self, customer):
         cart = self.cart_service().get_or_create_cart(customer)
         if not cart.address_info:
             raise self.ValidationError({
                 "address": [_("Set a delivery address before checkout.")]
             })
-        if not self._has_payment_channel():
-            raise self.ValidationError({
-                "payment": [_("No active payment channel is available.")]
-            })
         items = self._load_lines(cart)
         if not items:
             raise self.ValidationError({"cart": [_("The cart is empty.")]})
-        self._validate_lines(items)
+        return cart, items
 
+    def _create_order(self, customer, address_info, items):
         order = self.order_model.objects.create(
             customer=customer,
             status=self._status(self.STATUS_PAYMENT_PENDING),
-            address_info=cart.address_info,
+            address_info=address_info,
             subtotal=Decimal("0.00"),
             discount_amount=Decimal("0.00"),
             shipping_original_amount=Decimal("0.00"),
@@ -249,7 +260,17 @@ class BaseCheckoutService:
             "total_amount",
             "reservation_expires_at",
         ])
+        return order
 
+    @transaction.atomic
+    def checkout_from_cart(self, customer):
+        cart, items = self._cart_for_checkout(customer)
+        if not self._has_payment_channel():
+            raise self.ValidationError({
+                "payment": [_("No active payment channel is available.")]
+            })
+        self._validate_lines(items)
+        order = self._create_order(customer, cart.address_info, items)
         for item in items:
             item.delete()
         return order

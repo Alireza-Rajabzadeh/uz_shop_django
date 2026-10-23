@@ -11,11 +11,11 @@ class MarketplaceCartService(BaseCartService):
     would be a rule that could drift from the shop cart. A marketplace-specific
     rule belongs here as an override, never as a copy.
 
-    Pricing reads the same active offers the shop cart reads, because the
-    business is a singleton today and the cart deliberately carries no
-    business of its own. Checkout is what pins each order to the business its
-    offers came from.
+    Pricing selects the best active offer for each line unless the customer
+    explicitly pinned one. The pin lets the storefront keep the selected
+    seller when the same variant is offered by several businesses.
     """
 
     cart_model = MarketplaceCart
     item_model = MarketplaceCartItem
+    offer_field = "offer"

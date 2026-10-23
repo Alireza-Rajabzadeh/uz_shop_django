@@ -30,3 +30,18 @@ class MarketplacePaymentService(BusinessPaymentService):
 
     def order_service(self):
         return MarketplaceOrderService()
+
+    def confirm_manual_payment_for_customer(
+        self, customer, order_id, **kwargs
+    ):
+        """Resolve the order's seller before using the shared payment flow."""
+        order = (
+            self.order_model.objects.select_related("business")
+            .filter(id=order_id, customer=customer)
+            .first()
+        )
+        if order is None:
+            raise self.NotFoundError("Order not found.")
+        return self.confirm_manual_payment(
+            order.business, customer, order_id, **kwargs
+        )

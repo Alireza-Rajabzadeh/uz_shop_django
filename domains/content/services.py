@@ -101,9 +101,11 @@ class LandingPageService:
 
 
 class LandingPageContentResolver:
-    def __init__(self, loaders=None):
+    def __init__(self, loaders=None, *, include_unlisted=False):
         self.loaders = loaders or {
-            "products": lambda ids: StorefrontProductService().get_content_items(ids),
+            "products": lambda ids: StorefrontProductService().get_content_items(
+                ids, include_unlisted=include_unlisted
+            ),
             "categories": lambda ids: CategoryService().get_storefront_content_items(ids),
         }
 
@@ -113,6 +115,10 @@ class LandingPageContentResolver:
             "products": lambda ids: ProductService().get_authoring_content_items(ids),
             "categories": lambda ids: CategoryService().get_authoring_content_items(ids),
         })
+
+    @classmethod
+    def for_preview(cls):
+        return cls(include_unlisted=True)
 
     def resolve(self, content):
         resolved = deepcopy(content)

@@ -12,6 +12,7 @@ from domains.shipment.services import ShipmentCalculationService
 from .address import AddressInfoService
 from .models import Cart, CartItem
 from .pricing import (
+    apply_pinned_offers,
     attach_offers,
     availability,
     load_variants,
@@ -35,6 +36,7 @@ class BaseCartService:
 
     cart_model = None
     item_model = None
+    offer_field = None
 
     inventory_service = InventoryService()
     shipment_service = ShipmentCalculationService()
@@ -105,39 +107,171 @@ class BaseCartService:
             self._item_payload(item, variant)
             for item, variant in self._attach_variants(cart_items)
         ]
-        subtotal = sum(Decimal(p["unit_price"]) * p["quantity"] for p in payloads)
-        discount_amount = sum(Decimal(v) for v in (p["line_discount"] for p in payloads))
-        shipment = self.shipment_service.calculate(cart)
+        seller_groups = self._seller_groups(payloads, cart)
+        two_places = Decimal("0.01")
+        subtotal = sum(
+            (Decimal(group["totals"]["subtotal"]) for group in seller_groups),
+            Decimal("0.00"),
+        )
+        discount_amount = sum(
+            (Decimal(group["totals"]["discount_amount"]) for group in seller_groups),
+            Decimal("0.00"),
+        )
+        shipping_amount = sum(
+            (Decimal(group["totals"]["shipping_amount"]) for group in seller_groups),
+            Decimal("0.00"),
+        )
+        shipment_original = sum(
+            (
+                Decimal(group["totals"]["shipment"]["original_price"])
+                for group in seller_groups
+            ),
+            Decimal("0.00"),
+        )
+        shipment_final = sum(
+            (
+                Decimal(group["totals"]["shipment"]["final_price"])
+                for group in seller_groups
+            ),
+            Decimal("0.00"),
+        )
         return {
             "id": cart.id,
             "address_info": cart.address_info,
             "items": payloads,
+            "seller_groups": seller_groups,
             "totals": {
-                "subtotal": str(subtotal),
-                "discount_amount": str(discount_amount),
-                "shipping_amount": str(shipment.final_price),
-                "shipment": shipment.payload(),
+                "subtotal": str(subtotal.quantize(two_places)),
+                "discount_amount": str(discount_amount.quantize(two_places)),
+                "shipping_amount": str(shipping_amount.quantize(two_places)),
+                "shipment": {
+                    "original_price": str(shipment_original.quantize(two_places)),
+                    "final_price": str(shipment_final.quantize(two_places)),
+                },
                 "total_amount": str(
-                    subtotal - discount_amount + shipment.final_price
+                    (subtotal - discount_amount + shipping_amount).quantize(
+                        two_places
+                    )
                 ),
             },
             "cart_valid": bool(payloads) and all(p["valid"] for p in payloads),
         }
 
+    def _seller_groups(self, payloads, cart):
+        """Split the basket into the independent seller checkouts it implies.
+
+        A cart can hold items from several businesses, but an order belongs to
+        exactly one. The group tells the storefront what it may check out now
+        and which seller is still missing a payment method.
+        """
+        grouped = {}
+        for payload in payloads:
+            business = payload.get("business")
+            key = business["id"] if business else "unknown"
+            grouped.setdefault(key, {"business": business, "items": []})
+            grouped[key]["items"].append(payload)
+
+        groups = []
+        for group in grouped.values():
+            business = group["business"]
+            items = group["items"]
+            subtotal = sum(
+                Decimal(item["unit_price"]) * item["quantity"] for item in items
+            )
+            discount_amount = sum(
+                Decimal(item["line_discount"]) for item in items
+            )
+            shipment = self.shipment_service.calculate(cart)
+            valid = all(item["valid"] for item in items)
+            payment_available = bool(
+                business and self._business_payment_available(business["id"])
+            )
+            if not valid:
+                checkout_status = "unavailable"
+            elif business is None:
+                checkout_status = "unavailable"
+            elif not payment_available:
+                checkout_status = "awaiting_payment_method"
+            else:
+                checkout_status = "ready"
+            groups.append({
+                "business": business,
+                "item_ids": [item["id"] for item in items],
+                "valid": valid,
+                "payment_available": payment_available,
+                "checkout_status": checkout_status,
+                "totals": {
+                    "subtotal": str(subtotal),
+                    "discount_amount": str(discount_amount),
+                    "shipping_amount": str(shipment.final_price),
+                    "shipment": shipment.payload(),
+                    "total_amount": str(
+                        subtotal - discount_amount + shipment.final_price
+                    ),
+                },
+            })
+        return groups
+
+    @staticmethod
+    def _business_payment_available(business_id):
+        from domains.business_payments.services import BusinessPaymentService
+
+        return BusinessPaymentService.has_available_channel(business_id=business_id)
+
     def _attach_variants(self, items):
         variant_ids = [item.variant_id for item in items]
         variants = load_variants(variant_ids)
         self._attach_offers(variants.values())
-        return [(item, variants.get(item.variant_id)) for item in items]
+        attached = [(item, variants.get(item.variant_id)) for item in items]
+        self._apply_pinned_offers(attached)
+        return attached
 
     def _attach_offers(self, variants):
         """Scope the offers a cart line is priced from.
 
         A flow that already knows which business it is shopping overrides
-        this; the shop flow prices from every active offer because the
-        business is a singleton.
+        this; the shop flow searches every active offer and selects the best
+        in-stock one.
         """
         attach_offers(variants)
+
+    def _resolve_offer(self, variant, offer_id):
+        """Return the active offer a shop line may pin, or raise on a bad id."""
+        if offer_id is None or not self.offer_field:
+            return None
+        from domains.marketplace.models import BusinessOffer
+
+        try:
+            return BusinessOffer.objects.get(
+                id=offer_id,
+                variant=variant,
+                is_active=True,
+            )
+        except BusinessOffer.DoesNotExist as exc:
+            raise self.ValidationError({
+                "offer_id": [_("Selected seller is not available for this variant.")]
+            }) from exc
+
+    def _optional_offer(self, variant, offer_id):
+        """Best-effort variant of :meth:`_resolve_offer` for cart syncing.
+
+        A guest cart can outlive the seller it pinned. Merging the rest of the
+        line is better than rejecting the whole cart at sign-in, so an invalid
+        pin falls back to the automatic selection.
+        """
+        try:
+            return self._resolve_offer(variant, offer_id)
+        except self.ValidationError:
+            return None
+
+    def _apply_pinned_offers(self, attached):
+        from domains.marketplace.offer_selection import select_offer
+
+        for item, variant in attached:
+            offer_id = getattr(item, "offer_id", None)
+            if variant is None or offer_id is None:
+                continue
+            select_offer(variant, offer_id)
 
     def _product_thumbnail(self, product):
         media = getattr(product, "storefront_media", None)
@@ -159,12 +293,24 @@ class BaseCartService:
         except FileService.Error:
             return None
 
+    def _business_payload(self, variant):
+        """The seller a cart line is priced from, as public storefront data."""
+        offer = getattr(variant, "_business_offer", None)
+        if offer is None:
+            return None
+        from domains.marketplace.offer_selection import public_business_payload
+
+        return public_business_payload(offer.business)
+
     def _item_payload(self, item, variant):
         if variant is None:
             return self._empty_payload(item)
         product = variant.product
         product_status = product.status.name.casefold()
-        enough_stock = variant.available_item_count >= item.quantity
+        available = getattr(
+            variant, "_business_offer_available", variant.available_item_count
+        )
+        enough_stock = available >= item.quantity
         status, action, valid, reason = availability(
             product_status, enough_stock=enough_stock
         )
@@ -176,6 +322,8 @@ class BaseCartService:
         return {
             "id": item.id,
             "variant_id": item.variant_id,
+            "offer_id": getattr(item, "offer_id", None),
+            "business": self._business_payload(variant),
             "quantity": item.quantity,
             "product_id": product.id,
             "product_name": product.name,
@@ -186,7 +334,7 @@ class BaseCartService:
             **pricing,
             "line_discount": str((unit_discount * item.quantity).quantize(two_places)),
             "line_total": str((effective_price * item.quantity).quantize(two_places)),
-            "available": variant.available_item_count,
+            "available": available,
             "selections": [
                 {
                     "attribute_id": selection.attribute_id,
@@ -211,7 +359,9 @@ class BaseCartService:
     def _variant_payload(self, variant, quantity, *, cap_quantity=False):
         product = variant.product
         product_status = product.status.name.casefold()
-        available = variant.available_item_count
+        available = getattr(
+            variant, "_business_offer_available", variant.available_item_count
+        )
         requested_quantity = quantity
         quantity_capped = False
 
@@ -228,6 +378,8 @@ class BaseCartService:
 
         return {
             "variant_id": variant.id,
+            "offer_id": getattr(getattr(variant, "_business_offer", None), "id", None),
+            "business": self._business_payload(variant),
             "requested_quantity": requested_quantity,
             "quantity": quantity,
             "quantity_capped": quantity_capped,
@@ -259,6 +411,8 @@ class BaseCartService:
     def _unavailable_payload(variant_id, quantity):
         return {
             "variant_id": variant_id,
+            "offer_id": None,
+            "business": None,
             "requested_quantity": quantity,
             "quantity": 0,
             "quantity_capped": False,
@@ -287,6 +441,8 @@ class BaseCartService:
         return {
             "id": item.id,
             "variant_id": item.variant_id,
+            "offer_id": getattr(item, "offer_id", None),
+            "business": None,
             "quantity": item.quantity,
             "product_id": None,
             "product_name": "",
@@ -317,20 +473,23 @@ class BaseCartService:
     # ───────────────────────── mutations ─────────────────────────
 
     @transaction.atomic
-    def add(self, customer, variant_id, quantity=1):
+    def add(self, customer, variant_id, quantity=1, offer_id=None):
         if quantity < 1:
             raise self.ValidationError({"quantity": [_("Quantity must be greater than zero.")]})
         try:
             variant = ProductVariants.objects.get(id=variant_id)
         except ProductVariants.DoesNotExist as exc:
             raise self.ValidationError({"variant_id": [_("Variant not found.")]}) from exc
+        offer = self._resolve_offer(variant, offer_id)
         cart = self.get_or_create_cart(customer)
-        item, _created = self.item_model.objects.get_or_create(
+        item, created = self.item_model.objects.get_or_create(
             cart=cart, variant=variant, defaults={"quantity": quantity}
         )
-        if not _created:
+        if not created:
             item.quantity = quantity
-            item.save()
+        if offer is not None:
+            setattr(item, self.offer_field, offer)
+        item.save()
         return self._render_item(item)
 
     @transaction.atomic
@@ -383,12 +542,15 @@ class BaseCartService:
                     "suggested_action": "wishlist",
                 })
                 continue
-            item, created = self.item_model.objects.get_or_create(
+            offer = self._optional_offer(variant, entry.get("offer_id"))
+            item, _created = self.item_model.objects.get_or_create(
                 cart=cart, variant=variant, defaults={"quantity": quantity}
             )
-            if not created:
+            if not _created:
                 item.quantity = quantity
-                item.save()
+            if offer is not None:
+                setattr(item, self.offer_field, offer)
+            item.save()
         return {
             "cart": self.describe_existing(cart),
             "removed": removed,
@@ -408,7 +570,7 @@ class BaseCartService:
         item = self._get_item(customer, item_id)
         item.delete()
 
-    def validate_variant(self, variant_id, quantity=1):
+    def validate_variant(self, variant_id, quantity=1, offer_id=None):
         """Validate a variant and requested quantity without a cart.
 
         Used by the guest flow; nothing is persisted.
@@ -426,11 +588,20 @@ class BaseCartService:
         ).prefetch_related("selections__attribute", "selections__option")
         variant = self.inventory_service.annotate_variant_summaries(queryset)[0]
         self._attach_offers([variant])
+        if offer_id is not None and self.offer_field:
+            from domains.marketplace.offer_selection import select_offer
+
+            if select_offer(variant, offer_id) is None:
+                return self._unavailable_payload(variant_id, quantity)
         return self._variant_payload(variant, quantity, cap_quantity=True)
 
     def validate_items(self, items):
         return [
-            self.validate_variant(entry["variant_id"], entry.get("quantity", 1))
+            self.validate_variant(
+                entry["variant_id"],
+                entry.get("quantity", 1),
+                entry.get("offer_id"),
+            )
             for entry in items
         ]
 
@@ -497,8 +668,8 @@ class BaseCartService:
 
 
 class CartService(BaseCartService):
-    """The shop cart: one basket per customer, priced by the singleton
-    business's active offers."""
+    """The shop cart: one basket per customer, priced by the selected offer."""
 
     cart_model = Cart
     item_model = CartItem
+    offer_field = "offer"

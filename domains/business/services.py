@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.db.models import Q
 
 from .models import BusinessCategory, BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessWorkingDay, RecordStatus, Visibility
 
@@ -6,13 +7,32 @@ from .models import BusinessCategory, BusinessPhone, BusinessProfile, BusinessSo
 class BusinessService:
     @staticmethod
     def public_data():
+        profile = BusinessProfile.objects.first()
+        if profile is None:
+            return {
+                "profile": None,
+                "phones": BusinessPhone.objects.none(),
+                "social_links": BusinessSocialLink.objects.none(),
+                "working_hours": BusinessWorkingDay.objects.none(),
+            }
+        working_hours = BusinessWorkingDay.objects.filter(vendor__isnull=True)
+        if profile.vendor_id:
+            working_hours = BusinessWorkingDay.objects.filter(
+                Q(vendor=profile.vendor) | Q(vendor__isnull=True)
+            )
         return {
-            "profile": BusinessProfile.objects.first(),
-            "phones": BusinessPhone.objects.filter(status=RecordStatus.ACTIVE, visibility=Visibility.PUBLIC),
+            "profile": profile,
+            "phones": BusinessPhone.objects.filter(
+                Q(business=profile) | Q(business__isnull=True),
+                status=RecordStatus.ACTIVE,
+                visibility=Visibility.PUBLIC,
+            ),
             "social_links": BusinessSocialLink.objects.filter(
-                status=RecordStatus.ACTIVE, visibility=Visibility.PUBLIC
+                Q(business=profile) | Q(business__isnull=True),
+                status=RecordStatus.ACTIVE,
+                visibility=Visibility.PUBLIC,
             ).select_related("social_media", "icon__file__status"),
-            "working_hours": BusinessWorkingDay.objects.all(),
+            "working_hours": working_hours,
         }
 
     @staticmethod

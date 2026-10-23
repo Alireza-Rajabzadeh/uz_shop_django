@@ -673,7 +673,7 @@ class BaseOrderService(BaseCheckoutService):
                 "documents__file__status"
             ).order_by("id")
         ]
-        return {
+        payload = {
             "id": order.id,
             "status": order.status.name,
             "address_info": order.address_info,
@@ -697,6 +697,10 @@ class BaseOrderService(BaseCheckoutService):
             "payments": payments,
             "created_at": order.created_at.isoformat(),
         }
+        business = self._business_ref(order)
+        if business is not None:
+            payload["business"] = business
+        return payload
 
 
 def file_url(file):

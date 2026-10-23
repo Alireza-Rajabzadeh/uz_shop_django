@@ -2,6 +2,7 @@ import re
 
 from rest_framework import serializers
 
+from domains.business.models import BusinessProfile
 from domains.catalog.models import (
     Brand,
     Category,
@@ -58,6 +59,7 @@ class StorefrontProductSearchQuerySerializer(serializers.Serializer):
     )
     detail_filters = FacetSelectionSerializer(many=True, required=False, default=list)
     variant_filters = FacetSelectionSerializer(many=True, required=False, default=list)
+    business = serializers.IntegerField(min_value=1, required=False)
     price_min = serializers.DecimalField(
         max_digits=15, decimal_places=2, min_value=0, required=False
     )
@@ -78,7 +80,7 @@ class StorefrontProductSearchQuerySerializer(serializers.Serializer):
     @classmethod
     def from_query_params(cls, query_params):
         scalar_fields = (
-            "q", "price_min", "price_max", "in_stock", "on_sale",
+            "q", "business", "price_min", "price_max", "in_stock", "on_sale",
             "ordering", "page", "page_size", "include_facets",
         )
         payload = {
@@ -109,6 +111,13 @@ class StorefrontProductSearchQuerySerializer(serializers.Serializer):
                 })
         attrs["category_ids"] = self._resolve_ids(Category, attrs["category_ids"], "category")
         attrs["brand_ids"] = self._resolve_ids(Brand, attrs["brand_ids"], "brand")
+        business_id = attrs.get("business")
+        if business_id is not None and not BusinessProfile.objects.filter(
+            id=business_id
+        ).exists():
+            raise serializers.ValidationError({
+                "business": "Selected seller does not exist."
+            })
         self._validate_facet_options(attrs["detail_filters"], detail=True)
         self._validate_facet_options(attrs["variant_filters"], detail=False)
         return attrs
@@ -172,6 +181,7 @@ class StorefrontProductSearchQuerySerializer(serializers.Serializer):
                 FacetSelection(item["field_id"], tuple(item["value_ids"]))
                 for item in data["variant_filters"]
             ),
+            business_id=data.get("business"),
             minimum_price=data.get("price_min"),
             maximum_price=data.get("price_max"),
             in_stock=data.get("in_stock"),
@@ -181,3 +191,10 @@ class StorefrontProductSearchQuerySerializer(serializers.Serializer):
             page_size=data["page_size"],
             include_facets=data["include_facets"],
         )
+
+
+class StorefrontOfferQuerySerializer(serializers.Serializer):
+    page = serializers.IntegerField(min_value=1, required=False, default=1)
+    page_size = serializers.IntegerField(
+        min_value=1, max_value=100, required=False, default=20
+    )

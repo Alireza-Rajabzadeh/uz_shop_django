@@ -252,6 +252,43 @@ class BusinessAPITests(APITestCase):
         self.assertEqual(listed.data["data"]["results"][0]["vendor"], vendor.id)
 
     @patch("domains.business.api.views.CacheService")
+    def test_public_only_returns_the_platform_profiles_contact_rows(self, cache_class):
+        cache_class.return_value.get_public.return_value = None
+        cache_class.return_value.get_or_set_public.side_effect = lambda key, builder: builder()[0]
+        other = BusinessProfile.objects.create(
+            vendor=None,
+            business_name="Other Business",
+            display_name="Other Business",
+        )
+        BusinessPhone.objects.create(
+            business=self.profile, key="mine", title="Mine", number="1"
+        )
+        BusinessPhone.objects.create(
+            business=other, key="other", title="Other", number="2"
+        )
+        BusinessSocialLink.objects.create(
+            business=self.profile,
+            key="mine-social",
+            title="Mine",
+            url="https://mine.example.com",
+        )
+        BusinessSocialLink.objects.create(
+            business=other,
+            key="other-social",
+            title="Other",
+            url="https://other.example.com",
+        )
+
+        response = self.client.get("/api/business/public")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.data["data"]
+        self.assertEqual([item["key"] for item in data["phones"]], ["mine"])
+        self.assertEqual(
+            [item["key"] for item in data["social_links"]], ["mine-social"]
+        )
+
+    @patch("domains.business.api.views.CacheService")
     def test_public_filters_private_inactive_and_notes(self, cache_class):
         cache_class.return_value.get_public.return_value = None
         cache_class.return_value.get_or_set_public.side_effect = lambda key, builder: builder()[0]

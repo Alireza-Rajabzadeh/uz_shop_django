@@ -32,28 +32,35 @@ def storefront_media():
 
 
 def attach_offers(variants, *, business=None):
-    """Attach ``_business_offers`` / ``_business_offer`` to each variant.
+    """Attach the best active offer to each variant.
 
     Pricing is read from ``_business_offer``, so every flow that touches a
-    price must attach first. ``variants`` must be re-iterable. ``business``
-    scopes the lookup for the marketplace flow; leaving it unset reads the
-    singleton business's offers, which is what the shop flow means.
+    price must attach first. ``business`` scopes the lookup for the
+    marketplace flow; leaving it unset searches every active offer, which is
+    what the shop flow does now that several businesses can list one variant.
     """
-    from domains.marketplace.models import BusinessOffer
+    from domains.marketplace.offer_selection import attach_offers as select_offers
 
-    variant_ids = [variant.id for variant in variants]
-    queryset = BusinessOffer.objects.filter(
-        variant_id__in=variant_ids, is_active=True
-    ).select_related("business")
-    if business is not None:
-        queryset = queryset.filter(business=business)
-    offer_map = {}
-    for offer in queryset:
-        offer_map.setdefault(offer.variant_id, []).append(offer)
-    for variant in variants:
-        attached = offer_map.get(variant.id, [])
-        variant._business_offers = attached
-        variant._business_offer = attached[0] if attached else None
+    select_offers(variants, business=business)
+
+
+def apply_pinned_offers(items):
+    """Use the seller a cart line pinned instead of the automatic best offer.
+
+    ``attach_offers`` always selects the cheapest in-stock seller. A shop cart
+    line may carry ``offer_id`` because the customer picked a seller on the
+    product page; applying it here keeps display, totals, checkout and stock
+    reservation on that same offer. Marketplace cart rows have no such field,
+    so this is a no-op there.
+    """
+    from domains.marketplace.offer_selection import select_offer
+
+    for item in items:
+        offer_id = getattr(item, "offer_id", None)
+        variant = getattr(item, "variant", None)
+        if offer_id is None or variant is None:
+            continue
+        select_offer(variant, offer_id)
 
 
 def annotated_variants(variant_ids):
@@ -160,8 +167,14 @@ def validate_item(item, summary):
         return False, _("Item %(sku)s is not available for purchase.") % {
             "sku": variant.sku
         }
-    summary_row = summary.get(variant.id)
-    available = summary_row.available_item_count if summary_row else 0
+    if getattr(variant, "_business_offer", None) is None:
+        return False, _("Item %(sku)s is not available for purchase.") % {
+            "sku": variant.sku
+        }
+    available = getattr(variant, "_business_offer_available", None)
+    if available is None:
+        summary_row = summary.get(variant.id)
+        available = summary_row.available_item_count if summary_row else 0
     if available < item.quantity:
         return False, _("Item %(sku)s does not have enough stock.") % {
             "sku": variant.sku

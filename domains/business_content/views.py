@@ -95,6 +95,7 @@ class LandingPageBySlug(APIView):
     permission_classes = [AllowAny]
     allowed_statuses = ()
     content_field = ""
+    resolver_factory = LandingPageContentResolver
 
     def get(self, request, slug):
         try:
@@ -105,7 +106,7 @@ class LandingPageBySlug(APIView):
         if page.status not in self.allowed_statuses:
             raise NotFound(_("Landing page not found."))
 
-        page.selected_content = LandingPageContentResolver().resolve(
+        page.selected_content = self.resolver_factory().resolve(
             getattr(page, self.content_field)
         )
         return api_response(data=LandingPageContentSerializer(page).data)
@@ -114,6 +115,7 @@ class LandingPageBySlug(APIView):
 class LandingPagePreview(LandingPageBySlug):
     allowed_statuses = (LandingPage.Status.DRAFT, LandingPage.Status.PUBLISHED)
     content_field = "draft_content"
+    resolver_factory = LandingPageContentResolver.for_preview
 
 
 class PublicLandingPage(LandingPageBySlug):
@@ -171,6 +173,7 @@ class PageBySlug(APIView):
     permission_classes = [AllowAny]
     allowed_statuses = ()
     content_field = ""
+    resolver_factory = LandingPageContentResolver
 
     def get(self, request, slug):
         try:
@@ -181,7 +184,7 @@ class PageBySlug(APIView):
         if page.status not in self.allowed_statuses:
             raise NotFound(_("Page not found."))
 
-        page.selected_content = LandingPageContentResolver().resolve(
+        page.selected_content = self.resolver_factory().resolve(
             getattr(page, self.content_field)
         )
         return api_response(data=PageContentSerializer(page).data)
@@ -190,6 +193,7 @@ class PageBySlug(APIView):
 class PagePreview(PageBySlug):
     allowed_statuses = (Page.Status.DRAFT, Page.Status.PUBLISHED)
     content_field = "draft_content"
+    resolver_factory = LandingPageContentResolver.for_preview
 
 
 class PublicPage(PageBySlug):

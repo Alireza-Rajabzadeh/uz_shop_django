@@ -30,6 +30,7 @@ Run directly from `back/`:
 | `python manage.py makemigrations` | Generate migrations |
 | `python manage.py seed` | Seed development/reference data |
 | `python manage.py seed_categories` | Idempotently load the canonical category taxonomy |
+| `python manage.py seed_vendor_marketplace --vendors 100` | Generate development vendors, complete businesses, inventory supplies, and marketplace offers |
 | `python manage.py purge_changed_type_units --older-than-days 90` | Purge expired `changed_type` units left by an inventory type conversion |
 | `pip install -r scripts/requirements-digikala-discovery.txt` | Install Playwright+Chromium deps for Digikala mapping discovery |
 | `python scripts/discover_all_categories.py` | Discover/merge Digikala mappings one by one |
@@ -216,13 +217,17 @@ The marketplace domain owns per-business variant pricing through `BusinessOffer`
 - `cost_strategy` is a `PROTECT` foreign key to `PricingStrategy` (`marketplace_pricing_strategy`, default id 1 = `latest`), seeded by `marketplace.0007` from `domains/marketplace/data/pricing_strategies.py`. The row holds `code`, `name`, `fa_name`, and a `description` content-component document (`{components: [{id, key, version, props}]}`) that the panels render as the per-strategy user guide through their existing content registry.
 - `PricingStrategy` is reference data: seed-only, with no admin or vendor write path, so adding a strategy requires a `VariantCostStrategyEnum` member, a seed row, a `InventoryPricingService._calculate_basis()` branch, and a new migration. The enum remains the validation vocabulary for request codes; the table only supplies display data. `domains.marketplace.tests_pricing_strategy` asserts the two never drift apart.
 - Code strings are the API contract in both directions. Only the persistence layer resolves them to rows (`MarketplacePricingService.resolve_strategies` used by `create_offer` / `update_offer`, and `InventoryPricingService._strategy_row`); readers emit `offer.cost_strategy.code`. `OfferPriceHistory.cost_strategy` keeps its own `CharField` code snapshot so the audit trail does not move with the reference data.
-- Reading pricing: callers attach `_business_offer` to variant objects via a batched lookup, then read from `offer.price`, `offer.discount_type`, `offer.discount_value`.
+- Reading pricing: callers attach offers to variant objects via `domains.marketplace.offer_selection.attach_offers()`. It attaches `_business_offers` best-first and `_business_offer` as the selected offer, then reads from `offer.price`, `offer.discount_type`, `offer.discount_value`. Selection prefers offers whose business has available stock, then the lowest effective price, then `business_id` / `offer.id` for a deterministic tie-break. `_business_offer_available` carries the selected business's available units.
 - Writing pricing: `InventoryPricingService.apply_price()` writes to `BusinessOffer.price` and creates `VariantPriceHistory` snapshots. `GET .../variants/<id>/pricing` accepts optional `cost_strategy` / `expected_profit_percentage` query params to calculate a suggested price from unsaved values without writing anything.
 - `VariantService.calculate_discounted_price(variant, offer=None)` accepts an optional offer parameter and reads price/discount from it.
-- Cart, order, storefront, and search backends must attach `_business_offer` to variant objects before reading pricing.
+- Cart, order, storefront, and search backends must attach offers before reading pricing. Cart validation and checkout reserve stock from the selected offer's business, not from the first inventory row across every business.
+- A shop `CartItem` can pin the offer the customer chose on the product page through its nullable `offer` FK. `POST /api/cart/items`, `/cart/sync`, `/cart/merge`, and `/cart/validate` accept an optional `offer_id`; cart payloads return `offer_id`. `BaseCartService` re-applies the pin after `attach_offers()`, and checkout applies it before validation and reservation, so display, totals, and stock all stay on that seller. A retired pin makes the line unavailable instead of silently switching sellers; sync falls back to automatic selection only for a stale guest pin.
 - The Digikala import pipeline no longer writes pricing to variants. Pricing is applied separately via inventory pricing.
-- Product search price filters (`price_operator`, `price`, `price_min`, `price_max`) filter on `BusinessOffer.price` with `is_active=True`.
-- The storefront search API (`/api/catalog/storefront/products`) serves pricing from `BusinessOffer` through `StorefrontProductService`.
+- Product search price filters (`price_min`, `price_max`) and `price_asc` / `price_desc` ordering use the annotated lowest in-stock effective price with `is_active=True`. The search price facet reports the same effective-price range. Product-level `in_stock` also means "an active offer has available units", not merely "inventory exists somewhere".
+- The storefront search API (`/api/catalog/storefront/products`) computes minimum pricing and seller counts directly in `PostgresProductSearchBackend`; product detail and cart use `offer_selection.attach_offers()`. Both price subqueries order offers in-stock-first, then by effective price and `business_id`/`offer.id`, so search and detail agree.
+- Storefront offer payloads live in `domains.marketplace.offer_selection.public_offer_payload()`: `{id, business: {id, name, logo_url, availability_status}, price, effective_price, discount_type, discount_value, available, in_stock}`. Do not reuse the admin `BusinessOfferSerializer` here; it exposes cost/profit fields.
+- Product detail serializes the selected offer, a five-offer preview, and `offer_summary` per variant, plus product-level seller counts under `offers`. `GET /api/catalog/storefront/products/<slug>/variants/<variant_id>/offers` serves the full paginated seller list. Search accepts `business=<id>` and returns `offers.seller_count` / `offers.in_stock_seller_count`.
+- `BusinessProfile.status` is not yet a storefront eligibility gate; `BusinessOffer.is_active` remains the only listing flag. Banned or confirmation-await sellers can still appear if an active offer exists. Enforce status before treating seller identity as a trust signal.
 
 ### Marketplace Orders
 
@@ -433,6 +438,7 @@ from the cached rows for the overview; `sync_points()` is what repairs drift.
 - Pair data normalization with database constraints when introducing canonical formats.
 - Keep seeders idempotent and clearly development-only.
 - The seed command creates location, canonical categories, catalog/inventory reference data, marketplace pricing-strategy reference data, vendor club activities and point-transaction types, and customer fixtures, but no generated test catalog, admin account, stock, product variants, or notification provider.
+- `seed_vendor_marketplace --vendors 100` is the opt-in generator for a large, deterministic marketplace sample: one complete vendor and business per index, root-category assignments, a default warehouse, inventory supplies, and marketplace offers. It reuses the imported catalog and adds a curated catalog only for roots the import does not cover. It is idempotent, development-only, and all fixture vendor accounts share the printed test password.
 - Canonical category IDs start at `1001`; category seeding updates those IDs without deleting pre-existing categories.
 
 Run focused tests while developing, then broader tests for shared infrastructure or cross-domain changes. Important suites include:

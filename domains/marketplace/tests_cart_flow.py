@@ -175,7 +175,9 @@ class MarketplaceCartServiceTests(TestCase):
         payload = MarketplaceCartService().describe_cart(self.customer)
 
         # Only published offers are attached, so the line falls back to zero
-        # rather than to the offer that stopped being published.
+        # and is not purchasable rather than silently pricing from the offer
+        # that stopped being published.
         self.assertEqual(Decimal(payload["items"][0]["unit_price"]), Decimal("0"))
         self.assertEqual(Decimal(payload["items"][0]["effective_price"]), Decimal("0"))
-        self.assertEqual(payload["cart_valid"], True)
+        self.assertFalse(payload["cart_valid"])
+        self.assertFalse(payload["items"][0]["valid"])

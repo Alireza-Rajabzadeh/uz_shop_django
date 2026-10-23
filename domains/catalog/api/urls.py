@@ -18,6 +18,7 @@ from .storefront import (
     StorefrontProductDetail,
     StorefrontProductQuickView,
     StorefrontProductSearch,
+    StorefrontProductVariantOffers,
     StorefrontStaticData,
 )
 from .vendor_product_review_views import (
@@ -34,6 +35,10 @@ urlpatterns = [
     path(
         "storefront/products/<str:slug>/quick-view",
         StorefrontProductQuickView.as_view(),
+    ),
+    path(
+        "storefront/products/<str:slug>/variants/<int:variant_id>/offers",
+        StorefrontProductVariantOffers.as_view(),
     ),
     path("storefront/products/<str:slug>", StorefrontProductDetail.as_view()),
     # Brands

@@ -9,6 +9,7 @@ from domains.catalog.services import StorefrontProductService
 
 from .static_data import STATIC_DATA_HANDLERS
 from .storefront_serializers import (
+    StorefrontOfferQuerySerializer,
     StorefrontProductSearchQuerySerializer,
     StorefrontStaticDataQuerySerializer,
 )
@@ -84,3 +85,37 @@ class StorefrontProductDetail(APIView):
         except Product.DoesNotExist as exc:
             raise NotFound("Product not found.") from exc
         return api_response(True, "", data)
+
+
+class StorefrontProductVariantOffers(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request, slug, variant_id):
+        serializer = StorefrontOfferQuerySerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        try:
+            data = StorefrontProductService().get_variant_offers(
+                slug,
+                variant_id,
+                page=serializer.validated_data["page"],
+                page_size=serializer.validated_data["page_size"],
+            )
+        except Product.DoesNotExist as exc:
+            raise NotFound("Product variant not found.") from exc
+        data["next"] = (
+            self._page_url(request, data["page"] + 1)
+            if data["page"] * data["page_size"] < data["count"]
+            else None
+        )
+        data["previous"] = (
+            self._page_url(request, data["page"] - 1)
+            if data["page"] > 1 else None
+        )
+        return api_response(True, "", data)
+
+    @staticmethod
+    def _page_url(request, page):
+        query = request.query_params.copy()
+        query["page"] = page
+        return request.build_absolute_uri(f"{request.path}?{query.urlencode()}")

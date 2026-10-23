@@ -16,6 +16,7 @@ class ProductSearchCriteria:
     brand_ids: tuple[int, ...] = ()
     detail_filters: tuple[FacetSelection, ...] = ()
     variant_filters: tuple[FacetSelection, ...] = ()
+    business_id: int | None = None
     minimum_price: Decimal | None = None
     maximum_price: Decimal | None = None
     in_stock: bool | None = None

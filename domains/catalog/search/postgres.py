@@ -5,17 +5,21 @@ from django.db.models import (
     BooleanField,
     Case,
     Count,
+    DecimalField,
     Exists,
     F,
     IntegerField,
+    Max,
+    Min,
     OuterRef,
     Prefetch,
     Q,
     Subquery,
+    Sum,
     Value,
     When,
 )
-from django.db.models.functions import Coalesce, Lower, Replace
+from django.db.models.functions import Coalesce, Lower, Replace, Round
 
 from domains.catalog.models import (
     Category,
@@ -96,7 +100,10 @@ class PostgresProductSearchBackend:
     def _base_queryset(self, criteria):
         queryset = self._public_products()
         if not criteria.query:
-            return queryset.annotate(search_rank=Value(0.0))
+            queryset = queryset.annotate(search_rank=Value(0.0))
+            return self._annotate_price_fields(queryset).filter(
+                minimum_effective_price__isnull=False
+            )
 
         query_text = normalize_search_text(criteria.query)
         vector = (
@@ -124,7 +131,7 @@ class PostgresProductSearchBackend:
             Q(normalized_attribute__icontains=query_text)
             | Q(normalized_option__icontains=query_text)
         )
-        return queryset.annotate(
+        queryset = queryset.annotate(
             normalized_name=normalized_text_expression("name"),
             normalized_brand=normalized_text_expression("brand__name"),
             normalized_category=normalized_text_expression("primary_category_name"),
@@ -140,6 +147,89 @@ class PostgresProductSearchBackend:
             | Exists(matching_details)
             | Exists(matching_variants)
         )
+        return self._annotate_price_fields(queryset).filter(
+            minimum_effective_price__isnull=False
+        )
+
+    @staticmethod
+    def _effective_price_expression():
+        price = F("price")
+        return Round(
+            Case(
+                When(
+                    discount_type="percentage",
+                    discount_value__isnull=False,
+                    then=price - price * F("discount_value") / Value(Decimal("100")),
+                ),
+                When(
+                    discount_type="fixed",
+                    discount_value__isnull=False,
+                    then=price - F("discount_value"),
+                ),
+                default=price,
+                output_field=DecimalField(max_digits=15, decimal_places=2),
+            ),
+            2,
+        )
+
+    @staticmethod
+    def _offer_available_expression():
+        """Available units for one offer's ``(variant, business)`` pair.
+
+        Correlated against a ``BusinessOffer`` row. Summed across warehouses
+        so a seller with stock in any one warehouse counts as available.
+        """
+        from domains.inventory.models import Inventory
+
+        inventory = (
+            Inventory.objects.filter(
+                variant_id=OuterRef("variant_id"),
+                business_id=OuterRef("business_id"),
+            )
+            .values("variant_id")
+            .annotate(
+                value=(
+                    Coalesce(Sum("sellable"), Value(0))
+                    - Coalesce(Sum("reserved"), Value(0))
+                )
+            )
+            .values("value")
+        )
+        return Coalesce(
+            Subquery(inventory[:1]),
+            Value(0),
+            output_field=IntegerField(),
+        )
+
+    @classmethod
+    def _annotate_price_fields(cls, queryset):
+        from domains.marketplace.models import BusinessOffer
+
+        offers = (
+            BusinessOffer.objects.filter(
+                variant__product_id=OuterRef("pk"),
+                variant__status__name__iexact="active",
+                is_active=True,
+            )
+            .annotate(
+                _available=cls._offer_available_expression(),
+                _effective_price=cls._effective_price_expression(),
+            )
+            .order_by(
+                Case(
+                    When(_available__gt=0, then=Value(0)),
+                    default=Value(1),
+                    output_field=IntegerField(),
+                ),
+                "_effective_price",
+                "business_id",
+                "id",
+            )
+        )
+        return queryset.annotate(
+            minimum_price=Subquery(offers.values("price")[:1]),
+            minimum_effective_price=Subquery(offers.values("_effective_price")[:1]),
+        )
 
     def _apply_filters(self, queryset, criteria, excluded=None):
         excluded = excluded or ""
@@ -149,6 +239,14 @@ class PostgresProductSearchBackend:
             ).distinct()
         if criteria.brand_ids and excluded != "brand":
             queryset = queryset.filter(brand_id__in=criteria.brand_ids)
+        if criteria.minimum_price is not None and excluded != "price":
+            queryset = queryset.filter(
+                minimum_effective_price__gte=criteria.minimum_price
+            )
+        if criteria.maximum_price is not None and excluded != "price":
+            queryset = queryset.filter(
+                minimum_effective_price__lte=criteria.maximum_price
+            )
 
         for selection in criteria.detail_filters:
             if excluded == f"detail:{selection.field_id}":
@@ -170,8 +268,18 @@ class PostgresProductSearchBackend:
             )
             queryset = queryset.filter(Exists(matching))
 
+        if criteria.business_id is not None:
+            from domains.marketplace.models import BusinessOffer
+
+            matching = BusinessOffer.objects.filter(
+                variant__product_id=OuterRef("pk"),
+                variant__status__name__iexact="active",
+                business_id=criteria.business_id,
+                is_active=True,
+            )
+            queryset = queryset.filter(Exists(matching))
         if criteria.in_stock is not None and excluded != "availability":
-            queryset = queryset.annotate(_filter_in_stock=Exists(self._available_variants()))
+            queryset = queryset.annotate(_filter_in_stock=Exists(self._available_offers()))
             queryset = queryset.filter(_filter_in_stock=criteria.in_stock)
         return queryset
 
@@ -189,17 +297,26 @@ class PostgresProductSearchBackend:
                     pending.append(child_id)
         return selected
 
-    def _available_variants(self):
-        variants = ProductVariants.objects.filter(product_id=OuterRef("pk"))
-        return self.inventory_service.annotate_variant_summaries(variants).filter(
-            available_item_count__gt=0
+    def _available_offers(self):
+        from domains.marketplace.models import BusinessOffer
+
+        return (
+            BusinessOffer.objects.filter(
+                variant__product_id=OuterRef("pk"),
+                variant__status__name__iexact="active",
+                is_active=True,
+            )
+            .annotate(_available=self._offer_available_expression())
+            .filter(_available__gt=0)
         )
 
     @staticmethod
     def _sale_variants():
         from domains.marketplace.models import BusinessOffer
         offer_variant_ids = BusinessOffer.objects.filter(
-            discount_value__gt=0
+            variant__status__name__iexact="active",
+            is_active=True,
+            discount_value__gt=0,
         ).exclude(
             discount_type__isnull=True
         ).values_list("variant_id", flat=True)
@@ -219,10 +336,36 @@ class PostgresProductSearchBackend:
             variants = variants.filter(Exists(matching))
         return variants.order_by("id")
 
+    @classmethod
+    def _seller_count_expression(cls, *, in_stock):
+        from domains.marketplace.models import BusinessOffer
+
+        offers = BusinessOffer.objects.filter(
+            variant__product_id=OuterRef("pk"),
+            variant__status__name__iexact="active",
+            is_active=True,
+        )
+        if in_stock:
+            offers = offers.annotate(
+                _available=cls._offer_available_expression()
+            ).filter(_available__gt=0)
+        return Coalesce(
+            Subquery(
+                offers.values("variant__product_id")
+                .annotate(count=Count("business_id", distinct=True))
+                .values("count")[:1],
+                output_field=IntegerField(),
+            ),
+            Value(0),
+            output_field=IntegerField(),
+        )
+
     def _annotate_result_fields(self, queryset, criteria):
         queryset = queryset.annotate(
-            in_stock=Exists(self._available_variants()),
+            in_stock=Exists(self._available_offers()),
             on_sale=Exists(self._sale_variants()),
+            seller_count=self._seller_count_expression(in_stock=False),
+            in_stock_seller_count=self._seller_count_expression(in_stock=True),
         )
         if criteria.variant_filters:
             exact = self._exact_variants(criteria)
@@ -246,6 +389,10 @@ class PostgresProductSearchBackend:
         exact_prefix = ["-exact_combination"] if criteria.variant_filters else []
         if criteria.ordering == "name":
             ordering = ["name", "id"]
+        elif criteria.ordering == "price_asc":
+            ordering = [F("minimum_effective_price").asc(nulls_last=True), "id"]
+        elif criteria.ordering == "price_desc":
+            ordering = [F("minimum_effective_price").desc(nulls_last=True), "id"]
         else:
             ordering = ["-in_stock", "-search_rank", "id"]
         return queryset.order_by(*exact_prefix, *ordering)
@@ -288,8 +435,23 @@ class PostgresProductSearchBackend:
                 if product.brand_id else None
             ),
             "thumbnail_url": thumbnail_url,
-            "pricing": {},
+            "pricing": {
+                "minimum_price": (
+                    str(product.minimum_price)
+                    if product.minimum_price is not None
+                    else None
+                ),
+                "minimum_effective_price": (
+                    str(product.minimum_effective_price)
+                    if product.minimum_effective_price is not None
+                    else None
+                ),
+            },
             "availability": {"in_stock": product.in_stock},
+            "offers": {
+                "seller_count": product.seller_count,
+                "in_stock_seller_count": product.in_stock_seller_count,
+            },
             "on_sale": product.on_sale,
             "variant_match": {
                 "exact_combination": product.exact_combination,
@@ -367,12 +529,28 @@ class PostgresProductSearchBackend:
         }
 
     def _price_facet(self, base, criteria):
+        bounds = base.aggregate(
+            minimum=Min("minimum_effective_price"),
+            maximum=Max("minimum_effective_price"),
+        )
         return {
             "type": "range",
-            "minimum": None,
-            "maximum": None,
-            "selected_minimum": criteria.minimum_price,
-            "selected_maximum": criteria.maximum_price,
+            "minimum": (
+                str(bounds["minimum"]) if bounds["minimum"] is not None else None
+            ),
+            "maximum": (
+                str(bounds["maximum"]) if bounds["maximum"] is not None else None
+            ),
+            "selected_minimum": (
+                str(criteria.minimum_price)
+                if criteria.minimum_price is not None
+                else None
+            ),
+            "selected_maximum": (
+                str(criteria.maximum_price)
+                if criteria.maximum_price is not None
+                else None
+            ),
         }
 
     def _detail_facets(self, base, criteria):
@@ -481,7 +659,7 @@ class PostgresProductSearchBackend:
 
     def _boolean_facet(self, base, criteria, name):
         products = self._apply_filters(base, criteria, name)
-        subquery = self._available_variants() if name == "availability" else self._sale_variants()
+        subquery = self._available_offers() if name == "availability" else self._sale_variants()
         count = products.annotate(matches=Exists(subquery)).filter(matches=True).order_by().count()
         selected = criteria.in_stock if name == "availability" else criteria.on_sale
         return {"type": "boolean", "count": count, "selected": selected}

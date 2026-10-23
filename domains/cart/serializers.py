@@ -21,6 +21,7 @@ class AdminCartListQuerySerializer(serializers.Serializer):
 
 class CartItemAddSerializer(serializers.Serializer):
     variant_id = serializers.IntegerField()
+    offer_id = serializers.IntegerField(required=False, allow_null=True)
     quantity = serializers.IntegerField(required=False, default=1, min_value=1)
 
 
@@ -30,6 +31,7 @@ class CartItemQuantitySerializer(serializers.Serializer):
 
 class CartSyncItemSerializer(serializers.Serializer):
     variant_id = serializers.IntegerField()
+    offer_id = serializers.IntegerField(required=False, allow_null=True)
     quantity = serializers.IntegerField(required=False, default=1, min_value=1)
 
 
