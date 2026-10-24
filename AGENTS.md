@@ -31,6 +31,7 @@ Run directly from `back/`:
 | `python manage.py seed` | Seed development/reference data |
 | `python manage.py seed_categories` | Idempotently load the canonical category taxonomy |
 | `python manage.py seed_vendor_marketplace --vendors 100` | Generate development vendors, complete businesses, inventory supplies, and marketplace offers |
+| `python manage.py seed_business_payment_channels` | Give every existing business a card-to-card and a deposit-to-account payment channel so the vendor payment flow is testable (`--dry-run`, `--limit`, `--business-id`) |
 | `python manage.py purge_changed_type_units --older-than-days 90` | Purge expired `changed_type` units left by an inventory type conversion |
 | `pip install -r scripts/requirements-digikala-discovery.txt` | Install Playwright+Chromium deps for Digikala mapping discovery |
 | `python scripts/discover_all_categories.py` | Discover/merge Digikala mappings one by one |
@@ -439,6 +440,7 @@ from the cached rows for the overview; `sync_points()` is what repairs drift.
 - Keep seeders idempotent and clearly development-only.
 - The seed command creates location, canonical categories, catalog/inventory reference data, marketplace pricing-strategy reference data, vendor club activities and point-transaction types, and customer fixtures, but no generated test catalog, admin account, stock, product variants, or notification provider.
 - `seed_vendor_marketplace --vendors 100` is the opt-in generator for a large, deterministic marketplace sample: one complete vendor and business per index, root-category assignments, a default warehouse, inventory supplies, and marketplace offers. It reuses the imported catalog and adds a curated catalog only for roots the import does not cover. It is idempotent, development-only, and all fixture vendor accounts share the printed test password.
+- `seed_business_payment_channels` backfills the vendor payment methods (`card_to_card`, `deposit_to_account`) and one channel per method for businesses that already exist, using generated placeholder numbers; it never touches channels a business configured itself. The shop-side `PaymentsSeeder` does not cover these tables.
 - Canonical category IDs start at `1001`; category seeding updates those IDs without deleting pre-existing categories.
 
 Run focused tests while developing, then broader tests for shared infrastructure or cross-domain changes. Important suites include:
