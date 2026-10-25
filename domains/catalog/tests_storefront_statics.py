@@ -25,7 +25,19 @@ class StorefrontStaticDataTests(TestCase):
 
     @patch("domains.catalog.api.static_data.cache_service")
     def test_categories_are_rebuilt_cached_and_returned(self, cache_service):
-        root = self.create_category("Electronics", fa_name="الکترونیک", logo="cpu")
+        root = self.create_category(
+            "Electronics",
+            fa_name="الکترونیک",
+            logo="cpu",
+            category_market_picture={
+                "key": "category_market_picture",
+                "version": 1,
+                "props": {
+                    "title": "Electronics stores",
+                    "link": "/business/category/electronics",
+                },
+            },
+        )
         child = self.create_category("Phones", parent=root)
         self.create_category("Smartphones", parent=child)
         hidden_root = self.create_category("Hidden", status=self.inactive)
@@ -42,6 +54,11 @@ class StorefrontStaticDataTests(TestCase):
         self.assertEqual(categories[0]["name"], "الکترونیک")
         self.assertEqual(categories[0]["icon"], "cpu")
         self.assertEqual(categories[0]["link"], f"/search/categories/{root.slug}")
+        self.assertEqual(
+            categories[0]["category_market_picture"],
+            root.category_market_picture,
+        )
+        self.assertIsNone(categories[0]["children"][0]["category_market_picture"])
         self.assertEqual(categories[0]["children"][0]["id"], child.id)
         self.assertEqual(
             categories[0]["children"][0]["children"][0]["name"],

@@ -236,6 +236,19 @@ msgstr "%(location)s has an invalid key or version."
 msgid "Unknown component key/version: %(key)s."
 msgstr "Unknown component key/version: %(key)s."
 
+#: domains/content/contracts.py:295
+msgid "A component must contain only key, version, and props."
+msgstr "A component must contain only key, version, and props."
+
+#: domains/content/contracts.py:298
+msgid "A component has an invalid key or version."
+msgstr "A component has an invalid key or version."
+
+#: domains/content/contracts.py:301
+#, python-format
+msgid "The component key must be %(key)s."
+msgstr "The component key must be %(key)s."
+
 #: domains/business_content/contracts.py:316
 #, python-format
 msgid "components[%(index)s] is not available for this type of page."

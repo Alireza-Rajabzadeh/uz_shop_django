@@ -261,11 +261,17 @@ class PublicBusinessCardSerializer(serializers.ModelSerializer):
     """The business fields a category directory may expose."""
 
     name = serializers.CharField(source="display_name", read_only=True)
+    city = serializers.SerializerMethodField()
     logo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = BusinessProfile
-        fields = ["id", "name", "logo_url", "availability_status"]
+        fields = ["id", "name", "city", "logo_url", "availability_status"]
+
+    def get_city(self, obj):
+        if obj.city_id is None:
+            return None
+        return obj.city.fa_title or obj.city.name
 
     def get_logo_url(self, obj):
         logo = obj.light_logo or obj.dark_logo

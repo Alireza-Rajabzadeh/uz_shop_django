@@ -30,6 +30,7 @@ class StorefrontStaticCategorySerializer(serializers.Serializer):
     icon = serializers.CharField(allow_null=True, allow_blank=True)
     slug = serializers.CharField()
     link = serializers.CharField()
+    category_market_picture = serializers.JSONField(allow_null=True)
     children = serializers.SerializerMethodField()
 
     def get_children(self, category):

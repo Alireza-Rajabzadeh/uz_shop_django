@@ -62,7 +62,7 @@ class BusinessService:
         queryset = BusinessProfile.objects.filter(
             status_id=BusinessStatusEnum.ACTIVE.value,
             categories__category_id=root.id,
-        ).select_related("light_logo__status", "dark_logo__status")
+        ).select_related("city", "light_logo__status", "dark_logo__status")
         if search:
             queryset = queryset.filter(
                 Q(display_name__icontains=search)

@@ -27,6 +27,7 @@ class ContractFileInvariantTests(APITestCase):
             [
                 "business_contact",
                 "category_grid",
+                "category_market_picture",
                 "hero_slider",
                 "link_list",
                 "picture",

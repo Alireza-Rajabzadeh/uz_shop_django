@@ -3,6 +3,7 @@ from rest_framework.test import APITestCase
 from domains.business.enums.BusinessStatusEnum import BusinessStatusEnum
 from domains.business.models import BusinessCategory, BusinessProfile
 from domains.catalog.models import Category, CategoryStatus
+from domains.location.models import City, Country, State
 
 
 class PublicBusinessByCategoryTests(APITestCase):
@@ -101,5 +102,62 @@ class PublicBusinessByCategoryTests(APITestCase):
 
         self.assertEqual(
             set(response.data["data"]["results"][0]),
-            {"id", "name", "logo_url", "availability_status"},
+            {"id", "name", "city", "logo_url", "availability_status"},
         )
+
+    def test_card_exposes_city_title(self):
+        country = Country.objects.create(name="Iran", code="IR", phone_code="98")
+        state = State.objects.create(country=country, name="Tehran")
+        city = City.objects.create(state=state, name="Tehran", fa_title="تهران")
+        self.active.city = city
+        self.active.save(update_fields=["city"])
+
+        response = self.get(self.root.slug)
+
+        card = next(
+            item for item in response.data["data"]["results"] if item["name"] == "Alpha"
+        )
+        self.assertEqual(card["city"], "تهران")
+
+    def test_card_city_is_null_when_business_has_no_city(self):
+        response = self.get(self.root.slug)
+
+        card = next(
+            item for item in response.data["data"]["results"] if item["name"] == "Alpha"
+        )
+        self.assertIsNone(card["city"])
+
+
+class PublicBusinessDetailTests(APITestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.active = BusinessProfile.objects.create(
+            business_name="Alpha Trading",
+            display_name="Alpha",
+            status_id=BusinessStatusEnum.ACTIVE.value,
+        )
+        cls.pending = BusinessProfile.objects.create(
+            business_name="Beta Trading",
+            display_name="Beta",
+            status_id=BusinessStatusEnum.CONFIRMATION_AWAIT.value,
+        )
+
+    def get(self, pk):
+        return self.client.get(f"/api/business/public/{pk}")
+
+    def test_active_business_returns_its_public_card(self):
+        response = self.get(self.active.id)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            set(response.data["data"]),
+            {"id", "name", "city", "logo_url", "availability_status"},
+        )
+        self.assertEqual(response.data["data"]["id"], self.active.id)
+        self.assertEqual(response.data["data"]["name"], "Alpha")
+
+    def test_inactive_business_returns_404(self):
+        self.assertEqual(self.get(self.pending.id).status_code, 404)
+
+    def test_unknown_business_returns_404(self):
+        self.assertEqual(self.get(999_999).status_code, 404)

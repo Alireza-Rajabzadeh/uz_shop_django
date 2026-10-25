@@ -101,7 +101,7 @@ class PostgresProductSearchBackend:
         queryset = self._public_products()
         if not criteria.query:
             queryset = queryset.annotate(search_rank=Value(0.0))
-            return self._annotate_price_fields(queryset).filter(
+            return self._annotate_price_fields(queryset, criteria.business_id).filter(
                 minimum_effective_price__isnull=False
             )
 
@@ -147,7 +147,7 @@ class PostgresProductSearchBackend:
             | Exists(matching_details)
             | Exists(matching_variants)
         )
-        return self._annotate_price_fields(queryset).filter(
+        return self._annotate_price_fields(queryset, criteria.business_id).filter(
             minimum_effective_price__isnull=False
         )
 
@@ -202,16 +202,18 @@ class PostgresProductSearchBackend:
         )
 
     @classmethod
-    def _annotate_price_fields(cls, queryset):
+    def _annotate_price_fields(cls, queryset, business_id=None):
         from domains.marketplace.models import BusinessOffer
 
+        offers = BusinessOffer.objects.filter(
+            variant__product_id=OuterRef("pk"),
+            variant__status__name__iexact="active",
+            is_active=True,
+        )
+        if business_id is not None:
+            offers = offers.filter(business_id=business_id)
         offers = (
-            BusinessOffer.objects.filter(
-                variant__product_id=OuterRef("pk"),
-                variant__status__name__iexact="active",
-                is_active=True,
-            )
-            .annotate(
+            offers.annotate(
                 _available=cls._offer_available_expression(),
                 _effective_price=cls._effective_price_expression(),
             )
@@ -279,7 +281,9 @@ class PostgresProductSearchBackend:
             )
             queryset = queryset.filter(Exists(matching))
         if criteria.in_stock is not None and excluded != "availability":
-            queryset = queryset.annotate(_filter_in_stock=Exists(self._available_offers()))
+            queryset = queryset.annotate(
+                _filter_in_stock=Exists(self._available_offers(criteria.business_id))
+            )
             queryset = queryset.filter(_filter_in_stock=criteria.in_stock)
         return queryset
 
@@ -297,29 +301,33 @@ class PostgresProductSearchBackend:
                     pending.append(child_id)
         return selected
 
-    def _available_offers(self):
+    def _available_offers(self, business_id=None):
         from domains.marketplace.models import BusinessOffer
 
+        offers = BusinessOffer.objects.filter(
+            variant__product_id=OuterRef("pk"),
+            variant__status__name__iexact="active",
+            is_active=True,
+        )
+        if business_id is not None:
+            offers = offers.filter(business_id=business_id)
         return (
-            BusinessOffer.objects.filter(
-                variant__product_id=OuterRef("pk"),
-                variant__status__name__iexact="active",
-                is_active=True,
-            )
-            .annotate(_available=self._offer_available_expression())
+            offers.annotate(_available=self._offer_available_expression())
             .filter(_available__gt=0)
         )
 
     @staticmethod
-    def _sale_variants():
+    def _sale_variants(business_id=None):
         from domains.marketplace.models import BusinessOffer
-        offer_variant_ids = BusinessOffer.objects.filter(
+
+        offers = BusinessOffer.objects.filter(
             variant__status__name__iexact="active",
             is_active=True,
             discount_value__gt=0,
-        ).exclude(
-            discount_type__isnull=True
-        ).values_list("variant_id", flat=True)
+        ).exclude(discount_type__isnull=True)
+        if business_id is not None:
+            offers = offers.filter(business_id=business_id)
+        offer_variant_ids = offers.values_list("variant_id", flat=True)
         return ProductVariants.objects.filter(
             product_id=OuterRef("pk"),
             id__in=offer_variant_ids,
@@ -337,7 +345,7 @@ class PostgresProductSearchBackend:
         return variants.order_by("id")
 
     @classmethod
-    def _seller_count_expression(cls, *, in_stock):
+    def _seller_count_expression(cls, *, in_stock, business_id=None):
         from domains.marketplace.models import BusinessOffer
 
         offers = BusinessOffer.objects.filter(
@@ -345,6 +353,8 @@ class PostgresProductSearchBackend:
             variant__status__name__iexact="active",
             is_active=True,
         )
+        if business_id is not None:
+            offers = offers.filter(business_id=business_id)
         if in_stock:
             offers = offers.annotate(
                 _available=cls._offer_available_expression()
@@ -361,11 +371,16 @@ class PostgresProductSearchBackend:
         )
 
     def _annotate_result_fields(self, queryset, criteria):
+        business_id = criteria.business_id
         queryset = queryset.annotate(
-            in_stock=Exists(self._available_offers()),
-            on_sale=Exists(self._sale_variants()),
-            seller_count=self._seller_count_expression(in_stock=False),
-            in_stock_seller_count=self._seller_count_expression(in_stock=True),
+            in_stock=Exists(self._available_offers(business_id)),
+            on_sale=Exists(self._sale_variants(business_id)),
+            seller_count=self._seller_count_expression(
+                in_stock=False, business_id=business_id
+            ),
+            in_stock_seller_count=self._seller_count_expression(
+                in_stock=True, business_id=business_id
+            ),
         )
         if criteria.variant_filters:
             exact = self._exact_variants(criteria)
@@ -659,7 +674,11 @@ class PostgresProductSearchBackend:
 
     def _boolean_facet(self, base, criteria, name):
         products = self._apply_filters(base, criteria, name)
-        subquery = self._available_offers() if name == "availability" else self._sale_variants()
+        subquery = (
+            self._available_offers(criteria.business_id)
+            if name == "availability"
+            else self._sale_variants(criteria.business_id)
+        )
         count = products.annotate(matches=Exists(subquery)).filter(matches=True).order_by().count()
         selected = criteria.in_stock if name == "availability" else criteria.on_sale
         return {"type": "boolean", "count": count, "selected": selected}

@@ -429,6 +429,38 @@
           "description": "Open link in a new browser tab."
         }
       }
+    },
+    {
+      "key": "category_market_picture",
+      "name": "Category Market Picture",
+      "version": 1,
+      "description": "Category market banner picture with a centered title, rendered directly by the UI rather than from a content slot.",
+      "allowedContexts": [
+        "special"
+      ],
+      "props": {
+        "title": {
+          "type": "string",
+          "required": true,
+          "description": "Banner title, centered over the picture."
+        },
+        "link": {
+          "type": "relative_link",
+          "required": true,
+          "description": "Destination path, such as the category market page, when the banner is clicked."
+        },
+        "image": {
+          "type": "image",
+          "ratio": "5:1",
+          "width": 1200,
+          "height": 240,
+          "description": "Banner picture covering the 5:1 area."
+        },
+        "bgColor": {
+          "type": "color",
+          "description": "Fallback background color used when no picture is set."
+        }
+      }
     }
   ]
 }

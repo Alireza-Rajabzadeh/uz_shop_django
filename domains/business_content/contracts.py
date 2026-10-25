@@ -29,8 +29,9 @@ ALLOWED_CARDINALITIES = {"one", "many"}
 #: carries exactly one context (see `SuggestionPage.Context`) and a component
 #: is offered only when that context is listed here, so classifying a new
 #: component is one edit to its contract rather than a change to every
-#: suggestion row. Kept in step with `ContentContext` in the panels.
-ALLOWED_CONTEXTS = {"page", "section", "footer"}
+#: suggestion row. `special` components are never placed in a slot; dedicated
+#: UI calls them directly. Kept in step with `ContentContext` in the panels.
+ALLOWED_CONTEXTS = {"page", "section", "footer", "special"}
 
 
 def load_content_contracts():

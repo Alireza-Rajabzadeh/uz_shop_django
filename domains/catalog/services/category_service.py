@@ -155,6 +155,7 @@ class CategoryService(BaseService):
                 "slug",
                 "logo",
                 "status__name",
+                "category_market_picture",
             )
         )
         nodes = {
@@ -164,6 +165,7 @@ class CategoryService(BaseService):
                 "icon": category["logo"],
                 "slug": category["slug"],
                 "link": f"/search/categories/{quote(category['slug'], safe='')}",
+                "category_market_picture": category["category_market_picture"],
                 "children": [],
             }
             for category in categories

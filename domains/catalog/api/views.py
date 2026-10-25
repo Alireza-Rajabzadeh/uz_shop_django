@@ -155,6 +155,7 @@ class CategoryNameSuggestions(APIView):
                 "status": category.status_id,
                 "status_name": category.status.name,
                 "logo": category.logo,
+                "category_market_picture": category.category_market_picture,
                 "similarity": score,
                 "exact": exact,
             }

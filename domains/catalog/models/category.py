@@ -60,7 +60,13 @@ class Category(models.Model):
         null=True,
         blank=True
         );
-    
+
+    category_market_picture = models.JSONField(
+        null=True,
+        blank=True,
+        default=None,
+    );
+
 
     def __str__(self):
         return self.name

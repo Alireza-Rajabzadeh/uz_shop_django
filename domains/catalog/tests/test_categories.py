@@ -6,6 +6,17 @@ from domains.catalog.category_icons import match_category_icon
 from domains.catalog.models import Category, CategoryStatus
 
 
+MARKET_PICTURE = {
+    "key": "category_market_picture",
+    "version": 1,
+    "props": {
+        "title": "Mobile stores",
+        "link": "/business/category/mobile",
+        "bgColor": "#123456",
+    },
+}
+
+
 class CategoryWriteTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_superuser(username="admin", password="password")
@@ -76,7 +87,11 @@ class CategoryWriteTests(APITestCase):
         self.assertIsNone(unknown.logo)
 
     def test_name_suggestions_return_ranked_matches_and_exact_flag(self):
-        category = Category.objects.create(name="Smart Phones", status=self.status)
+        category = Category.objects.create(
+            name="Smart Phones",
+            status=self.status,
+            category_market_picture=MARKET_PICTURE,
+        )
         Category.objects.create(name="Groceries", status=self.status)
 
         response = self.client.get(
@@ -87,9 +102,84 @@ class CategoryWriteTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.data["data"]["exact_duplicate"])
         self.assertEqual(response.data["data"]["suggestions"][0]["id"], category.id)
+        self.assertEqual(
+            response.data["data"]["suggestions"][0]["category_market_picture"],
+            MARKET_PICTURE,
+        )
 
         exact_response = self.client.get(
             "/api/catalog/categories/name-suggestions",
             {"name": " SMART PHONES "},
         )
         self.assertTrue(exact_response.data["data"]["exact_duplicate"])
+
+    def test_create_and_update_store_category_market_picture_component(self):
+        payload = {
+            "name": "Phones",
+            "status": self.status.id,
+            "category_market_picture": MARKET_PICTURE,
+        }
+
+        response = self.client.post("/api/catalog/categories", payload, format="json")
+
+        self.assertEqual(response.status_code, 201)
+        category = Category.objects.get(name="Phones")
+        self.assertEqual(category.category_market_picture, MARKET_PICTURE)
+
+        updated_picture = {
+            **MARKET_PICTURE,
+            "props": {**MARKET_PICTURE["props"], "title": "Mobile stores"},
+        }
+        response = self.client.patch(
+            f"/api/catalog/categories/{category.id}",
+            {"category_market_picture": updated_picture},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        category.refresh_from_db()
+        self.assertEqual(category.category_market_picture, updated_picture)
+
+        response = self.client.patch(
+            f"/api/catalog/categories/{category.id}",
+            {"category_market_picture": {}},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        category.refresh_from_db()
+        self.assertIsNone(category.category_market_picture)
+
+    def test_category_market_picture_rejects_other_keys_and_invalid_props(self):
+        category = Category.objects.create(name="Phones", status=self.status)
+
+        wrong_key = self.client.post(
+            "/api/catalog/categories",
+            {
+                "name": "Tablets",
+                "status": self.status.id,
+                "category_market_picture": {**MARKET_PICTURE, "key": "picture"},
+            },
+            format="json",
+        )
+        unknown_prop = self.client.patch(
+            f"/api/catalog/categories/{category.id}",
+            {
+                "category_market_picture": {
+                    **MARKET_PICTURE,
+                    "props": {**MARKET_PICTURE["props"], "subtitle": "extra"},
+                }
+            },
+            format="json",
+        )
+        missing_required = self.client.patch(
+            f"/api/catalog/categories/{category.id}",
+            {"category_market_picture": {**MARKET_PICTURE, "props": {"title": "Phones"}}},
+            format="json",
+        )
+
+        self.assertEqual(wrong_key.status_code, 400)
+        self.assertEqual(unknown_prop.status_code, 400)
+        self.assertEqual(missing_required.status_code, 400)
+        category.refresh_from_db()
+        self.assertIsNone(category.category_market_picture)

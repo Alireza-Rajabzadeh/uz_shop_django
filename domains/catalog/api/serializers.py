@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from domains.content.contracts import validate_component_payload
 from domains.catalog.models import (
     Brand, Category, CategoryStatus, CategoryDetail,
     CategoryDetailRelation, Product, ProductStatus,
@@ -95,6 +96,11 @@ class CategorySerializer(serializers.ModelSerializer):
         model = Category
         fields = "__all__"
 
+    def validate_category_market_picture(self, value):
+        if value in ({}, None):
+            return None
+        return validate_component_payload(value, expected_key="category_market_picture")
+
     def get_children(self, obj):
         children = obj.children.all()
         if children:
@@ -108,7 +114,7 @@ class CategoryListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Category
-        fields = ["id", "name", "fa_name", "slug", "parent", "parent_name", "status", "status_name", "logo"]
+        fields = ["id", "name", "fa_name", "slug", "parent", "parent_name", "status", "status_name", "logo", "category_market_picture"]
 
 
 class CategoryNameSuggestionQuerySerializer(serializers.Serializer):
@@ -127,6 +133,7 @@ class CategoryNameSuggestionSerializer(serializers.Serializer):
     status = serializers.IntegerField()
     status_name = serializers.CharField()
     logo = serializers.CharField(allow_null=True)
+    category_market_picture = serializers.JSONField(allow_null=True)
     similarity = serializers.IntegerField(read_only=True)
     exact = serializers.BooleanField(read_only=True)
 

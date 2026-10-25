@@ -235,6 +235,19 @@ msgstr "%(location)s کلید یا نسخه نامعتبری دارد."
 msgid "Unknown component key/version: %(key)s."
 msgstr "کلید/نسخه ناشناخته مولفه: %(key)s."
 
+#: domains/content/contracts.py:295
+msgid "A component must contain only key, version, and props."
+msgstr "یک مولفه باید تنها شامل key، version و props باشد."
+
+#: domains/content/contracts.py:298
+msgid "A component has an invalid key or version."
+msgstr "مولفه کلید یا نسخه نامعتبری دارد."
+
+#: domains/content/contracts.py:301
+#, python-format
+msgid "The component key must be %(key)s."
+msgstr "کلید مولفه باید %(key)s باشد."
+
 #: domains/business_content/contracts.py:316
 #, python-format
 msgid "components[%(index)s] is not available for this type of page."

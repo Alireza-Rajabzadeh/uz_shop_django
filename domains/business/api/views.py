@@ -11,6 +11,7 @@ from core.permissions import AdminModelPermissions
 from core.responses import api_response
 from core.services import CacheService
 from domains.business.cache import BUSINESS_CACHE_KEY
+from domains.business.enums.BusinessStatusEnum import BusinessStatusEnum
 from domains.business.models import BusinessCategory, BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessWorkingDay, SocialMedia, SocialMediaIcon
 from domains.business.services import BusinessService
 from domains.catalog.models import Category
@@ -130,6 +131,22 @@ class PublicSocialMediaListView(APIView):
     def get(self, request):
         social_medias = SocialMedia.objects.filter(is_active=True).prefetch_related("icons__file__status")
         return api_response(data=PublicSocialMediaSerializer(social_medias, many=True).data)
+
+
+class PublicBusinessDetailView(APIView):
+    """The public directory card for one active business."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request, pk):
+        business = get_object_or_404(
+            BusinessProfile.objects.select_related(
+                "city", "light_logo__status", "dark_logo__status"
+            ).filter(status_id=BusinessStatusEnum.ACTIVE.value),
+            pk=pk,
+        )
+        return api_response(data=PublicBusinessCardSerializer(business).data)
 
 
 class PublicBusinessByCategoryView(APIView):

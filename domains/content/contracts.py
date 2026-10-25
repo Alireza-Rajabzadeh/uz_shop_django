@@ -28,9 +28,10 @@ ALLOWED_CARDINALITIES = {"one", "many"}
 #: Contexts a component may declare in `allowedContexts`. The vocabulary is
 #: shared with `business_content` because both files are synced from the same
 #: panel contract source; the platform `content` domain does not resolve a
-#: row's context, so it validates the field without enforcing it. Kept in
-#: step with `ContentContext` in the panels.
-ALLOWED_CONTEXTS = {"page", "section", "footer"}
+#: row's context, so it validates the field without enforcing it. `special`
+#: components are never placed in a slot; dedicated UI calls them directly.
+#: Kept in step with `ContentContext` in the panels.
+ALLOWED_CONTEXTS = {"page", "section", "footer", "special"}
 
 
 def load_content_contracts():
@@ -284,6 +285,32 @@ def validate_draft_content(value):
                 % {"key": f"{component['key']}@{component['version']}"}
             )
         _validate_object(component["props"], definition.get("props", {}), f"{location}.props")
+    return value
+
+
+def validate_component_payload(value, expected_key=None):
+    """Validate a single component instance stored outside a draft document."""
+    if not isinstance(value, dict) or set(value) != {"key", "version", "props"}:
+        raise serializers.ValidationError(
+            _("A component must contain only key, version, and props.")
+        )
+    if not isinstance(value["key"], str) or type(value["version"]) is not int:
+        raise serializers.ValidationError(_("A component has an invalid key or version."))
+    if expected_key is not None and value["key"] != expected_key:
+        raise serializers.ValidationError(
+            _("The component key must be %(key)s.") % {"key": expected_key}
+        )
+    definitions = {
+        (component["key"], component["version"]): component
+        for component in load_content_contracts().get("components", [])
+    }
+    definition = definitions.get((value["key"], value["version"]))
+    if definition is None:
+        raise serializers.ValidationError(
+            _("Unknown component key/version: %(key)s.")
+            % {"key": f"{value['key']}@{value['version']}"}
+        )
+    _validate_object(value["props"], definition.get("props", {}), "props")
     return value
 
 

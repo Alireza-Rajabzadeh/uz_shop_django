@@ -669,6 +669,44 @@ class StorefrontProductSearchTests(TestCase):
             [row["id"] for row in filtered.data["data"]["results"]],
             [product.id],
         )
+        filtered_item = filtered.data["data"]["results"][0]
+        self.assertEqual(filtered_item["pricing"]["minimum_price"], "80.00")
+        self.assertEqual(filtered_item["offers"]["seller_count"], 1)
+
+    def test_business_filter_scopes_prices_to_that_business(self):
+        product = self.create_product("Scoped Price Phone", self.samsung)
+        variant = self.create_variant(product, "blue", "100.00", [self.blue])
+        second = self.create_second_business()
+        BusinessOffer.objects.create(
+            business=second,
+            variant=variant,
+            price=Decimal("80.00"),
+        )
+
+        global_result = self.client.get(
+            "/api/catalog/storefront/products", {"q": "scoped price"}
+        )
+        second_result = self.client.get(
+            "/api/catalog/storefront/products",
+            {"q": "scoped price", "business": second.id},
+        )
+        owner_result = self.client.get(
+            "/api/catalog/storefront/products",
+            {"q": "scoped price", "business": self.business.id},
+        )
+
+        self.assertEqual(
+            global_result.data["data"]["results"][0]["pricing"]["minimum_price"],
+            "80.00",
+        )
+        self.assertEqual(
+            second_result.data["data"]["results"][0]["pricing"]["minimum_price"],
+            "80.00",
+        )
+        self.assertEqual(
+            owner_result.data["data"]["results"][0]["pricing"]["minimum_price"],
+            "100.00",
+        )
 
     def test_in_stock_offer_wins_over_a_cheaper_out_of_stock_offer(self):
         product = self.create_product("In Stock Seller Phone", self.samsung)
@@ -694,6 +732,16 @@ class StorefrontProductSearchTests(TestCase):
         self.assertEqual(item["pricing"]["minimum_effective_price"], "100.00")
         self.assertEqual(item["offers"]["seller_count"], 2)
         self.assertEqual(item["offers"]["in_stock_seller_count"], 1)
+
+        second_search = self.client.get(
+            "/api/catalog/storefront/products",
+            {"q": "in stock seller", "business": second.id},
+        )
+        second_item = second_search.data["data"]["results"][0]
+        self.assertEqual(second_item["pricing"]["minimum_price"], "80.00")
+        self.assertFalse(second_item["availability"]["in_stock"])
+        self.assertEqual(second_item["offers"]["seller_count"], 1)
+        self.assertEqual(second_item["offers"]["in_stock_seller_count"], 0)
         self.assertEqual(
             detail.data["data"]["variants"][0]["selected_offer"]["id"],
             BusinessOffer.objects.get(
