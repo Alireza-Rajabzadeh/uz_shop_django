@@ -1,5 +1,6 @@
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
+from rest_framework.exceptions import NotFound
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
@@ -12,12 +13,14 @@ from core.services import CacheService
 from domains.business.cache import BUSINESS_CACHE_KEY
 from domains.business.models import BusinessCategory, BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessWorkingDay, SocialMedia, SocialMediaIcon
 from domains.business.services import BusinessService
+from domains.catalog.models import Category
 from domains.users.auth import AdminJWTAuthentication
 
 from .serializers import (
     BusinessCategorySerializer, BusinessCategoryUpsertSerializer,
     BusinessPhoneSerializer, BusinessProfileSerializer, BusinessSocialLinkSerializer,
-    BusinessWorkingDaySerializer, PublicBusinessPhoneSerializer, PublicBusinessProfileSerializer,
+    BusinessWorkingDaySerializer, PublicBusinessCardSerializer,
+    PublicBusinessPhoneSerializer, PublicBusinessProfileSerializer,
     PublicBusinessSocialLinkSerializer, PublicBusinessWorkingDaySerializer, PublicSocialMediaSerializer,
     SocialMediaIconSerializer, SocialMediaSerializer,
 )
@@ -127,6 +130,33 @@ class PublicSocialMediaListView(APIView):
     def get(self, request):
         social_medias = SocialMedia.objects.filter(is_active=True).prefetch_related("icons__file__status")
         return api_response(data=PublicSocialMediaSerializer(social_medias, many=True).data)
+
+
+class PublicBusinessByCategoryView(APIView):
+    """Active businesses registered under one catalog category.
+
+    The slug may name a child category: only root categories can be
+    registered against a business, so the query is resolved to the root.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request, slug):
+        category = get_object_or_404(Category, slug=slug)
+        root, queryset = BusinessService.category_businesses(
+            category, request.query_params.get("q", "").strip()
+        )
+        if root.status.name.casefold() != "active":
+            raise NotFound("Category not found.")
+
+        paginator = PageNumberPagination()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        return api_response(
+            data=paginator.get_paginated_response(
+                PublicBusinessCardSerializer(page, many=True).data
+            ).data
+        )
 
 
 class ProfileList(AdminBusinessListCreate):

@@ -257,6 +257,26 @@ class PublicBusinessProfileSerializer(serializers.ModelSerializer):
         return self._get_logo_url(obj.dark_logo)
 
 
+class PublicBusinessCardSerializer(serializers.ModelSerializer):
+    """The business fields a category directory may expose."""
+
+    name = serializers.CharField(source="display_name", read_only=True)
+    logo_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BusinessProfile
+        fields = ["id", "name", "logo_url", "availability_status"]
+
+    def get_logo_url(self, obj):
+        logo = obj.light_logo or obj.dark_logo
+        if logo is None:
+            return None
+        try:
+            return FileService().url(logo)
+        except FileService.Error:
+            return None
+
+
 class PublicBusinessWorkingDaySerializer(serializers.ModelSerializer):
     class Meta:
         model = BusinessWorkingDay
