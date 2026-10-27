@@ -1,9 +1,22 @@
+from decimal import Decimal
+
 from rest_framework import serializers
 
-from domains.business.models import BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessWorkingDay, SocialMedia, SocialMediaIcon
+from domains.business.models import (
+    BusinessPhone,
+    BusinessProfile,
+    BusinessProfileServiceMode,
+    BusinessServiceMode,
+    BusinessShipment,
+    BusinessSocialLink,
+    BusinessWorkingDay,
+    SocialMedia,
+    SocialMediaIcon,
+)
 from domains.files.models import File
 from domains.files.services import FileService
 from domains.location.models import City, State
+from domains.shipment.models import ShipmentMethod, ShipmentPricingMethod
 
 
 class VendorBusinessProfileSerializer(serializers.ModelSerializer):
@@ -321,3 +334,102 @@ class VendorBusinessWorkingDayUpsertSerializer(serializers.Serializer):
         if second_opens_at is not None and (second_opens_at >= second_closes_at or second_opens_at < closes_at):
             raise serializers.ValidationError("Second interval must be ordered and cannot overlap the first.")
         return attrs
+
+
+class ShipmentMethodSummarySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ShipmentMethod
+        fields = ["id", "code", "name", "description", "is_active"]
+
+
+class ShipmentPricingMethodSummarySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ShipmentPricingMethod
+        fields = ["id", "code", "name", "description", "is_active"]
+
+
+class VendorBusinessShipmentSerializer(serializers.ModelSerializer):
+    """One business's shipment configuration.
+
+    Writes name the global rows by id; reads expand both references so the
+    panel never has to join the shipping vocabulary itself.
+    """
+
+    shipment_method_id = serializers.PrimaryKeyRelatedField(
+        source="shipment_method",
+        queryset=ShipmentMethod.objects.all(),
+        write_only=True,
+    )
+    pricing_method_id = serializers.PrimaryKeyRelatedField(
+        source="pricing_method",
+        queryset=ShipmentPricingMethod.objects.all(),
+        write_only=True,
+    )
+    shipment_method = ShipmentMethodSummarySerializer(read_only=True)
+    pricing_method = ShipmentPricingMethodSummarySerializer(read_only=True)
+
+    class Meta:
+        model = BusinessShipment
+        fields = [
+            "id",
+            "shipment_method_id",
+            "shipment_method",
+            "pricing_method_id",
+            "pricing_method",
+            "cost",
+            "is_default",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+        extra_kwargs = {
+            "cost": {"min_value": Decimal("0.00")},
+        }
+
+    def validate(self, attrs):
+        # Deactivating an existing default is allowed: the service clears the
+        # default flag in the same transaction. Only an explicit request to
+        # make an inactive configuration the default is contradictory.
+        if attrs.get("is_default") is True:
+            is_active = attrs.get(
+                "is_active",
+                self.instance.is_active if self.instance else True,
+            )
+            if not is_active:
+                raise serializers.ValidationError(
+                    {"is_default": "A default shipment method must be active."}
+                )
+        return attrs
+
+
+class BusinessServiceModeSummarySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BusinessServiceMode
+        fields = ["id", "code", "name", "description", "is_active"]
+
+
+class VendorBusinessServiceModeSerializer(serializers.ModelSerializer):
+    service_mode = BusinessServiceModeSummarySerializer(read_only=True)
+
+    class Meta:
+        model = BusinessProfileServiceMode
+        fields = [
+            "id",
+            "service_mode",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class VendorBusinessServiceModeCreateSerializer(serializers.Serializer):
+    service_mode_id = serializers.PrimaryKeyRelatedField(
+        source="service_mode",
+        queryset=BusinessServiceMode.objects.all(),
+    )
+
+
+class VendorBusinessServiceModeUpdateSerializer(serializers.Serializer):
+    is_active = serializers.BooleanField()

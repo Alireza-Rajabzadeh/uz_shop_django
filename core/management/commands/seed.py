@@ -5,6 +5,7 @@ from core.management.seeders.brands import BrandSeeder
 from core.management.seeders.business_payment_statuses import BusinessPaymentStatusSeeder
 from core.management.seeders.business_payments import BusinessPaymentMethodsSeeder
 
+from core.management.seeders.business_service_modes import BusinessServiceModeSeeder
 from core.management.seeders.business_statuses import BusinessStatusSeeder
 from core.management.seeders.categories import CategorySeeder
 from core.management.seeders.category_details import CategoryDetailSeeder
@@ -18,6 +19,7 @@ from core.management.seeders.order import OrderSeeder
 from core.management.seeders.marketplace_order import MarketplaceOrderSeeder
 from core.management.seeders.packages import PackagesSeeder
 from core.management.seeders.payments import PaymentsSeeder
+from core.management.seeders.shipment import ShipmentSeeder
 from core.management.seeders.customers import CustomerSeeder
 from core.management.seeders.location import LocationSeeder
 from core.management.seeders.marketplace import MarketplaceSeeder
@@ -39,6 +41,7 @@ class Command(BaseCommand):
             VariantAttributeSeeder(),
             VendorStatusSeeder(),
             BusinessStatusSeeder(),
+            BusinessServiceModeSeeder(),
             BusinessPaymentStatusSeeder(),
             BusinessPaymentMethodsSeeder(),
             BankSeeder(),
@@ -55,6 +58,7 @@ class Command(BaseCommand):
             PaymentsSeeder(),
             SocialMediaSeeder(),
             PackagesSeeder(),
+            ShipmentSeeder(),
             VendorsClubSeeder(),
         ]
 

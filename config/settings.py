@@ -110,6 +110,7 @@ INSTALLED_APPS = [
     "domains.marketplace.apps.MarketplaceConfig",
     "domains.banks.apps.BanksConfig",
     "domains.packages.apps.PackagesConfig",
+    "domains.shipment.apps.ShipmentConfig",
     "domains.vendors_club.apps.VendorsClubConfig",
     "core",
     "domains.users",

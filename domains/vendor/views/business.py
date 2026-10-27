@@ -2,16 +2,27 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.translation import gettext as _
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
 from core.responses import api_response
 from domains.business.models import BusinessCategory, BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessWorkingDay
+from domains.business.services import BusinessServiceModeService, BusinessShipmentService
+from domains.shipment.models import ShipmentMethod, ShipmentPricingMethod
+from domains.shipment.services import ShipmentPricingService
 from domains.vendor.auth import VendorJWTAuthentication
 
 from ..serializers.business import (
+    BusinessServiceModeSummarySerializer,
+    ShipmentMethodSummarySerializer,
+    ShipmentPricingMethodSummarySerializer,
     VendorBusinessPhoneSerializer,
     VendorBusinessProfileSerializer,
+    VendorBusinessServiceModeCreateSerializer,
+    VendorBusinessServiceModeSerializer,
+    VendorBusinessServiceModeUpdateSerializer,
+    VendorBusinessShipmentSerializer,
     VendorBusinessSocialLinkSerializer,
     VendorBusinessWorkingDaySerializer,
     VendorBusinessWorkingDayUpsertSerializer,
@@ -443,3 +454,190 @@ class VendorCategorySearchView(APIView):
             })
 
         return api_response(data=results)
+
+
+class VendorBusinessShipmentListCreateView(APIView):
+    authentication_classes = [VendorJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        business = _get_business(request)
+        if not business:
+            return api_response(data=[])
+        shipments = BusinessShipmentService.list_shipments(business)
+        return api_response(
+            data=VendorBusinessShipmentSerializer(shipments, many=True).data
+        )
+
+    def post(self, request):
+        business = _get_business(request)
+        if not business:
+            return api_response(
+                False, _("Business profile not found."), status_code=400
+            )
+        serializer = VendorBusinessShipmentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            shipment = BusinessShipmentService.create_shipment(
+                business, **serializer.validated_data
+            )
+        except BusinessShipmentService.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
+        return api_response(
+            data=VendorBusinessShipmentSerializer(shipment).data,
+            status_code=201,
+        )
+
+
+class VendorBusinessShipmentDetailView(APIView):
+    authentication_classes = [VendorJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        business = _get_business(self.request)
+        if not business:
+            raise NotFound("Business profile not found.")
+        shipment = BusinessShipmentService.get_shipment(
+            business, self.kwargs["pk"]
+        )
+        if shipment is None:
+            raise NotFound("Shipment configuration not found.")
+        return shipment
+
+    def get(self, request, pk):
+        return api_response(
+            data=VendorBusinessShipmentSerializer(self.get_object()).data
+        )
+
+    def patch(self, request, pk):
+        serializer = VendorBusinessShipmentSerializer(
+            self.get_object(), data=request.data, partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        try:
+            shipment = BusinessShipmentService.update_shipment(
+                serializer.instance, **serializer.validated_data
+            )
+        except BusinessShipmentService.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
+        return api_response(
+            data=VendorBusinessShipmentSerializer(shipment).data
+        )
+
+    def delete(self, request, pk):
+        BusinessShipmentService.delete_shipment(self.get_object())
+        return api_response(True, _("Shipment configuration deleted."), None)
+
+
+class VendorBusinessShipmentOptionsView(APIView):
+    """The global methods a business may still choose.
+
+    Only active shipment methods and pricing methods with a real calculator
+    appear; a future database row does not become selectable before its
+    implementation exists.
+    """
+
+    authentication_classes = [VendorJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        shipment_methods = ShipmentMethod.objects.filter(
+            is_active=True
+        ).order_by("id")
+        pricing_methods = ShipmentPricingMethod.objects.filter(
+            is_active=True,
+            code__in=ShipmentPricingService.supported_codes(),
+        ).order_by("id")
+        return api_response(
+            data={
+                "shipment_methods": ShipmentMethodSummarySerializer(
+                    shipment_methods, many=True
+                ).data,
+                "pricing_methods": ShipmentPricingMethodSummarySerializer(
+                    pricing_methods, many=True
+                ).data,
+            }
+        )
+
+
+class VendorBusinessServiceModeOptionsView(APIView):
+    """The globally active service modes a business profile may enable."""
+
+    authentication_classes = [VendorJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        modes = BusinessServiceModeService.available_modes()
+        return api_response(
+            data=BusinessServiceModeSummarySerializer(modes, many=True).data
+        )
+
+
+class VendorBusinessServiceModeListCreateView(APIView):
+    authentication_classes = [VendorJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        business = _get_business(request)
+        if not business:
+            return api_response(data=[])
+        configurations = BusinessServiceModeService.list_configurations(business)
+        return api_response(
+            data=VendorBusinessServiceModeSerializer(
+                configurations, many=True
+            ).data
+        )
+
+    def post(self, request):
+        business = _get_business(request)
+        if not business:
+            return api_response(
+                False, _("Business profile not found."), status_code=400
+            )
+        serializer = VendorBusinessServiceModeCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            configuration = BusinessServiceModeService.enable_mode(
+                business, serializer.validated_data["service_mode"]
+            )
+        except BusinessServiceModeService.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
+        return api_response(
+            data=VendorBusinessServiceModeSerializer(configuration).data,
+            status_code=201,
+        )
+
+
+class VendorBusinessServiceModeDetailView(APIView):
+    authentication_classes = [VendorJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        business = _get_business(self.request)
+        if not business:
+            raise NotFound("Business profile not found.")
+        configuration = BusinessServiceModeService.get_configuration(
+            business, self.kwargs["pk"]
+        )
+        if configuration is None:
+            raise NotFound("Service mode configuration not found.")
+        return configuration
+
+    def get(self, request, pk):
+        return api_response(
+            data=VendorBusinessServiceModeSerializer(self.get_object()).data
+        )
+
+    def patch(self, request, pk):
+        configuration = self.get_object()
+        serializer = VendorBusinessServiceModeUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            configuration = BusinessServiceModeService.set_configuration_active(
+                configuration, serializer.validated_data["is_active"]
+            )
+        except BusinessServiceModeService.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
+        return api_response(
+            data=VendorBusinessServiceModeSerializer(configuration).data
+        )

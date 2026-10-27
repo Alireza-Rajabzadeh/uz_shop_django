@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import BusinessCategory, BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessWorkingDay, SocialMedia, SocialMediaIcon
+from .models import BusinessCategory, BusinessPhone, BusinessProfile, BusinessServiceMode, BusinessShipment, BusinessSocialLink, BusinessWorkingDay, SocialMedia, SocialMediaIcon
 
 
 @admin.register(BusinessProfile)
@@ -54,3 +54,35 @@ class BusinessCategoryAdmin(admin.ModelAdmin):
     list_display = ("business", "category", "created_at")
     list_filter = ("business",)
     search_fields = ("business__display_name", "category__name")
+
+
+@admin.register(BusinessShipment)
+class BusinessShipmentAdmin(admin.ModelAdmin):
+    list_display = (
+        "business",
+        "shipment_method",
+        "pricing_method",
+        "cost",
+        "is_default",
+        "is_active",
+        "updated_at",
+    )
+    list_filter = ("is_default", "is_active", "shipment_method", "pricing_method")
+    search_fields = (
+        "business__business_name",
+        "business__display_name",
+        "shipment_method__code",
+        "pricing_method__code",
+    )
+
+
+@admin.register(BusinessServiceMode)
+class BusinessServiceModeAdmin(admin.ModelAdmin):
+    list_display = ("code", "name", "is_active", "updated_at")
+    list_filter = ("is_active",)
+    search_fields = ("code", "name")
+    # `code` is the stable identifier other code keys off, so it is created
+    # once and never edited. Making it read-only here keeps the model's
+    # immutability guard from ever surfacing as an error on save.
+    readonly_fields = ("code", "created_at", "updated_at")
+    ordering = ("id",)

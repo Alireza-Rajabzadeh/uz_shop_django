@@ -26,6 +26,12 @@ from .views.business import (
     VendorBusinessDashboardView,
     VendorBusinessCategoryView,
     VendorCategorySearchView,
+    VendorBusinessShipmentListCreateView,
+    VendorBusinessShipmentDetailView,
+    VendorBusinessShipmentOptionsView,
+    VendorBusinessServiceModeListCreateView,
+    VendorBusinessServiceModeDetailView,
+    VendorBusinessServiceModeOptionsView,
 )
 from .views.products import (
     VendorProductFilterOptionsView,
@@ -118,6 +124,30 @@ urlpatterns = [
     path("business/dashboard", VendorBusinessDashboardView.as_view()),
     path("business/categories", VendorBusinessCategoryView.as_view()),
     path("business/categories/search", VendorCategorySearchView.as_view()),
+    path(
+        "business/shipments/options",
+        VendorBusinessShipmentOptionsView.as_view(),
+    ),
+    path(
+        "business/shipments",
+        VendorBusinessShipmentListCreateView.as_view(),
+    ),
+    path(
+        "business/shipments/<int:pk>",
+        VendorBusinessShipmentDetailView.as_view(),
+    ),
+    path(
+        "business/service-modes/options",
+        VendorBusinessServiceModeOptionsView.as_view(),
+    ),
+    path(
+        "business/service-modes",
+        VendorBusinessServiceModeListCreateView.as_view(),
+    ),
+    path(
+        "business/service-modes/<int:pk>",
+        VendorBusinessServiceModeDetailView.as_view(),
+    ),
     # Products
     path("products", VendorProductListView.as_view()),
     path("products/similar", VendorProductSimilarSearchView.as_view()),

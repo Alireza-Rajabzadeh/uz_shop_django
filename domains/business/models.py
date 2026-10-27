@@ -320,3 +320,143 @@ class BusinessCategory(TimestampedModel):
 
     def __str__(self):
         return f"{self.business} → {self.category}"
+
+
+class BusinessShipment(TimestampedModel):
+    """A shipment method one business offers, with its pricing configuration.
+
+    The business domain owns the per-business choice. The shipping domain owns
+    the global method and pricing vocabularies, so both foreign keys PROTECT:
+    a method that a business already configured is retired by clearing
+    ``is_active``, never by deleting the row out from under the configuration.
+    """
+
+    business = models.ForeignKey(
+        BusinessProfile,
+        on_delete=models.CASCADE,
+        related_name="shipments",
+    )
+    shipment_method = models.ForeignKey(
+        "shipment.ShipmentMethod",
+        on_delete=models.PROTECT,
+        related_name="business_shipments",
+    )
+    pricing_method = models.ForeignKey(
+        "shipment.ShipmentPricingMethod",
+        on_delete=models.PROTECT,
+        related_name="business_shipments",
+    )
+    cost = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        validators=[MinValueValidator(0)],
+    )
+    is_default = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "business_shipment"
+        ordering = ["-is_default", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["business", "shipment_method"],
+                name="business_shipment_business_method_unique",
+            ),
+            # PostgreSQL partial unique index: at most one default per
+            # business, while businesses with no default are unaffected.
+            models.UniqueConstraint(
+                fields=["business"],
+                condition=Q(is_default=True),
+                name="business_shipment_one_default_per_business",
+            ),
+            models.CheckConstraint(
+                condition=Q(cost__gte=0),
+                name="business_shipment_cost_gte_zero",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.business} → {self.shipment_method.code}"
+
+
+class BusinessServiceMode(TimestampedModel):
+    """A way a business serves its customers.
+
+    Shared reference vocabulary rather than per-business data: business
+    profiles select from these rows through ``BusinessProfileServiceMode``.
+    ``code`` is the stable contract other code keys off, so it is written once
+    and never edited; ``name``, ``description``, and ``is_active`` stay
+    editable. A mode is retired by clearing ``is_active``, never by deleting
+    it, because profiles point at it. Service modes describe fulfilment style
+    only — payment methods such as cash, card, or BNPL are a different
+    vocabulary.
+    """
+
+    code = models.CharField(max_length=50, unique=True)
+    name = models.CharField(max_length=100)
+    description = models.TextField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "business_service_mode"
+        ordering = ["id"]
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            stored = (
+                type(self)
+                .objects.filter(pk=self.pk)
+                .values_list("code", flat=True)
+                .first()
+            )
+            if stored is not None and stored != self.code:
+                raise ValidationError(
+                    {"code": "Code cannot be changed after creation."}
+                )
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.code
+
+
+class BusinessProfileServiceMode(TimestampedModel):
+    """A service mode one business profile has enabled.
+
+    ``business_profile`` cascades like the profile's other owned rows, so
+    deleting a profile retires its selections with it. ``service_mode``
+    protects the shared vocabulary: a mode a profile already selected is
+    retired by clearing its ``is_active``, never deleted. The unique
+    constraint makes a mode configurable at most once per profile; disabling
+    keeps the row so the id and its history stay stable.
+    """
+
+    business_profile = models.ForeignKey(
+        BusinessProfile,
+        on_delete=models.CASCADE,
+        related_name="service_modes",
+    )
+    service_mode = models.ForeignKey(
+        BusinessServiceMode,
+        on_delete=models.PROTECT,
+        related_name="profile_configurations",
+    )
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "business_profile_service_mode"
+        ordering = ["id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["business_profile", "service_mode"],
+                name="business_profile_service_mode_unique",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["business_profile", "is_active"],
+                name="bp_service_mode_active_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.business_profile} → {self.service_mode.code}"
