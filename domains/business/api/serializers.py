@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from domains.business.models import BusinessCategory, BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessWorkingDay, SocialMedia, SocialMediaIcon
+from domains.business.services import BusinessService
 from domains.files.models import File
 from domains.files.services import FileService
 
@@ -263,10 +264,11 @@ class PublicBusinessCardSerializer(serializers.ModelSerializer):
     name = serializers.CharField(source="display_name", read_only=True)
     city = serializers.SerializerMethodField()
     logo_url = serializers.SerializerMethodField()
+    service_modes = serializers.SerializerMethodField()
 
     class Meta:
         model = BusinessProfile
-        fields = ["id", "name", "city", "logo_url", "availability_status"]
+        fields = ["id", "name", "city", "logo_url", "availability_status", "service_modes"]
 
     def get_city(self, obj):
         if obj.city_id is None:
@@ -281,6 +283,12 @@ class PublicBusinessCardSerializer(serializers.ModelSerializer):
             return FileService().url(logo)
         except FileService.Error:
             return None
+
+    def get_service_modes(self, obj):
+        return [
+            {"code": configuration.service_mode.code, "name": configuration.service_mode.name}
+            for configuration in BusinessService.public_service_modes(obj)
+        ]
 
 
 class PublicBusinessWorkingDaySerializer(serializers.ModelSerializer):

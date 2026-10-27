@@ -141,9 +141,9 @@ class PublicBusinessDetailView(APIView):
 
     def get(self, request, pk):
         business = get_object_or_404(
-            BusinessProfile.objects.select_related(
-                "city", "light_logo__status", "dark_logo__status"
-            ).filter(status_id=BusinessStatusEnum.ACTIVE.value),
+            BusinessService.public_card_businesses().filter(
+                status_id=BusinessStatusEnum.ACTIVE.value
+            ),
             pk=pk,
         )
         return api_response(data=PublicBusinessCardSerializer(business).data)

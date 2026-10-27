@@ -1,9 +1,26 @@
 from rest_framework.test import APITestCase
 
+from core.management.seeders.business_service_modes import (
+    BusinessServiceModeSeeder,
+)
 from domains.business.enums.BusinessStatusEnum import BusinessStatusEnum
-from domains.business.models import BusinessCategory, BusinessProfile
+from domains.business.models import (
+    BusinessCategory,
+    BusinessProfile,
+    BusinessProfileServiceMode,
+    BusinessServiceMode,
+)
 from domains.catalog.models import Category, CategoryStatus
 from domains.location.models import City, Country, State
+
+CARD_FIELDS = {
+    "id",
+    "name",
+    "city",
+    "logo_url",
+    "availability_status",
+    "service_modes",
+}
 
 
 class PublicBusinessByCategoryTests(APITestCase):
@@ -102,8 +119,46 @@ class PublicBusinessByCategoryTests(APITestCase):
 
         self.assertEqual(
             set(response.data["data"]["results"][0]),
-            {"id", "name", "city", "logo_url", "availability_status"},
+            CARD_FIELDS,
         )
+
+    def test_card_lists_only_active_service_modes(self):
+        BusinessServiceModeSeeder().run()
+        online = BusinessServiceMode.objects.get(code="online")
+        in_person = BusinessServiceMode.objects.get(code="in_person")
+        retired = BusinessServiceMode.objects.create(
+            code="retired", name="Retired", is_active=False
+        )
+        BusinessProfileServiceMode.objects.create(
+            business_profile=self.active, service_mode=online
+        )
+        BusinessProfileServiceMode.objects.create(
+            business_profile=self.active, service_mode=in_person, is_active=False
+        )
+        BusinessProfileServiceMode.objects.create(
+            business_profile=self.active, service_mode=retired
+        )
+        # Another listed business's selection stays on its own card.
+        BusinessCategory.objects.create(business=self.other, category=self.root)
+        BusinessProfileServiceMode.objects.create(
+            business_profile=self.other, service_mode=in_person
+        )
+
+        cards = {
+            item["name"]: item["service_modes"]
+            for item in self.get(self.root.slug).data["data"]["results"]
+        }
+
+        self.assertEqual(cards["Alpha"], [{"code": "online", "name": "Online"}])
+        self.assertEqual(cards["Gamma"], [{"code": "in_person", "name": "In Person"}])
+
+    def test_card_service_modes_are_empty_without_configuration(self):
+        response = self.get(self.root.slug)
+
+        card = next(
+            item for item in response.data["data"]["results"] if item["name"] == "Alpha"
+        )
+        self.assertEqual(card["service_modes"], [])
 
     def test_card_exposes_city_title(self):
         country = Country.objects.create(name="Iran", code="IR", phone_code="98")
@@ -149,12 +204,22 @@ class PublicBusinessDetailTests(APITestCase):
         response = self.get(self.active.id)
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            set(response.data["data"]),
-            {"id", "name", "city", "logo_url", "availability_status"},
-        )
+        self.assertEqual(set(response.data["data"]), CARD_FIELDS)
         self.assertEqual(response.data["data"]["id"], self.active.id)
         self.assertEqual(response.data["data"]["name"], "Alpha")
+
+    def test_detail_lists_active_service_modes(self):
+        BusinessServiceModeSeeder().run()
+        online = BusinessServiceMode.objects.get(code="online")
+        BusinessProfileServiceMode.objects.create(
+            business_profile=self.active, service_mode=online
+        )
+
+        response = self.get(self.active.id)
+
+        self.assertEqual(
+            response.data["data"]["service_modes"], [{"code": "online", "name": "Online"}]
+        )
 
     def test_inactive_business_returns_404(self):
         self.assertEqual(self.get(self.pending.id).status_code, 404)

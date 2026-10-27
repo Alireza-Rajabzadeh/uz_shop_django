@@ -1,5 +1,5 @@
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 from django.utils.translation import gettext as _
 
 from domains.shipment.services import ShipmentPricingService
@@ -70,13 +70,55 @@ class BusinessService:
         return current
 
     @staticmethod
+    def public_service_mode_configurations():
+        """The configurations a storefront may advertise.
+
+        A configuration is public only while both the business selected it and
+        the reference mode itself is still offered, so a mode retired by an
+        administrator disappears from every card at once.
+        """
+        return (
+            BusinessProfileServiceMode.objects.filter(
+                is_active=True, service_mode__is_active=True
+            )
+            .select_related("service_mode")
+            .order_by("service_mode_id")
+        )
+
+    @staticmethod
+    def public_card_businesses():
+        """Business rows ready for the public directory card.
+
+        The public card serializes each business's service modes, so the
+        prefetch is part of the card contract, not an optional tuning step.
+        """
+        return BusinessProfile.objects.select_related(
+            "city", "light_logo__status", "dark_logo__status"
+        ).prefetch_related(
+            Prefetch(
+                "service_modes",
+                queryset=BusinessService.public_service_mode_configurations(),
+                to_attr="public_service_modes",
+            )
+        )
+
+    @staticmethod
+    def public_service_modes(business):
+        prefetched = getattr(business, "public_service_modes", None)
+        if prefetched is not None:
+            return prefetched
+        return BusinessService.public_service_mode_configurations().filter(
+            business_profile=business
+        )
+
+    @staticmethod
     def category_businesses(category, search=""):
         """Active businesses registered under a category's root."""
         root = BusinessService.root_category(category)
-        queryset = BusinessProfile.objects.filter(
+        queryset = BusinessService.public_card_businesses().filter(
             status_id=BusinessStatusEnum.ACTIVE.value,
             categories__category_id=root.id,
-        ).select_related("city", "light_logo__status", "dark_logo__status")
+        )
         if search:
             queryset = queryset.filter(
                 Q(display_name__icontains=search)
