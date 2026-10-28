@@ -69,6 +69,14 @@ BUSINESS_REFERENCE_PATHS = frozenset(
     }
 )
 
+# Reference data the business form loads, matched by whole path family. The
+# vendor location options are the province/city lists the profile selects are
+# built from: shared location vocabulary, not the business's own rows, so a
+# pending vendor reads them exactly like the list above. The inventory
+# location options live under `/api/vendor/location-options/` and stay gated,
+# because those feed warehouse and product work rather than the profile.
+BUSINESS_REFERENCE_PREFIXES = ("/api/location/options/vendor/",)
+
 # Authentication entry points are never gated by the business lifecycle.
 # A vendor whose business an admin just banned or sent back for
 # confirmation still has to be able to sign in — and to sign in again while
@@ -122,6 +130,19 @@ def _is_read_allowed(request, paths):
     return request.method in SAFE_METHODS and request.path in paths
 
 
+def _is_reference_read(request):
+    """Reference data the business form builds its selects from.
+
+    Reads only: these are platform vocabularies, and a pending vendor is
+    expected to be filling the form there. Query strings do not matter,
+    because `request.path` carries only the route.
+    """
+    return request.method in SAFE_METHODS and (
+        request.path in BUSINESS_REFERENCE_PATHS
+        or request.path.startswith(BUSINESS_REFERENCE_PREFIXES)
+    )
+
+
 class BusinessStatusMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
@@ -150,7 +171,7 @@ class BusinessStatusMiddleware:
             if (
                 path.startswith(BUSINESS_INFO_PATH_PREFIX)
                 or _is_read_allowed(request, BOOT_PATHS)
-                or _is_read_allowed(request, BUSINESS_REFERENCE_PATHS)
+                or _is_reference_read(request)
             ):
                 return self.get_response(request)
             return _deny(

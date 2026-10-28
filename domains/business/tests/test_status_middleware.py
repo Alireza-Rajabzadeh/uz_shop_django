@@ -146,6 +146,38 @@ class BusinessStatusMiddlewareTests(APITestCase):
         response = self.client.get("/api/business/public/social-medias")
         self.assertNotEqual(response.status_code, 403)
 
+    def test_pending_vendor_may_read_the_location_options(self):
+        # The business form's province/city selects read the shared location
+        # vocabulary. Without these the wizard cannot save an address, so
+        # they belong to the same reference allowlist as the lists above.
+        self.as_vendor(self.pending_vendor)
+        for path in (
+            "/api/location/options/vendor/provinces",
+            "/api/location/options/vendor/cities",
+        ):
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                self.assertNotEqual(response.status_code, 403)
+
+    def test_banned_vendor_is_blocked_from_the_location_options(self):
+        self.as_vendor(self.banned_vendor)
+        response = self.client.get("/api/location/options/vendor/provinces")
+        self.assert_gate_denied(response, "business_banned")
+
+    def test_location_options_allowlist_is_read_only(self):
+        # A reference read is not a write path: only safe methods pass.
+        self.as_vendor(self.pending_vendor)
+        response = self.client.post(
+            "/api/location/options/vendor/provinces", {}, format="json"
+        )
+        self.assert_gate_denied(response, "business_confirmation_await")
+
+    def test_inventory_location_options_stay_gated(self):
+        # Warehouse/product lookups are operations, not the business form.
+        self.as_vendor(self.pending_vendor)
+        response = self.client.get("/api/vendor/location-options/countries")
+        self.assert_gate_denied(response, "business_confirmation_await")
+
     def test_banned_vendor_is_blocked_from_the_onboarding_reference_data(self):
         self.as_vendor(self.banned_vendor)
         response = self.client.get("/api/business/public/social-medias")
