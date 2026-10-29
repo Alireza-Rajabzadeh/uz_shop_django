@@ -8,7 +8,11 @@ from rest_framework.views import APIView
 
 from core.responses import api_response
 from domains.business.models import BusinessCategory, BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessWorkingDay
-from domains.business.services import BusinessServiceModeService, BusinessShipmentService
+from domains.business.services import (
+    BusinessOnboardingService,
+    BusinessServiceModeService,
+    BusinessShipmentService,
+)
 from domains.shipment.models import ShipmentMethod, ShipmentPricingMethod
 from domains.shipment.services import ShipmentPricingService
 from domains.vendor.auth import VendorJWTAuthentication
@@ -51,7 +55,11 @@ class VendorBusinessProfileView(APIView):
             return api_response(False, _("Business profile already exists."), status_code=400)
         serializer = VendorBusinessProfileSerializer(data=request.data, context={"vendor": request.user})
         serializer.is_valid(raise_exception=True)
-        serializer.save(vendor=request.user)
+        # The profile and its onboarding baseline commit together: a store
+        # must never exist without the reference rows the wizard expects.
+        with transaction.atomic():
+            profile = serializer.save(vendor=request.user)
+            BusinessOnboardingService.initialize(profile)
         return api_response(data=serializer.data, status_code=201)
 
     def patch(self, request):
