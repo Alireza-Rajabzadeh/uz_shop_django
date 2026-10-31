@@ -4,6 +4,7 @@ from .cart_item import MarketplaceCartItem
 from .offer_price_history import OfferPriceHistory
 from .order import MarketplaceOrder
 from .order_action import MarketplaceOrderAction, MarketplaceOrderStatusAction
+from .order_charge import OrderCharge
 from .order_history import MarketplaceOrderHistory
 from .order_item import MarketplaceOrderItem
 from .order_reservation import MarketplaceOrderItemReservation
@@ -33,5 +34,6 @@ __all__ = [
     "MarketplaceReturnRequestEvidence",
     "MarketplaceReturnRequestItem",
     "OfferPriceHistory",
+    "OrderCharge",
     "PricingStrategy",
 ]

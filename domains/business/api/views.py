@@ -1,8 +1,8 @@
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 
 from django.db import transaction
@@ -13,12 +13,14 @@ from core.services import CacheService
 from domains.business.cache import BUSINESS_CACHE_KEY
 from domains.business.enums.BusinessStatusEnum import BusinessStatusEnum
 from domains.business.models import BusinessCategory, BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessWorkingDay, SocialMedia, SocialMediaIcon
-from domains.business.services import BusinessService
+from domains.business.services import BusinessChargeService, BusinessService
 from domains.catalog.models import Category
 from domains.users.auth import AdminJWTAuthentication
+from domains.vendor.auth import VendorJWTAuthentication
 
 from .serializers import (
     BusinessCategorySerializer, BusinessCategoryUpsertSerializer,
+    BusinessChargeSerializer,
     BusinessPhoneSerializer, BusinessProfileSerializer, BusinessSocialLinkSerializer,
     BusinessWorkingDaySerializer, PublicBusinessCardSerializer,
     PublicBusinessPhoneSerializer, PublicBusinessProfileSerializer,
@@ -253,6 +255,90 @@ class WorkingDayList(AdminBusinessListCreate):
     ordering_fields = AdminBusinessBase.ordering_fields + ("weekday",)
 
 class WorkingDayDetail(AdminBusinessDetailDeletable, WorkingDayList): pass
+
+
+class VendorBusinessChargeBase(APIView):
+    """Business-owner API for charges, scoped to the caller's business.
+
+    The business is always resolved from the authenticated vendor, never from
+    the request body or query string, so a charge id from another business is
+    indistinguishable from a missing one.
+    """
+
+    authentication_classes = [VendorJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get_business(self, request):
+        business = BusinessProfile.objects.filter(vendor=request.user).first()
+        if business is None:
+            raise NotFound("Business profile not found.")
+        return business
+
+    def get_object(self, request, pk):
+        charge = BusinessChargeService.get_charge(self.get_business(request), pk)
+        if charge is None:
+            raise NotFound("Charge not found.")
+        return charge
+
+    @staticmethod
+    def _save(charge, **values):
+        try:
+            return BusinessChargeService.update_charge(charge, **values)
+        except BusinessChargeService.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
+
+
+class VendorBusinessChargeListCreateView(VendorBusinessChargeBase):
+    def get(self, request):
+        business = BusinessProfile.objects.filter(vendor=request.user).first()
+        if business is None:
+            return api_response(data=[])
+        charges = BusinessChargeService.list_charges(business)
+        return api_response(data=BusinessChargeSerializer(charges, many=True).data)
+
+    def post(self, request):
+        business = self.get_business(request)
+        serializer = BusinessChargeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            charge = BusinessChargeService.create_charge(
+                business, **serializer.validated_data
+            )
+        except BusinessChargeService.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
+        return api_response(data=BusinessChargeSerializer(charge).data, status_code=201)
+
+
+class VendorBusinessChargeDetailView(VendorBusinessChargeBase):
+    def get(self, request, pk):
+        return api_response(
+            data=BusinessChargeSerializer(self.get_object(request, pk)).data
+        )
+
+    def patch(self, request, pk):
+        charge = self.get_object(request, pk)
+        serializer = BusinessChargeSerializer(charge, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        charge = self._save(charge, **serializer.validated_data)
+        return api_response(data=BusinessChargeSerializer(charge).data)
+
+    def delete(self, request, pk):
+        BusinessChargeService.delete_charge(self.get_object(request, pk))
+        return api_response(True, "Charge deleted.", None)
+
+
+class VendorBusinessChargeStatusView(VendorBusinessChargeBase):
+    """Activate or deactivate one of the caller's charges."""
+
+    ACTIONS = {"activate": True, "deactivate": False}
+
+    def post(self, request, pk, action):
+        if action not in self.ACTIONS:
+            raise NotFound("Charge action not found.")
+        charge = BusinessChargeService.set_active(
+            self.get_object(request, pk), self.ACTIONS[action]
+        )
+        return api_response(data=BusinessChargeSerializer(charge).data)
 
 
 class AdminBusinessProfileCategoryView(APIView):

@@ -96,6 +96,15 @@ class BaseCheckoutService:
     def _reservation_extra_fields(self, entry):
         return {}
 
+    def _apply_order_charges(self, order, discounted_subtotal):
+        """Create this flow's extra charge rows and return their total.
+
+        ``None`` means the flow has no charge rows at all, which keeps the
+        shop flow's totals exactly as they were. A flow that does have them
+        returns a ``Decimal`` to add to the order total.
+        """
+        return None
+
     # ───────────────────────── shared reads ─────────────────────────
 
     def _status(self, name):
@@ -243,23 +252,35 @@ class BaseCheckoutService:
 
         order.subtotal = subtotal.quantize(self.two_places)
         order.discount_amount = discount_total.quantize(self.two_places)
+        # Charges are calculated from the discounted subtotal, before
+        # shipping: the shipment calculator owns its own share of the total.
+        charges_total = self._apply_order_charges(
+            order, order.subtotal - order.discount_amount
+        )
         shipment = self.shipment_service.calculate(order)
         order.shipping_original_amount = shipment.original_price
         order.shipping_amount = shipment.final_price
         order.total_amount = (
-            subtotal - discount_total + shipment.final_price
+            subtotal
+            - discount_total
+            + shipment.final_price
+            + (charges_total or Decimal("0.00"))
         ).quantize(self.two_places)
         order.reservation_expires_at = timezone.now() + timedelta(
             minutes=settings.ORDER_RESERVATION_MINUTES
         )
-        order.save(update_fields=[
+        update_fields = [
             "subtotal",
             "discount_amount",
             "shipping_original_amount",
             "shipping_amount",
             "total_amount",
             "reservation_expires_at",
-        ])
+        ]
+        if charges_total is not None:
+            order.charges_total = charges_total
+            update_fields.append("charges_total")
+        order.save(update_fields=update_fields)
         return order
 
     @transaction.atomic

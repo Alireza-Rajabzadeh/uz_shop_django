@@ -1,7 +1,9 @@
+from decimal import Decimal
+
 from rest_framework import serializers
 
-from domains.business.models import BusinessCategory, BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessWorkingDay, SocialMedia, SocialMediaIcon
-from domains.business.services import BusinessService
+from domains.business.models import BusinessCategory, BusinessCharge, BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessWorkingDay, SocialMedia, SocialMediaIcon
+from domains.business.services import BusinessChargeService, BusinessService
 from domains.files.models import File
 from domains.files.services import FileService
 
@@ -295,6 +297,43 @@ class PublicBusinessWorkingDaySerializer(serializers.ModelSerializer):
     class Meta:
         model = BusinessWorkingDay
         exclude = ["created_at", "updated_at"]
+
+
+class BusinessChargeSerializer(serializers.ModelSerializer):
+    """One business's charge configuration.
+
+    ``business`` is intentionally absent: ownership comes from the
+    authenticated vendor, never from the request body.
+    """
+
+    class Meta:
+        model = BusinessCharge
+        fields = [
+            "id",
+            "name",
+            "type",
+            "calculation_type",
+            "amount",
+            "is_active",
+            "is_mandatory",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+        extra_kwargs = {
+            "amount": {"min_value": Decimal("0")},
+        }
+
+    def validate(self, attrs):
+        calculation_type = attrs.get(
+            "calculation_type", getattr(self.instance, "calculation_type", None)
+        )
+        amount = attrs.get("amount", getattr(self.instance, "amount", None))
+        try:
+            BusinessChargeService.validate_amount(calculation_type, amount)
+        except BusinessChargeService.ValidationError as exc:
+            raise serializers.ValidationError(exc.errors) from exc
+        return attrs
 
 
 class BusinessCategorySerializer(serializers.ModelSerializer):

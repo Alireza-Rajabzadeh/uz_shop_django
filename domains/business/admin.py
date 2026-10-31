@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import BusinessCategory, BusinessPhone, BusinessProfile, BusinessServiceMode, BusinessShipment, BusinessSocialLink, BusinessWorkingDay, SocialMedia, SocialMediaIcon
+from .models import BusinessCategory, BusinessCharge, BusinessPhone, BusinessProfile, BusinessServiceMode, BusinessShipment, BusinessSocialLink, BusinessWorkingDay, SocialMedia, SocialMediaIcon
 
 
 @admin.register(BusinessProfile)
@@ -74,6 +74,22 @@ class BusinessShipmentAdmin(admin.ModelAdmin):
         "shipment_method__code",
         "pricing_method__code",
     )
+
+
+@admin.register(BusinessCharge)
+class BusinessChargeAdmin(admin.ModelAdmin):
+    list_display = (
+        "business",
+        "name",
+        "type",
+        "calculation_type",
+        "amount",
+        "is_active",
+        "is_mandatory",
+        "updated_at",
+    )
+    list_filter = ("type", "calculation_type", "is_active", "is_mandatory")
+    search_fields = ("business__business_name", "business__display_name", "name")
 
 
 @admin.register(BusinessServiceMode)

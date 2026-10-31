@@ -24,7 +24,16 @@ class CartView(APIView):
     cart_service_class = CartService
 
     def get(self, request):
-        return api_response(True, "", self.cart_service_class().describe_cart(request.user))
+        include_shipping = request.query_params.get(
+            "shipping", ""
+        ).strip().casefold() in {"1", "true", "yes"}
+        return api_response(
+            True,
+            "",
+            self.cart_service_class().describe_cart(
+                request.user, include_shipping=include_shipping
+            ),
+        )
 
 
 class CartItemsView(APIView):

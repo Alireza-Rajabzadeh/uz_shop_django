@@ -97,17 +97,19 @@ class BaseCartService:
 
     # ───────────────────────── rendering ─────────────────────────
 
-    def describe_cart(self, customer):
+    def describe_cart(self, customer, *, include_shipping=False):
         cart = self.get_or_create_cart(customer)
-        return self.describe_existing(cart)
+        return self.describe_existing(cart, include_shipping=include_shipping)
 
-    def describe_existing(self, cart):
+    def describe_existing(self, cart, *, include_shipping=False):
         cart_items = list(cart.items.order_by("id"))
         payloads = [
             self._item_payload(item, variant)
             for item, variant in self._attach_variants(cart_items)
         ]
-        seller_groups = self._seller_groups(payloads, cart)
+        seller_groups = self._seller_groups(
+            payloads, cart, include_shipping=include_shipping
+        )
         two_places = Decimal("0.01")
         subtotal = sum(
             (Decimal(group["totals"]["subtotal"]) for group in seller_groups),
@@ -118,46 +120,48 @@ class BaseCartService:
             Decimal("0.00"),
         )
         shipping_amount = sum(
-            (Decimal(group["totals"]["shipping_amount"]) for group in seller_groups),
-            Decimal("0.00"),
-        )
-        shipment_original = sum(
             (
-                Decimal(group["totals"]["shipment"]["original_price"])
+                Decimal(group["totals"]["shipping_amount"])
                 for group in seller_groups
+                if "shipping_amount" in group["totals"]
             ),
             Decimal("0.00"),
         )
-        shipment_final = sum(
-            (
-                Decimal(group["totals"]["shipment"]["final_price"])
-                for group in seller_groups
+        totals = {
+            "subtotal": str(subtotal.quantize(two_places)),
+            "discount_amount": str(discount_amount.quantize(two_places)),
+            "total_amount": str(
+                (subtotal - discount_amount + shipping_amount).quantize(
+                    two_places
+                )
             ),
-            Decimal("0.00"),
-        )
+        }
+        if include_shipping:
+            totals["shipping_amount"] = str(shipping_amount.quantize(two_places))
+            totals["shipment"] = {
+                "original_price": str(
+                    sum(
+                        (
+                            Decimal(
+                                group["totals"]["shipment"]["original_price"]
+                            )
+                            for group in seller_groups
+                        ),
+                        Decimal("0.00"),
+                    ).quantize(two_places)
+                ),
+                "final_price": str(shipping_amount.quantize(two_places)),
+            }
         return {
             "id": cart.id,
             "address_info": cart.address_info,
             "items": payloads,
             "seller_groups": seller_groups,
-            "totals": {
-                "subtotal": str(subtotal.quantize(two_places)),
-                "discount_amount": str(discount_amount.quantize(two_places)),
-                "shipping_amount": str(shipping_amount.quantize(two_places)),
-                "shipment": {
-                    "original_price": str(shipment_original.quantize(two_places)),
-                    "final_price": str(shipment_final.quantize(two_places)),
-                },
-                "total_amount": str(
-                    (subtotal - discount_amount + shipping_amount).quantize(
-                        two_places
-                    )
-                ),
-            },
+            "totals": totals,
             "cart_valid": bool(payloads) and all(p["valid"] for p in payloads),
         }
 
-    def _seller_groups(self, payloads, cart):
+    def _seller_groups(self, payloads, cart, *, include_shipping=False):
         """Split the basket into the independent seller checkouts it implies.
 
         A cart can hold items from several businesses, but an order belongs to
@@ -181,7 +185,12 @@ class BaseCartService:
             discount_amount = sum(
                 Decimal(item["line_discount"]) for item in items
             )
-            shipment = self.shipment_service.calculate(cart)
+            shipping_amount = Decimal("0.00")
+            shipment_payload = None
+            if include_shipping:
+                shipment = self.shipment_service.calculate(cart)
+                shipping_amount = shipment.final_price
+                shipment_payload = shipment.payload()
             valid = all(item["valid"] for item in items)
             payment_available = bool(
                 business and self._business_payment_available(business["id"])
@@ -194,21 +203,23 @@ class BaseCartService:
                 checkout_status = "awaiting_payment_method"
             else:
                 checkout_status = "ready"
+            totals = {
+                "subtotal": str(subtotal),
+                "discount_amount": str(discount_amount),
+                "total_amount": str(
+                    subtotal - discount_amount + shipping_amount
+                ),
+            }
+            if include_shipping:
+                totals["shipping_amount"] = str(shipping_amount)
+                totals["shipment"] = shipment_payload
             groups.append({
                 "business": business,
                 "item_ids": [item["id"] for item in items],
                 "valid": valid,
                 "payment_available": payment_available,
                 "checkout_status": checkout_status,
-                "totals": {
-                    "subtotal": str(subtotal),
-                    "discount_amount": str(discount_amount),
-                    "shipping_amount": str(shipment.final_price),
-                    "shipment": shipment.payload(),
-                    "total_amount": str(
-                        subtotal - discount_amount + shipment.final_price
-                    ),
-                },
+                "totals": totals,
             })
         return groups
 

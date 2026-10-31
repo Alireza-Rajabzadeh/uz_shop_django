@@ -13,6 +13,7 @@ from ..models import (
     MarketplaceOrderStatusAction,
 )
 from .cart_service import MarketplaceCartService
+from .charge_service import MarketplaceOrderChargeService
 from .return_service import MarketplaceReturnRequestService
 
 
@@ -82,6 +83,36 @@ class MarketplaceOrderService(BaseOrderService):
 
     def _order_extra_fields(self, items):
         return {"business": self._business_for(items)}
+
+    def _apply_order_charges(self, order, discounted_subtotal):
+        """Snapshot the seller's configured charges onto this order."""
+        return MarketplaceOrderChargeService.apply(order, discounted_subtotal)
+
+    def _charge_payload(self, order):
+        return [
+            {
+                "id": charge.id,
+                "name": charge.name,
+                "type": charge.type,
+                "calculation_type": charge.calculation_type,
+                "rate": str(charge.rate),
+                "amount": str(charge.amount),
+            }
+            for charge in order.charges.order_by("id")
+        ]
+
+    def _order_payload(self, order):
+        payload = super()._order_payload(order)
+        payload["totals"]["charges_total"] = str(order.charges_total)
+        payload["charges"] = self._charge_payload(order)
+        return payload
+
+    def _admin_order_row(self, order, *, include_returns=False):
+        payload = super()._admin_order_row(
+            order, include_returns=include_returns
+        )
+        payload["totals"]["charges_total"] = str(order.charges_total)
+        return payload
 
 
 
