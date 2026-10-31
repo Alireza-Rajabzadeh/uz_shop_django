@@ -592,6 +592,16 @@ class BaseOrderService(BaseCheckoutService):
         )
         return payload
 
+    @staticmethod
+    def _payment_status_code(status):
+        """The payment status as its code, which is the payload contract.
+
+        The shop keeps the code on the row; the marketplace points at a
+        ``BusinessPaymentStatus`` seeded with the same codes, so both flows
+        answer with the same vocabulary.
+        """
+        return status.name if hasattr(status, "name") else status
+
     def _order_payload(self, order):
         item_rows = list(
             order.items.order_by("id")
@@ -638,7 +648,7 @@ class BaseOrderService(BaseCheckoutService):
                     else None
                 ),
                 "amount": str(successful_payment.amount),
-                "status": successful_payment.status,
+                "status": self._payment_status_code(successful_payment.status),
                 "ref_number": successful_payment.ref_number,
             }
         payments = [
@@ -652,7 +662,7 @@ class BaseOrderService(BaseCheckoutService):
                 "payment_channel_fa_name": p.payment_channel.fa_name if p.payment_channel else None,
                 "channel_account_number": p.payment_channel.account_number if p.payment_channel else None,
                 "channel_card_number": p.payment_channel.card_number if p.payment_channel else None,
-                "status": p.status,
+                "status": self._payment_status_code(p.status),
                 "amount": str(p.amount),
                 "ref_number": p.ref_number,
                 "resource_account_number": p.resource_account_number,

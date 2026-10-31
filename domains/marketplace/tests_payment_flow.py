@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import json
 from decimal import Decimal
 
 from django.utils import timezone
@@ -74,6 +75,22 @@ class MarketplacePaymentFlowTests(MarketplaceCheckoutFixture):
         inventory.refresh_from_db()
         self.assertEqual(inventory.reserved, 2)
         self.assertEqual(BusinessPayment.objects.count(), 0)
+
+    def test_a_submitted_payment_is_reported_to_the_customer_as_a_code(self):
+        # The panels read a payment status as a string. The shop stores that
+        # string on the row, but a marketplace payment points at a
+        # BusinessPaymentStatus row, so the shared payload has to flatten the
+        # relation — otherwise the pay response dies while rendering JSON.
+        order, _inventory = self.checkout()
+
+        submitted = self.submit(order, ref_number="1234567890")
+
+        payload = self.service._customer_order_payload(submitted)
+        json.dumps(payload)
+
+        self.assertEqual(
+            [payment["status"] for payment in payload["payments"]], ["pending"]
+        )
 
     def test_a_documented_method_requires_a_document(self):
         method = BusinessPaymentMethod.objects.get(code="card_to_card")
