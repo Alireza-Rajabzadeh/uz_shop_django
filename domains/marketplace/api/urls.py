@@ -13,6 +13,11 @@ urlpatterns = [
     path("cart/clear", cart_views.MarketplaceCartClearView.as_view()),
     path("cart/merge", cart_views.MarketplaceCartMergeView.as_view()),
     path("cart/address", cart_views.MarketplaceCartAddressView.as_view()),
+    path("cart/charges", cart_views.MarketplaceCartChargesView.as_view()),
+    path(
+        "businesses/<int:business_id>/shipments",
+        cart_views.MarketplaceBusinessShipmentsView.as_view(),
+    ),
     path("cart/validate", cart_views.MarketplaceCartValidateView.as_view()),
     path(
         "cart/validate-items",
@@ -41,6 +46,10 @@ urlpatterns = [
         "returns/<int:return_request_id>",
         order_views.MarketplaceReturnRequestDetailView.as_view(),
     ),
+    # Both forms: the panels' API proxy sits behind Next.js, which strips a
+    # trailing slash with a 308 before the request reaches Django, and a POST
+    # cannot be redirected again under APPEND_SLASH.
+    path("orders", order_views.MarketplaceOrderListCreateView.as_view()),
     path("orders/", order_views.MarketplaceOrderListCreateView.as_view()),
     path("orders/<int:order_id>", order_views.MarketplaceOrderDetailView.as_view()),
     path(

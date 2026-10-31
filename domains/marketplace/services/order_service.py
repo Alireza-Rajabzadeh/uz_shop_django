@@ -2,7 +2,9 @@ from django.db import transaction
 from django.utils.translation import gettext as _
 
 from domains.business_payments.services import BusinessPaymentService
+from domains.business.services import BusinessShipmentService
 from domains.order.flow import BaseOrderService
+from domains.shipment.services import ShipmentPrice
 
 from ..models import (
     MarketplaceOrder,
@@ -84,14 +86,21 @@ class MarketplaceOrderService(BaseOrderService):
     def _order_extra_fields(self, items):
         return {"business": self._business_for(items)}
 
-    def _apply_order_charges(self, order, discounted_subtotal):
-        """Snapshot the seller's configured charges onto this order."""
-        return MarketplaceOrderChargeService.apply(order, discounted_subtotal)
+    def _apply_order_charges(
+        self, order, discounted_subtotal, *, shipment=None, shipment_price=None
+    ):
+        """Snapshot the seller's charges and the chosen shipment."""
+        return MarketplaceOrderChargeService.apply(
+            order, discounted_subtotal, shipment=shipment
+        )
 
     def _charge_payload(self, order):
         return [
             {
                 "id": charge.id,
+                "kind": charge.kind,
+                "business_charge_id": charge.business_charge_id,
+                "business_shipment_id": charge.business_shipment_id,
                 "name": charge.name,
                 "type": charge.type,
                 "calculation_type": charge.calculation_type,
@@ -117,7 +126,9 @@ class MarketplaceOrderService(BaseOrderService):
 
 
     @transaction.atomic
-    def checkout_business_from_cart(self, customer, business_id):
+    def checkout_business_from_cart(
+        self, customer, business_id, shipment_id=None
+    ):
         """Create one order from one seller's share of the basket.
 
         The cart can hold several sellers. Checkout is intentionally per
@@ -125,6 +136,11 @@ class MarketplaceOrderService(BaseOrderService):
         seller's items must not remove the rest of the basket. If this seller
         has not configured a payment method, nothing is created and the lines
         stay in the cart so the customer can retry later.
+
+        ``shipment_id`` is the delivery method selected in checkout. It must
+        belong to the seller; omitting it uses the seller's default. When the
+        seller has no usable shipment configuration, the legacy zero-price
+        quote keeps the order creatable.
         """
         cart, items = self._cart_for_checkout(customer)
         self._attach_line_offers(items)
@@ -142,7 +158,29 @@ class MarketplaceOrderService(BaseOrderService):
         business = selected[0].variant._business_offer.business
         if not self._has_payment_channel(business):
             raise self.PaymentMethodUnavailable(business)
-        order = self._create_order(customer, cart.address_info, selected)
+
+        try:
+            shipment_config = BusinessShipmentService.resolve_for_checkout(
+                business, shipment_id
+            )
+        except BusinessShipmentService.ValidationError as exc:
+            raise self.ValidationError(exc.errors) from exc
+        shipment_quote = None
+        if shipment_config is not None:
+            try:
+                cost = BusinessShipmentService.calculate_price(shipment_config)
+            except BusinessShipmentService.ValidationError as exc:
+                raise self.ValidationError(exc.errors) from exc
+            shipment_quote = ShipmentPrice(
+                original_price=cost, final_price=cost
+            )
+        order = self._create_order(
+            customer,
+            cart.address_info,
+            selected,
+            shipment_quote=shipment_quote,
+            shipment_config=shipment_config,
+        )
         for item in selected:
             item.delete()
         return order

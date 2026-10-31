@@ -3,17 +3,31 @@ from django.db.models import Q
 
 
 class OrderCharge(models.Model):
-    """One configured charge applied to a marketplace order.
+    """One charge snapshotted onto a marketplace order.
 
-    Every value is snapshotted at checkout. ``business_charge`` is a nullable
-    traceability pointer only: the row keeps its own name, type, calculation
-    type, rate and calculated amount, so changing or deleting the original
-    ``BusinessCharge`` never alters a historical order. Order totals are read
-    from ``amount`` here, never recalculated from the pointer's target.
+    Every value is snapshotted at checkout. The two nullable pointers —
+    ``business_charge`` for a configured fee and ``business_shipment`` for
+    the chosen delivery method — are traceability only: the row keeps its own
+    name, type, calculation type, rate and calculated amount, so changing or
+    deleting the source configuration never alters a historical order. Order
+    totals are read from ``amount`` here, never recalculated from a pointer.
 
-    The pointer uses ``SET_NULL`` so removing a configuration retires the link
+    ``kind`` separates a seller's configured charge from the shipment row.
+    Both live in this table so the order screen can show one itemised
+    breakdown, while ``MarketplaceOrder.charges_total`` keeps counting only
+    the non-shipment rows (shipping has its own order fields and must not be
+    counted twice).
+
+    The pointers use ``SET_NULL`` so removing a configuration retires the link
     without touching the order row.
     """
+
+    KIND_BUSINESS_CHARGE = "business_charge"
+    KIND_SHIPMENT = "shipment"
+    KIND_CHOICES = [
+        (KIND_BUSINESS_CHARGE, "Business charge"),
+        (KIND_SHIPMENT, "Shipment"),
+    ]
 
     class Meta:
         db_table = "marketplace_order_charge"
@@ -47,6 +61,18 @@ class OrderCharge(models.Model):
         null=True,
         blank=True,
         related_name="marketplace_order_charges",
+    )
+    business_shipment = models.ForeignKey(
+        "business.BusinessShipment",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="marketplace_order_charges",
+    )
+    kind = models.CharField(
+        max_length=20,
+        choices=KIND_CHOICES,
+        default=KIND_BUSINESS_CHARGE,
     )
     name = models.CharField(max_length=200)
     type = models.CharField(max_length=16)

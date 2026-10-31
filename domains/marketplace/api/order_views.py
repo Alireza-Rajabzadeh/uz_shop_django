@@ -51,7 +51,9 @@ class MarketplaceOrderListCreateView(OrderListCreateView):
         service = self.order_service_class()
         try:
             order = service.checkout_business_from_cart(
-                request.user, serializer.validated_data["business_id"]
+                request.user,
+                serializer.validated_data["business_id"],
+                serializer.validated_data.get("shipment_id"),
             )
         except service.PaymentMethodUnavailable as exc:
             return api_response(

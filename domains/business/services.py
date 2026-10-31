@@ -199,6 +199,25 @@ class BusinessShipmentService:
         """
         return cls.available_shipments(business).filter(is_default=True).first()
 
+    @classmethod
+    def resolve_for_checkout(cls, business, shipment_id=None):
+        """The shipment a checkout should use.
+
+        Without an explicit id the business's default is used, falling back
+        to its first usable configuration (most businesses configure one
+        method, so a default row is not guaranteed). An explicit id must name
+        a configuration this business can still offer.
+        """
+        queryset = cls.available_shipments(business)
+        if shipment_id is None:
+            return queryset.filter(is_default=True).first() or queryset.first()
+        shipment = queryset.filter(pk=shipment_id).first()
+        if shipment is None:
+            raise cls.ValidationError({
+                "shipment": [_("The selected shipment method is not available.")]
+            })
+        return shipment
+
     @staticmethod
     def available_shipments(business):
         return (

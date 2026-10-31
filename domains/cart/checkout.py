@@ -96,12 +96,16 @@ class BaseCheckoutService:
     def _reservation_extra_fields(self, entry):
         return {}
 
-    def _apply_order_charges(self, order, discounted_subtotal):
+    def _apply_order_charges(
+        self, order, discounted_subtotal, *, shipment=None, shipment_price=None
+    ):
         """Create this flow's extra charge rows and return their total.
 
         ``None`` means the flow has no charge rows at all, which keeps the
         shop flow's totals exactly as they were. A flow that does have them
-        returns a ``Decimal`` to add to the order total.
+        returns a ``Decimal`` to add to the order total. ``shipment`` (the
+        chosen configuration) and ``shipment_price`` are supplied by flows
+        that snapshot shipping as a charge row.
         """
         return None
 
@@ -227,7 +231,15 @@ class BaseCheckoutService:
             raise self.ValidationError({"cart": [_("The cart is empty.")]})
         return cart, items
 
-    def _create_order(self, customer, address_info, items):
+    def _create_order(
+        self,
+        customer,
+        address_info,
+        items,
+        *,
+        shipment_quote=None,
+        shipment_config=None,
+    ):
         order = self.order_model.objects.create(
             customer=customer,
             status=self._status(self.STATUS_PAYMENT_PENDING),
@@ -255,9 +267,12 @@ class BaseCheckoutService:
         # Charges are calculated from the discounted subtotal, before
         # shipping: the shipment calculator owns its own share of the total.
         charges_total = self._apply_order_charges(
-            order, order.subtotal - order.discount_amount
+            order,
+            order.subtotal - order.discount_amount,
+            shipment=shipment_config,
+            shipment_price=shipment_quote,
         )
-        shipment = self.shipment_service.calculate(order)
+        shipment = shipment_quote or self.shipment_service.calculate(order)
         order.shipping_original_amount = shipment.original_price
         order.shipping_amount = shipment.final_price
         order.total_amount = (

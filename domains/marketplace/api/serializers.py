@@ -131,6 +131,12 @@ class MarketplaceReturnRequestCreateSerializer(ReturnRequestCreateSerializer):
 
 class MarketplaceCheckoutSerializer(serializers.Serializer):
     business_id = serializers.IntegerField()
+    shipment_id = serializers.IntegerField(required=False, allow_null=True)
+
+
+class MarketplaceOrderChargesSerializer(serializers.Serializer):
+    business_id = serializers.IntegerField()
+    shipment_id = serializers.IntegerField(required=False, allow_null=True)
 
 
 # ───────────────────────── admin order filters ─────────────────────────
