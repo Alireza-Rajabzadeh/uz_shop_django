@@ -79,6 +79,7 @@ from .views.orders import (
     VendorOrderDetail,
     VendorOrderActions,
     VendorOrderExecuteAction,
+    VendorOrderPaymentReview,
     VendorOrderReturnAction,
     VendorOrderStatusList,
 )
@@ -219,6 +220,11 @@ urlpatterns = [
     path(
         "orders/<int:order_id>/returns/<int:return_request_id>/actions/<str:action_code>",
         VendorOrderReturnAction.as_view(),
+    ),
+    # The seller receives the transfer, so the seller decides on it.
+    path(
+        "orders/<int:order_id>/payments/<int:payment_id>/<str:decision>",
+        VendorOrderPaymentReview.as_view(),
     ),
     # Vendor club: the seller's own membership, summary, and point ledger
     path("club/membership", VendorClubMembershipView.as_view()),

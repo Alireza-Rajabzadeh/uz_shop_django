@@ -95,6 +95,10 @@ urlpatterns = [
         "admin/orders/<int:order_id>/returns/<int:return_request_id>/actions/<str:action_code>",
         admin_views.MarketplaceAdminReturnAction.as_view(),
     ),
+    path(
+        "admin/payments/<int:payment_id>/<str:decision>",
+        admin_views.MarketplaceAdminPaymentReview.as_view(),
+    ),
     path("admin/statuses", admin_views.MarketplaceAdminOrderStatusList.as_view()),
     path("admin/businesses", admin_views.MarketplaceAdminBusinessList.as_view()),
 ]

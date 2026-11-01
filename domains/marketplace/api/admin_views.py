@@ -7,12 +7,15 @@ rather than the shop's own order permission to see this list.
 """
 
 from django.db.models import Q
+from django.utils.translation import gettext as _
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.pagination import PageNumberPagination
 
 from core.responses import api_response
 from domains.business.models import BusinessProfile
 from domains.order.admin_views import (
     AdminAPIView,
+    AdminOrderActionPermissions,
     AdminOrderActions,
     AdminOrderDetail,
     AdminOrderExecuteAction,
@@ -27,6 +30,7 @@ from ..models import (
     MarketplaceReturnRequest,
 )
 from ..services.order_service import MarketplaceOrderService
+from ..services.payment_service import MarketplacePaymentService
 from ..services.return_service import MarketplaceReturnRequestService
 from .serializers import AdminMarketplaceOrderStatusSerializer
 
@@ -102,3 +106,40 @@ class MarketplaceAdminReturnAction(AdminReturnAction):
     model = MarketplaceReturnRequest
     order_service_class = MarketplaceOrderService
     return_service_class = MarketplaceReturnRequestService
+
+
+class MarketplaceAdminPaymentReview(AdminAPIView):
+    """Approve or reject a pending manual payment on a marketplace order.
+
+    ``review_payment`` owns the decision and the marketplace service names the
+    rows it writes. What matters is that this is the only route that reaches
+    it: an order whose payment proof no one has reviewed stays in
+    ``payment_processing``, and a seller's first fulfillment step only opens
+    at ``paid`` — so without this endpoint the seller's order screen can never
+    offer anything.
+    """
+
+    model = MarketplaceOrder
+    order_service_class = MarketplaceOrderService
+    return_service_class = MarketplaceReturnRequestService
+    payment_service_class = MarketplacePaymentService
+    permission_classes = [AdminOrderActionPermissions]
+
+    def post(self, request, payment_id, decision):
+        if decision not in {"approve", "reject"}:
+            raise NotFound(_("Payment review action not found."))
+        payments = self.payment_service_class()
+        try:
+            order = payments.review_payment_for_order_owner(
+                payment_id, approve=decision == "approve", admin=request.user
+            )
+        except payments.NotFoundError as exc:
+            raise NotFound(_("Payment not found.")) from exc
+        except payments.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
+        return api_response(
+            data=self.order_service_class().get_order_admin(
+                order.id,
+                include_returns=request.user.has_perm(self.returns_permission),
+            )
+        )

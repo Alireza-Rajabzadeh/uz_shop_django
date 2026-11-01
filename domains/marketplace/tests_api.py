@@ -5,20 +5,30 @@ with the flow swapped, so what is pinned here is that they answer from the
 marketplace tables: an admin without ``marketplace.view_marketplaceorder``
 is turned away, another customer's order is a 404, and a return created
 over HTTP lands on a marketplace request rather than a shop one.
+
+The seller's routes are here too because they read the same tables: they
+scope by the caller's business, and they are where a manual payment is
+finally decided.
 """
 
 from django.contrib.auth.models import User
+from rest_framework_simplejwt.tokens import RefreshToken
 
+from domains.business.enums.BusinessStatusEnum import BusinessStatusEnum
+from domains.business.models import BusinessProfile
 from domains.customer.models import Customer
 from domains.marketplace.models import (
     MarketplaceCart,
     MarketplaceOrder,
     MarketplaceOrderAction,
     MarketplaceOrderHistory,
+    MarketplaceOrderPayment,
     MarketplaceOrderStatus,
     MarketplaceReturnRequest,
 )
+from domains.marketplace.services.payment_service import MarketplacePaymentService
 from domains.order.models import ReturnRequest
+from domains.vendor.models import Vendor, VendorStatus
 
 from .tests_checkout import MarketplaceCheckoutFixture
 
@@ -363,3 +373,306 @@ class MarketplaceAdminApiTests(MarketplaceApiFixture):
         ):
             response = getattr(self.client, method)(url)
             self.assertEqual(response.status_code, 403, url)
+
+
+class PaymentReviewFixture:
+    """A manually paid marketplace order, and the two sides that read it.
+
+    Both reviewers need the same unlikely setup: a checkout real enough to
+    hold a stock hold, a payment the customer has submitted, and a seller
+    whose token resolves to the business that owns it.
+    """
+
+    def setUp(self):
+        super().setUp()
+        # The inventory migration seeds a vendor-less profile at id=1, so the
+        # checkout fixture's get_or_create keeps it and never attaches its
+        # vendor. A seller token has to resolve one.
+        self.business.vendor = Vendor.objects.get(vendor_code="VEN-MKCO-001")
+        self.business.save(update_fields=["vendor"])
+
+    def a_pending_payment(self):
+        order = self.an_order()
+        MarketplacePaymentService().confirm_manual_payment_for_customer(
+            self.customer,
+            order.id,
+            payment_method_code="card_to_card",
+            payment_channel_id=self.channel.id,
+            ref_number="1234567890",
+        )
+        return order, MarketplaceOrderPayment.objects.get(order=order)
+
+    def as_seller(self):
+        self.client.force_authenticate(user=None)
+        refresh = RefreshToken.for_user(self.business.vendor)
+        refresh["user_type"] = "vendor"
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {refresh.access_token}")
+
+    def action_codes(self, response):
+        return [
+            action["code"] for action in response.json()["data"]["available_actions"]
+        ]
+
+    def seller_action_codes(self, order_id):
+        self.as_seller()
+        response = self.client.get(f"/api/vendor/orders/{order_id}")
+        self.assertEqual(response.status_code, 200)
+        return self.action_codes(response)
+
+
+class MarketplaceAdminPaymentReviewTests(PaymentReviewFixture, MarketplaceApiFixture):
+    """Reviewing a manual payment is what opens the seller's order actions.
+
+    A marketplace order only reaches ``paid`` through ``review_payment``, and a
+    seller's first fulfillment step is offered from ``paid`` onward. These pin
+    that the review is reachable over HTTP and that the seller's screen changes
+    as a consequence — the alternative is an order stuck in
+    ``payment_processing`` with no button on either side.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_superuser(
+            "mk-pay-admin", password="password"
+        )
+        self.client.force_authenticate(self.admin)
+
+    def test_approving_pays_the_order(self):
+        order, payment = self.a_pending_payment()
+
+        response = self.client.post(
+            f"/api/marketplace/admin/payments/{payment.id}/approve"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["data"]["status"]["name"], "paid")
+        order.refresh_from_db()
+        payment.refresh_from_db()
+        self.assertEqual(order.status.name, "paid")
+        self.assertEqual(payment.status.name, "successful")
+
+    def test_an_approved_order_offers_the_seller_its_first_action(self):
+        order, payment = self.a_pending_payment()
+        self.client.post(f"/api/marketplace/admin/payments/{payment.id}/approve")
+
+        self.assertEqual(self.seller_action_codes(order.id), ["confirm"])
+
+    def test_rejecting_fails_the_payment_and_leaves_the_seller_waiting(self):
+        order, payment = self.a_pending_payment()
+
+        response = self.client.post(
+            f"/api/marketplace/admin/payments/{payment.id}/reject"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["data"]["status"]["name"], "payment_failed")
+        payment.refresh_from_db()
+        self.assertEqual(payment.status.name, "failed")
+        self.assertEqual(self.seller_action_codes(order.id), [])
+
+    def test_a_payment_is_reviewed_only_once(self):
+        _order, payment = self.a_pending_payment()
+        self.client.post(f"/api/marketplace/admin/payments/{payment.id}/approve")
+
+        response = self.client.post(
+            f"/api/marketplace/admin/payments/{payment.id}/approve"
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(error_keys(response), {"payment"})
+
+    def test_an_unknown_decision_is_not_found(self):
+        _order, payment = self.a_pending_payment()
+
+        response = self.client.post(
+            f"/api/marketplace/admin/payments/{payment.id}/cancel"
+        )
+
+        self.assertEqual(response.status_code, 404)
+        payment.refresh_from_db()
+        self.assertEqual(payment.status.name, "pending")
+
+    def test_reviewing_needs_the_marketplace_order_change_permission(self):
+        _order, payment = self.a_pending_payment()
+        self.client.force_authenticate(
+            User.objects.create_user("mk-pay-restricted", password="password")
+        )
+
+        response = self.client.post(
+            f"/api/marketplace/admin/payments/{payment.id}/approve"
+        )
+
+        self.assertEqual(response.status_code, 403)
+        payment.refresh_from_db()
+        self.assertEqual(payment.status.name, "pending")
+
+
+class VendorOrderPaymentReviewTests(PaymentReviewFixture, MarketplaceApiFixture):
+    """The seller decides whether a transfer to their own account landed.
+
+    The payment reaches the seller's account, so nobody is better placed to
+    confirm or reject it. What these pin is that the decision is scoped to the
+    caller's business rather than to the payment id, and that it runs the
+    review flow rather than the status action list — only the former moves the
+    payment row and the stock hold along with the order.
+    """
+
+    def a_rival_seller(self):
+        """Another confirmed store with its own token, for cross-business reads."""
+        vendor = Vendor.objects.create(
+            phone="+9990000091",
+            first_name="Rival",
+            last_name="Seller",
+            national_id="0000000091",
+            vendor_code="VEN-MKPAY-002",
+            status=VendorStatus.objects.create(name="mkpay-active", title="Active"),
+        )
+        # An unconfirmed business is refused by the lifecycle middleware
+        # before any route runs, which would prove scoping by the wrong door.
+        business = BusinessProfile.objects.create(
+            vendor=vendor,
+            business_name="Rival Business",
+            display_name="Rival Business",
+            status_id=BusinessStatusEnum.ACTIVE.value,
+        )
+        return business, vendor
+
+    def an_unpaid_order(self):
+        """A second order of the seller's, with nothing submitted on it.
+
+        Built directly: a customer holds one marketplace cart, so a second
+        checkout from the same fixture would collide with the first.
+        """
+        return MarketplaceOrder.objects.create(
+            customer=self.customer,
+            business=self.business,
+            status=MarketplaceOrderStatus.objects.get(name="payment_processing"),
+            address_info={"city_name": "Tehran"},
+            subtotal="100.00",
+            discount_amount="0.00",
+            shipping_original_amount="100.00",
+            shipping_amount="0.00",
+            total_amount="100.00",
+        )
+
+    def review(self, order_id, payment_id, decision="approve"):
+        return self.client.post(
+            f"/api/vendor/orders/{order_id}/payments/{payment_id}/{decision}",
+            {},
+            format="json",
+        )
+
+    def test_a_seller_approves_their_own_payment(self):
+        order, payment = self.a_pending_payment()
+        self.as_seller()
+
+        response = self.review(order.id, payment.id)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["data"]["status"]["name"], "paid")
+        # The same response is the seller's screen: approving pays the order
+        # and hands the seller the fulfillment step that was missing.
+        self.assertEqual(self.action_codes(response), ["confirm"])
+        order.refresh_from_db()
+        payment.refresh_from_db()
+        self.assertEqual(order.status.name, "paid")
+        self.assertEqual(payment.status.name, "successful")
+
+    def test_the_approval_is_attributed_to_the_seller(self):
+        order, payment = self.a_pending_payment()
+        self.as_seller()
+        self.review(order.id, payment.id)
+
+        # Two entries now: the customer's submission and the seller's decision.
+        entry = order.history.select_related("action").get(
+            action__code="approve_payment"
+        )
+        self.assertEqual(entry.user_id, self.business.vendor_id)
+        self.assertEqual(entry.user_model, "vendor.Vendor")
+
+    def test_a_seller_rejects_their_own_payment(self):
+        order, payment = self.a_pending_payment()
+        self.as_seller()
+
+        response = self.review(order.id, payment.id, "reject")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["data"]["status"]["name"], "payment_failed")
+        self.assertEqual(self.action_codes(response), [])
+        payment.refresh_from_db()
+        self.assertEqual(payment.status.name, "failed")
+
+    def test_another_sellers_payment_is_not_decidable(self):
+        order, payment = self.a_pending_payment()
+        _rival_business, rival_vendor = self.a_rival_seller()
+        self.as_seller()
+        # The rival owns nothing here, so the payment they target is absent
+        # rather than forbidden — an id reveals nothing about someone else's
+        # storefront.
+        refresh = RefreshToken.for_user(rival_vendor)
+        refresh["user_type"] = "vendor"
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {refresh.access_token}")
+
+        response = self.review(order.id, payment.id)
+
+        self.assertEqual(response.status_code, 404)
+        payment.refresh_from_db()
+        self.assertEqual(payment.status.name, "pending")
+
+    def test_a_payment_is_decided_only_on_its_own_order(self):
+        _order, payment = self.a_pending_payment()
+        other_order = self.an_unpaid_order()
+        self.as_seller()
+
+        response = self.review(other_order.id, payment.id)
+
+        self.assertEqual(response.status_code, 404)
+        payment.refresh_from_db()
+        self.assertEqual(payment.status.name, "pending")
+
+    def test_a_reviewed_payment_is_not_reviewed_twice(self):
+        order, payment = self.a_pending_payment()
+        self.as_seller()
+        self.review(order.id, payment.id)
+
+        response = self.review(order.id, payment.id, "reject")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(error_keys(response), {"payment"})
+        payment.refresh_from_db()
+        self.assertEqual(payment.status.name, "successful")
+
+    def test_an_unknown_decision_is_not_found(self):
+        order, payment = self.a_pending_payment()
+        self.as_seller()
+
+        response = self.review(order.id, payment.id, "cancel")
+
+        self.assertEqual(response.status_code, 404)
+        payment.refresh_from_db()
+        self.assertEqual(payment.status.name, "pending")
+
+    def test_a_seller_cannot_use_the_action_list_for_it(self):
+        # The seeded action table offers approve_payment to an admin actor at
+        # this status, but executing it would only move the order's status.
+        order, _payment = self.a_pending_payment()
+        self.as_seller()
+
+        response = self.client.post(
+            f"/api/vendor/orders/{order.id}/actions/approve_payment", {}, format="json"
+        )
+
+        self.assertEqual(response.status_code, 400)
+        order.refresh_from_db()
+        self.assertEqual(order.status.name, "payment_processing")
+
+    def test_reviewing_needs_a_seller(self):
+        order, payment = self.a_pending_payment()
+        self.client.force_authenticate(user=None)
+        self.client.credentials()
+
+        response = self.review(order.id, payment.id)
+
+        self.assertIn(response.status_code, (401, 403))
+        payment.refresh_from_db()
+        self.assertEqual(payment.status.name, "pending")

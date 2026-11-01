@@ -45,3 +45,20 @@ class MarketplacePaymentService(BusinessPaymentService):
         return self.confirm_manual_payment(
             order.business, customer, order_id, **kwargs
         )
+
+    def review_payment_for_order_owner(self, payment_id, *, approve, admin=None):
+        """Resolve the payment's seller before using the shared review flow.
+
+        A reviewer is cross-business by definition, so the business comes from
+        the payment row rather than from the request.
+        """
+        payment = (
+            self.payment_model.objects.select_related("business")
+            .filter(id=payment_id)
+            .first()
+        )
+        if payment is None:
+            raise self.NotFoundError("Payment not found.")
+        return self.review_payment(
+            payment.business, payment.id, approve=approve, admin=admin
+        )

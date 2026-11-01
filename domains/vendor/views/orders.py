@@ -9,10 +9,13 @@ read, action and status change in the query rather than by an ownership check
 around each call.
 
 The action vocabulary is narrowed separately. The seeded action table carries
-a single ``admin`` flag that also covers payment approval, refunds and
-cancellation; those move money or release stock on the platform's behalf and
-stay with the platform, so they are cut out of every payload and refused on
-every request here.
+a single ``admin`` flag that also covers refunds and cancellation; those move
+money on the platform's behalf and stay with the platform, so they are cut out
+of every payload and refused on every request here. A payment is the
+exception: the seller is the one who receives the transfer, so the decision is
+theirs. It still does not join the action list, because settling a payment
+changes the payment row and the stock hold alongside the order status, and
+``execute_action`` only moves the status. It gets its own route instead.
 """
 
 from django.utils.translation import gettext as _
@@ -25,6 +28,7 @@ from core.responses import api_response
 from domains.marketplace.api.serializers import AdminMarketplaceOrderStatusSerializer
 from domains.marketplace.models import MarketplaceOrderStatus
 from domains.marketplace.services.order_service import MarketplaceOrderService
+from domains.marketplace.services.payment_service import MarketplacePaymentService
 from domains.marketplace.services.return_service import MarketplaceReturnRequestService
 from domains.order.serializers import (
     AdminOrderListQuerySerializer,
@@ -35,8 +39,9 @@ from domains.packages.permissions import RequiresShopOrders
 from ..auth import VendorJWTAuthentication
 from .business import _get_business
 
-# Fulfillment is the seller's job. Absent from this set: cancel,
-# approve_payment, reject_payment and process_refund — the platform's.
+# Fulfillment is the seller's job. Absent from this set: cancel and
+# process_refund — the platform's — and the payment decisions, which are the
+# seller's but run through VendorOrderPaymentReview instead of execute_action.
 VENDOR_ORDER_ACTIONS = frozenset({"confirm", "prepare", "pack", "ship", "deliver"})
 
 
@@ -139,6 +144,37 @@ class VendorOrderReturnAction(VendorOrderAPIView):
         service = MarketplaceOrderService(business=business)
         try:
             payload = self._payload(service, order_id)
+        except service.NotFoundError as exc:
+            raise NotFound(_("Order not found.")) from exc
+        return api_response(data=payload)
+
+
+class VendorOrderPaymentReview(VendorOrderAPIView):
+    """The seller's decision on a manual payment for one of their orders."""
+
+    def post(self, request, order_id, payment_id, decision):
+        if decision not in {"approve", "reject"}:
+            raise NotFound(_("Payment review action not found."))
+        business = self._business(request)
+        payments = MarketplacePaymentService()
+        # Scoping happens on the read, before anything is decided: a payment
+        # belonging to another seller is a 404, not a decision waiting to be
+        # made, and an order id that does not own it is the same.
+        try:
+            payment = payments.get_payment(business, payment_id)
+        except payments.NotFoundError as exc:
+            raise NotFound(_("Payment not found.")) from exc
+        if payment.order_id != order_id:
+            raise NotFound(_("Payment not found."))
+        try:
+            order = payments.review_payment(
+                business, payment_id, approve=decision == "approve", admin=request.user
+            )
+        except payments.ValidationError as exc:
+            raise ValidationError(exc.errors) from exc
+        service = MarketplaceOrderService(business=business)
+        try:
+            payload = self._payload(service, order.id)
         except service.NotFoundError as exc:
             raise NotFound(_("Order not found.")) from exc
         return api_response(data=payload)
