@@ -145,3 +145,21 @@ class MarketplaceOrderReadTests(MarketplaceCheckoutFixture):
             summary,
             {"count": 1, "open_count": 1, "latest_status": "requested"},
         )
+
+    def test_the_admin_list_keeps_the_locality_out_unless_asked(self):
+        """The platform's rows are the rows they were before the map.
+
+        Only a seller's list asks for the province, so no administrative read
+        grows a field nobody requested.
+        """
+        order = self.checked_out_order()
+        order.address_info = {"state_id": 7, "state_fa_title": "Tehran"}
+        order.save(update_fields=["address_info"])
+
+        self.assertNotIn("location", self.service.list_orders_admin()[0])
+
+        location = self.service.list_orders_admin(include_location=True)[0][
+            "location"
+        ]
+        self.assertEqual(location["state_id"], 7)
+        self.assertNotIn("postal_code", location)

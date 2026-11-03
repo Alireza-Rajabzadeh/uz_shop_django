@@ -40,3 +40,27 @@ class MarketplaceReturnRequestService(BaseReturnRequestService):
         if self.business is None:
             return queryset
         return queryset.filter(order__business=self.business)
+
+    def ongoing_returns_summary(self, limit=5):
+        """This seller's open return requests: the full total plus the newest rows.
+
+        A row carries its parent `order_id` because a return has no page of its
+        own — the seller decides on it from the order.
+        """
+        requests = (
+            self._scoped_requests()
+            .filter(status__in=self.ACTIVE_STATUSES)
+            .order_by("-requested_at", "-id")
+        )
+        return {
+            "count": requests.count(),
+            "results": [
+                {
+                    "id": request.id,
+                    "order_id": request.order_id,
+                    "status": request.status,
+                    "requested_at": request.requested_at,
+                }
+                for request in requests[:limit]
+            ],
+        }

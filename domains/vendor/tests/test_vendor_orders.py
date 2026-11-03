@@ -14,12 +14,34 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from core.management.seeders.marketplace_order import MarketplaceOrderSeeder
 from domains.business.models import BusinessProfile
 from domains.customer.models import Customer, CustomerStatus
+from domains.location.models import Country, State
 from domains.marketplace.models import (
     MarketplaceOrder,
     MarketplaceOrderStatus,
     MarketplaceReturnRequest,
 )
 from domains.vendor.models import Vendor, VendorStatus
+
+
+# What checkout writes into ``address_info``: the locality the seller's map
+# groups on, plus the street-and-receiver half that belongs to a single order.
+FULL_ADDRESS = {
+    "country_id": 1,
+    "country_name": "Iran",
+    "country_fa_title": "ایران",
+    "state_id": 7,
+    "state_name": "Tehran",
+    "state_fa_title": "تهران",
+    "city_id": 44,
+    "city_name": "Tehran",
+    "city_fa_title": "تهران",
+    "postal_code": "1234567890",
+    "address_line1": "Somewhere street",
+    "address_line2": "",
+    "house_number": "12",
+    "receiver_name": "Vendor Orders",
+    "receiver_phone": "09120000801",
+}
 
 
 class VendorOrderApiFixture(APITestCase):
@@ -78,12 +100,14 @@ class VendorOrderApiFixture(APITestCase):
 
     # ───────────────────────── fixtures ─────────────────────────
 
-    def make_order(self, business, *, status):
+    def make_order(self, business, *, status, address_info=None):
         return MarketplaceOrder.objects.create(
             customer=self.customer,
             business=business,
             status=MarketplaceOrderStatus.objects.get(name=status),
-            address_info={"city_name": "Tehran"},
+            address_info=(
+                {"city_name": "Tehran"} if address_info is None else address_info
+            ),
             subtotal="100.00",
             discount_amount="0.00",
             shipping_original_amount="100.00",
@@ -149,6 +173,119 @@ class VendorOrderListTests(VendorOrderApiFixture):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.data["data"])
         self.assertIn("payment_pending", [row["name"] for row in response.data["data"]])
+
+
+class VendorOrderLocationTests(VendorOrderApiFixture):
+    """The locality the seller's map groups on, projected onto the list.
+
+    The map builds itself in the browser from the rows it is handed, so the
+    list has to carry the province — and nothing beside it that a paginated
+    read has no business repeating.
+    """
+
+    def rows(self, params=None):
+        response = self.client.get("/api/vendor/orders", params or {})
+        self.assertEqual(response.status_code, 200)
+        return response.data["data"]["results"]
+
+    def row_for(self, order, params=None):
+        return next(row for row in self.rows(params) if row["id"] == order.id)
+
+    def test_the_row_carries_the_locality_and_nothing_else(self):
+        located = self.make_order(
+            self.business, status="paid", address_info=dict(FULL_ADDRESS)
+        )
+
+        self.assertEqual(
+            set(self.row_for(located)["location"]),
+            {
+                "state_id",
+                "state_name",
+                "state_fa_title",
+                "city_id",
+                "city_name",
+                "city_fa_title",
+            },
+        )
+
+    def test_the_row_repeats_no_part_of_the_street_address(self):
+        located = self.make_order(
+            self.business, status="paid", address_info=dict(FULL_ADDRESS)
+        )
+
+        row = self.row_for(located)
+        for key in (
+            "address_info",
+            "postal_code",
+            "address_line1",
+            "address_line2",
+            "house_number",
+            "receiver_name",
+            "receiver_phone",
+        ):
+            self.assertNotIn(key, row)
+
+    def test_a_snapshot_without_a_province_is_not_located(self):
+        # The shape this fixture has always stored: a dict with none of the
+        # locality keys. Such an order is absent from the map, not plotted
+        # under a province of nulls.
+        self.assertNotIn("location", self.row_for(self.order))
+
+    def test_a_province_name_without_an_id_is_still_located(self):
+        located = self.make_order(
+            self.business,
+            status="paid",
+            address_info={"state_fa_title": "تهران"},
+        )
+
+        location = self.row_for(located)["location"]
+        self.assertIsNone(location["state_id"])
+        self.assertEqual(location["state_fa_title"], "تهران")
+
+    def test_the_list_can_be_filtered_by_province(self):
+        located = self.make_order(
+            self.business, status="paid", address_info=dict(FULL_ADDRESS)
+        )
+
+        self.assertEqual(
+            [row["id"] for row in self.rows({"state_id": 7, "in_progress": "true"})],
+            [located.id],
+        )
+
+    def test_a_province_filter_answers_a_snapshot_that_only_names_it(self):
+        """The map groups a name-only row into its province; the filter agrees.
+
+        A selection made on a province the map just counted must not come back
+        empty because that order recorded the province's name rather than its
+        id — which is how the snapshot was written before the ids existed.
+        """
+        country = Country.objects.create(
+            name="VOR Iran", code="VA", phone_code="+98"
+        )
+        province = State.objects.create(
+            country=country, name="Tehran", fa_title="تهران"
+        )
+        named = self.make_order(
+            self.business,
+            status="paid",
+            address_info={"state_fa_title": "تهران", "city_fa_title": "تهران"},
+        )
+
+        rows = self.rows({"state_id": province.id})
+
+        self.assertEqual([row["id"] for row in rows], [named.id])
+
+    def test_another_sellers_order_is_not_returned_by_a_province_filter(self):
+        located = self.make_order(
+            self.business, status="paid", address_info=dict(FULL_ADDRESS)
+        )
+        theirs = self.make_order(
+            self.other_business, status="paid", address_info=dict(FULL_ADDRESS)
+        )
+
+        rows = self.rows({"state_id": 7})
+
+        self.assertEqual([row["id"] for row in rows], [located.id])
 
 
 class VendorOrderDetailTests(VendorOrderApiFixture):

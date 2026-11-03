@@ -250,7 +250,7 @@ The marketplace runs a basket, checkout, payment, and return flow parallel to th
 - `/api/order/admin/orders/geography` aggregates open orders from checkout-time address snapshots under `order.view_order`.
 - Province and city counts include all open orders; foreign or incomplete locations are reported as unmapped rather than plotted on the Iran map.
 - City marker coordinates belong to `location.City` and are populated from the attributed canonical coordinate data during migration and location seeding.
-- Administrative order lists accept `state_id` and `city_id` snapshot filters alongside `in_progress=true`.
+- Administrative order lists accept `state_id` and `city_id` snapshot filters alongside `in_progress=true`. `state_id` also matches a snapshot that recorded the province only by `state_name` / `state_fa_title`, because the vendor panel groups such an order into that province on its own map and the list it narrows has to agree with the map.
 
 ### Digikala Import (Importing Domain)
 

@@ -10,6 +10,7 @@ from core.responses import api_response
 from domains.business.models import BusinessCategory, BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessWorkingDay
 from domains.business.services import (
     BusinessOnboardingService,
+    BusinessService,
     BusinessServiceModeService,
     BusinessShipmentService,
 )
@@ -33,11 +34,100 @@ from ..serializers.business import (
     VendorPhoneReorderSerializer,
     VendorSocialLinkReorderSerializer,
 )
-from domains.business.api.serializers import BusinessCategorySerializer, BusinessCategoryUpsertSerializer, CategoryBrowseSerializer
+from domains.business.api.serializers import (
+    BusinessCategorySerializer,
+    BusinessCategoryUpsertSerializer,
+    BusinessChargeSerializer,
+    CategoryBrowseSerializer,
+)
+from domains.marketplace.services.charge_service import MarketplaceOrderChargeService
+from domains.marketplace.services.order_service import MarketplaceOrderService
+from domains.marketplace.services.return_service import MarketplaceReturnRequestService
+from domains.packages.exceptions import FeatureNotAvailable, require_feature
+from domains.packages.permissions import RequiresShopOrders
 
 
 def _get_business(request):
     return BusinessProfile.objects.filter(vendor=request.user).first()
+
+
+def _activity_summary(business):
+    """The seller's ongoing orders and open returns, or ``None`` to render nothing.
+
+    The dashboard is the page a vendor lands on, so it stays readable when the
+    package withholds orders: an entitlement miss here is a missing section,
+    not a 402 on the whole view. The order routes keep gating themselves.
+    """
+    if business is None:
+        return None
+    try:
+        require_feature(business, RequiresShopOrders.feature_code)
+    except FeatureNotAvailable:
+        return None
+    return {
+        "ongoing_orders": MarketplaceOrderService(
+            business=business
+        ).ongoing_orders_summary(),
+        "ongoing_returns": MarketplaceReturnRequestService(
+            business=business
+        ).ongoing_returns_summary(),
+    }
+
+
+def _dashboard_categories(business):
+    """The categories this shop sells under, in the shape the badges already read.
+
+    Registrations are always root categories, so `selected` is the whole answer
+    here and the browse list never has to be walked to build it.
+    """
+    configurations = (
+        BusinessService.profile_categories(business).order_by("category__name")
+    )
+    rows = [
+        {
+            "id": configuration.category_id,
+            "name": configuration.category.name,
+            "fa_name": configuration.category.fa_name,
+            "slug": configuration.category.slug,
+            "has_children": configuration.category.children.exists(),
+            "selected": True,
+        }
+        for configuration in configurations
+    ]
+    return CategoryBrowseSerializer(rows, many=True).data
+
+
+def _business_settings(business):
+    """What the seller has configured, read the way a customer reads it.
+
+    A seller comes here to see their own shop, so each group reuses the exact
+    query the storefront or checkout already uses: a row an admin retired, or a
+    configuration the seller switched off, is absent here just as it is absent
+    at checkout. An empty list is the panel's cue to say "not set" rather than
+    hide the section.
+    """
+    if business is None:
+        return {
+            "categories": [],
+            "service_modes": [],
+            "shipments": [],
+            "charges": [],
+        }
+    return {
+        "categories": _dashboard_categories(business),
+        "service_modes": VendorBusinessServiceModeSerializer(
+            BusinessService.public_service_mode_configurations().filter(
+                business_profile=business
+            ),
+            many=True,
+        ).data,
+        "shipments": VendorBusinessShipmentSerializer(
+            BusinessShipmentService.available_shipments(business), many=True
+        ).data,
+        "charges": BusinessChargeSerializer(
+            MarketplaceOrderChargeService.active_charges(business), many=True
+        ).data,
+    }
 
 
 class VendorBusinessProfileView(APIView):
@@ -343,6 +433,8 @@ class VendorBusinessDashboardView(APIView):
         return api_response(data={
             "profile": VendorBusinessProfileSerializer(profile).data if profile else None,
             "working_days": VendorBusinessWorkingDaySerializer(working_days, many=True).data,
+            "summary": _activity_summary(profile),
+            **_business_settings(profile),
         })
 
 

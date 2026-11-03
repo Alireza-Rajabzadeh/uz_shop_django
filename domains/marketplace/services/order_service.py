@@ -116,14 +116,64 @@ class MarketplaceOrderService(BaseOrderService):
         payload["charges"] = self._charge_payload(order)
         return payload
 
-    def _admin_order_row(self, order, *, include_returns=False):
+    def _admin_order_row(
+        self, order, *, include_returns=False, include_location=False
+    ):
         payload = super()._admin_order_row(
-            order, include_returns=include_returns
+            order,
+            include_returns=include_returns,
+            include_location=include_location,
         )
         payload["totals"]["charges_total"] = str(order.charges_total)
         return payload
 
+    def ongoing_orders_summary(self, limit=20):
+        """This seller's ongoing orders: the full total plus the newest rows.
 
+        Read through `_scoped_orders`, so a dashboard cannot report anybody
+        else's book. `count` is the total rather than the page length: the
+        panel shows it as a headline number.
+        """
+        orders = (
+            self._scoped_orders()
+            .filter(status__name__in=self.IN_PROGRESS_STATUSES)
+            .select_related("status", "customer")
+            .order_by("-created_at", "-id")
+        )
+        return {
+            "count": orders.count(),
+            "results": [
+                self._dashboard_order_row(order) for order in orders[:limit]
+            ],
+        }
+
+    def _dashboard_order_row(self, order):
+        """A summary line, deliberately not `_admin_order_row`.
+
+        The admin row carries items, available actions and charges; a summary
+        row needs none of them and each one costs a query. The province and
+        city are the exception: they already sit in this row's `address_info`,
+        so the map can group the same orders the card lists for free.
+        """
+        row = {
+            "id": order.id,
+            "status": {
+                "id": order.status_id,
+                "name": order.status.name,
+                "fa_name": order.status.fa_name,
+            },
+            "total_amount": str(order.total_amount),
+            "created_at": order.created_at,
+            "customer": {
+                "name": (
+                    f"{order.customer.first_name} {order.customer.last_name}"
+                ).strip()
+            },
+        }
+        location = self._order_location(order)
+        if location is not None:
+            row["location"] = location
+        return row
 
     @transaction.atomic
     def checkout_business_from_cart(

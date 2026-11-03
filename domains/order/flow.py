@@ -13,6 +13,7 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from domains.cart.checkout import BaseCheckoutService
+from domains.location.models import State
 
 
 class BaseOrderService(BaseCheckoutService):
@@ -48,6 +49,16 @@ class BaseOrderService(BaseCheckoutService):
         "in_transit",
         "out_for_delivery",
         "delivery_delayed",
+    )
+    # The whole of ``address_info`` a paginated list may repeat: the province
+    # and city, and none of the street, postcode or receiver details.
+    ORDER_LOCATION_KEYS = (
+        "state_id",
+        "state_name",
+        "state_fa_title",
+        "city_id",
+        "city_name",
+        "city_fa_title",
     )
 
     status_action_model = None
@@ -371,7 +382,9 @@ class BaseOrderService(BaseCheckoutService):
         self.expire_lazy(orders)
         return [self._customer_order_payload(order) for order in orders]
 
-    def list_orders_admin(self, *, include_returns=False, **filters):
+    def list_orders_admin(
+        self, *, include_returns=False, include_location=False, **filters
+    ):
         select_related = ["status", "customer"]
         # The shop order has no business owner; the marketplace order does.
         if hasattr(self.order_model, "business"):
@@ -399,7 +412,7 @@ class BaseOrderService(BaseCheckoutService):
             ).distinct()
         state_id = filters.get("state_id")
         if state_id:
-            queryset = queryset.filter(address_info__state_id=state_id)
+            queryset = queryset.filter(self._state_in_snapshot_q(state_id))
         city_id = filters.get("city_id")
         if city_id:
             queryset = queryset.filter(address_info__city_id=city_id)
@@ -422,11 +435,17 @@ class BaseOrderService(BaseCheckoutService):
         else:
             queryset = queryset.order_by("-created_at", "id")
         return [
-            self._admin_order_row(order, include_returns=include_returns)
+            self._admin_order_row(
+                order,
+                include_returns=include_returns,
+                include_location=include_location,
+            )
             for order in queryset
         ]
 
-    def _admin_order_row(self, order, *, include_returns=False):
+    def _admin_order_row(
+        self, order, *, include_returns=False, include_location=False
+    ):
         customer = order.customer
         payload = {
             "id": order.id,
@@ -467,6 +486,10 @@ class BaseOrderService(BaseCheckoutService):
         business = self._business_ref(order)
         if business is not None:
             payload["business"] = business
+        if include_location:
+            location = self._order_location(order)
+            if location is not None:
+                payload["location"] = location
         if include_returns:
             returns = sorted(
                 order.return_requests.all(),
@@ -482,6 +505,46 @@ class BaseOrderService(BaseCheckoutService):
                 "latest_status": returns[0].status if returns else None,
             }
         return payload
+
+    def _order_location(self, order):
+        """The checkout province and city, and nothing else.
+
+        ``address_info`` also holds the street, postcode, receiver name and
+        phone. Those stay on the detail payload, where the party who needs
+        them already reads them; a paginated list whose only consumer is a
+        map bucket must not repeat them on every row.
+        """
+        snapshot = order.address_info
+        if not isinstance(snapshot, dict):
+            return None
+        location = {key: snapshot.get(key) for key in self.ORDER_LOCATION_KEYS}
+        if location["state_id"] is None and not (
+            location["state_fa_title"] or location["state_name"]
+        ):
+            return None
+        return location
+
+    def _state_in_snapshot_q(self, state_id):
+        """Orders whose recorded address is in this province, by id or by name.
+
+        A snapshot written by checkout carries the province id, but an older or
+        hand-made one can hold only its name — and the seller's map counts such
+        a row into that very province. A selection made on the map must then not
+        answer with an empty list.
+        """
+        snapshot = Q(address_info__state_id=state_id)
+        state = (
+            State.objects.filter(id=state_id)
+            .values_list("name", "fa_title")
+            .first()
+        )
+        if state:
+            name, fa_title = state
+            if name:
+                snapshot |= Q(address_info__state_name=name)
+            if fa_title:
+                snapshot |= Q(address_info__state_fa_title=fa_title)
+        return snapshot
 
     @staticmethod
     def _business_ref(order):

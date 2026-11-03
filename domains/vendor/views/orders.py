@@ -81,7 +81,12 @@ class VendorOrderList(VendorOrderAPIView):
         service = MarketplaceOrderService(business=self._business(request))
         # Returns are always included: unlike the platform, a seller has no
         # permission to be denied them — every return on this list is theirs.
-        rows = service.list_orders_admin(include_returns=True, **query.validated_data)
+        # The locality projection costs no query (it is a column of the row
+        # already fetched) and is what lets the seller's map group in the
+        # browser instead of asking the server for an aggregate.
+        rows = service.list_orders_admin(
+            include_returns=True, include_location=True, **query.validated_data
+        )
         for row in rows:
             row["available_actions"] = self._actions(row["available_actions"])
         paginator = PageNumberPagination()
