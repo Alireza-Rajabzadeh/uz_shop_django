@@ -1,7 +1,7 @@
 from datetime import timedelta
 from decimal import Decimal
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIRequestFactory, force_authenticate
 
@@ -140,6 +140,45 @@ class VendorInventoryPricingTests(TestCase):
         row = response.data["data"][0]
         self.assertIsNone(row["price"])
         self.assertIsNone(row["discounted_price"])
+
+    @override_settings(
+        STORAGES={
+            "default": {
+                "BACKEND": "django.core.files.storage.InMemoryStorage",
+                "OPTIONS": {"base_url": "/test-media/"},
+            },
+            "staticfiles": {
+                "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+            },
+        },
+        FILE_STORAGE_ALIASES=["default"],
+    )
+    def test_inventory_overview_includes_product_image(self):
+        """GET /vendor/inventory/overview returns the product's primary image URL."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from domains.catalog.models import ProductFile
+        from domains.files.services.file_service import FileService
+
+        self._stock()
+        file_service = FileService()
+        uploaded = file_service.upload(
+            SimpleUploadedFile("thumb.jpg", b"image-data", content_type="image/jpeg"),
+        )
+        ProductFile.objects.create(
+            product=self.product,
+            file=uploaded,
+            role="gallery",
+            is_primary=True,
+        )
+
+        request = self.factory.get("/vendor/inventory/overview")
+        force_authenticate(request, user=self.vendor)
+        response = VendorInventoryOverviewView.as_view()(request)
+
+        self.assertEqual(response.status_code, 200)
+        row = response.data["data"][0]
+        self.assertIsNotNone(row["image"])
+        self.assertTrue(row["image"].startswith("/test-media/"))
 
     def test_inventory_overview_lists_only_stocked_variants(self):
         """A variant with no Inventory row stays out of the list.
@@ -454,3 +493,40 @@ class VendorInventoryPricingTests(TestCase):
         self.assertEqual(str(offer.price), "300.00")
         self.assertEqual(offer.cost_strategy.code, "fifo_next")
         self.assertEqual(offer.expected_profit_percentage, Decimal("10.00"))
+
+    def test_inventory_overview_includes_variant_selections_and_title(self):
+        """GET /vendor/inventory/overview returns selections and variant title."""
+        from domains.catalog.models import (
+            ProductVariantSelection,
+            VariantAttribute,
+            VariantOption,
+        )
+
+        attr = VariantAttribute.objects.create(name="Color", fa_name="رنگ")
+        opt = VariantOption.objects.create(
+            attribute=attr,
+            name="Red",
+            fa_name="قرمز",
+            info="#FF0000",
+            sku_code="RD",
+        )
+        ProductVariantSelection.objects.create(
+            variant=self.variant,
+            attribute=attr,
+            option=opt,
+        )
+        self._stock()
+
+        request = self.factory.get("/vendor/inventory/overview")
+        force_authenticate(request, user=self.vendor)
+        response = VendorInventoryOverviewView.as_view()(request)
+
+        self.assertEqual(response.status_code, 200)
+        row = response.data["data"][0]
+        self.assertEqual(row["title"], "قرمز")
+        self.assertEqual(row["variant_title"], "قرمز")
+        self.assertEqual(len(row["selections"]), 1)
+        self.assertEqual(row["selections"][0]["attribute_name"], "رنگ")
+        self.assertEqual(row["selections"][0]["option_name"], "قرمز")
+        self.assertEqual(row["selections"][0]["info"], "#FF0000")
+

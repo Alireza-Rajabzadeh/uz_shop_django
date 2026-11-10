@@ -4,8 +4,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
 from core.responses import api_response
-from domains.catalog.models import Product, ProductVariants
+from domains.catalog.models import Product, ProductVariants, ProductFile
 from domains.catalog.services.variant_service import VariantService
+from domains.files.services.file_service import FileService
 from domains.inventory.api.serializers import (
     InventoryAttributeDefinitionSerializer,
     InventoryAttributeDefinitionWriteSerializer,
@@ -448,18 +449,55 @@ class VendorInventoryOverviewView(VendorInventoryAPIView):
             )
         }
 
+        product_ids = {v.product_id for v in variants}
+        product_images = {}
+        if product_ids:
+            files = (
+                ProductFile.objects.filter(
+                    product_id__in=product_ids,
+                    file__file_type="image",
+                    file__status__name="available",
+                    file__deleted_at__isnull=True,
+                )
+                .select_related("file", "file__status")
+                .order_by("product_id", "-is_primary", "position", "id")
+            )
+            file_service = FileService()
+            for pf in files:
+                if pf.product_id not in product_images:
+                    try:
+                        product_images[pf.product_id] = file_service.url(pf.file)
+                    except Exception:
+                        product_images[pf.product_id] = None
+
         result = []
         for v in variants:
             overview = inventory_service.serialize_variant_overview(v, default_warehouse, business=business)
             offer = offers.get(v.id)
             discounted = variant_service.calculate_discounted_price(v, offer)
+            selections = [
+                {
+                    "attribute_id": s.attribute_id,
+                    "attribute_name": s.attribute.fa_name or s.attribute.name,
+                    "option_id": s.option_id,
+                    "option_name": s.option.fa_name or s.option.name,
+                    "sku_code": s.option.sku_code,
+                    "info": s.option.info,
+                }
+                for s in v.selections.all()
+            ]
+            variant_title = " / ".join(
+                filter(None, [s["option_name"] for s in selections])
+            )
             result.append({
                 "id": v.id,
                 "sku": v.sku,
-                "title": v.sku,
+                "title": variant_title or v.sku,
+                "variant_title": variant_title or None,
                 "product_title": v.product.name,
                 "product_id": v.product.id,
-                "image": None,
+                "image": product_images.get(v.product_id),
+                "selections": selections,
                 "total_stock": overview["total"],
                 "sellable_stock": overview["sellable"],
                 "available_stock": overview["available"],
