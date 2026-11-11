@@ -1,6 +1,6 @@
 from django.db.models import Count, Q as models_Q
 
-from domains.cart.services import CartService
+from domains.cart.services.cart_service import CartService
 from domains.payments.services import PaymentService
 from domains.location.models import City, Country, State
 

@@ -27,7 +27,9 @@ from rest_framework.views import APIView
 from core.permissions import IsCustomer
 from core.responses import api_response
 from domains.business.models import BusinessProfile
-from domains.business.services import BusinessShipmentService
+from domains.business.services.business_shipment_service import (
+    BusinessShipmentService,
+)
 
 from ..services.cart_service import MarketplaceCartService
 from .serializers import MarketplaceOrderChargesSerializer

@@ -3,8 +3,11 @@ from django.utils.translation import gettext as _
 from rest_framework import serializers
 
 from .contracts import empty_draft_content, validate_draft_content
-from .models import LandingPage, Page, SEORecord
-from .services import LandingPageContentResolver, SEOService
+from .models.landing_page import LandingPage
+from .models.page import Page
+from .models.seo_record import SEORecord
+from .services.landing_page_content_resolver import LandingPageContentResolver
+from .services.seo_service import SEOService
 
 
 class ContentSlugScopeMixin:

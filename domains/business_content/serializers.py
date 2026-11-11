@@ -4,7 +4,8 @@ from rest_framework import serializers
 
 from .contracts import empty_draft_content, enforce_draft_context, validate_draft_content
 from .models import LandingPage, Page, SEORecord, SuggestionPage
-from .services import LandingPageContentResolver, SEOService
+from .services.landing_page_content_resolver import LandingPageContentResolver
+from .services.seo_service import SEOService
 
 
 class ContentContextScopeMixin:

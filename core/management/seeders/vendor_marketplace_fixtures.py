@@ -52,7 +52,7 @@ from domains.business.models import (
     BusinessWorkingDay,
     SocialMedia,
 )
-from domains.business.services import BusinessService
+from domains.business.services.business_service import BusinessService
 from domains.catalog.models import (
     Brand,
     Category,

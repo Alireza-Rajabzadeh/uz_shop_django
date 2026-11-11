@@ -7,7 +7,9 @@ What differs is only the rows written, so this names the marketplace tables
 and points the hold machinery at the marketplace order service.
 """
 
-from domains.business_payments.services import BusinessPaymentService
+from domains.business_payments.services.business_payment_service import (
+    BusinessPaymentService,
+)
 
 from ..models import (
     MarketplaceOrder,

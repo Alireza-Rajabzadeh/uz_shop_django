@@ -11,8 +11,11 @@ from ..contracts import (
     validate_contracts_payload,
     validate_draft_content,
 )
-from ..models import LandingPage, Page, SEORecord
-from ..services import LandingPageService, PageService
+from ..models.landing_page import LandingPage
+from ..models.page import Page
+from ..models.seo_record import SEORecord
+from ..services.landing_page_service import LandingPageService
+from ..services.page_service import PageService
 
 
 class SEORecordAPITests(APITestCase):

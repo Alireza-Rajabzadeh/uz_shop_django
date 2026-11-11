@@ -4,7 +4,8 @@ from core.services import CacheService
 from domains.catalog.models import Category, CategoryStatus, Product, ProductStatus
 
 from ..models import LandingPage, Page, SEORecord
-from ..services import LandingPageService, PageService
+from ..services.landing_page_service import LandingPageService
+from ..services.page_service import PageService
 from .factories import storefront_business
 
 

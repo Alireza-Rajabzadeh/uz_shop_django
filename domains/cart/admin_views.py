@@ -9,7 +9,7 @@ from domains.users.auth import AdminJWTAuthentication
 
 from .models import Cart
 from .serializers import AdminCartListQuerySerializer
-from .services import CartService
+from .services.cart_service import CartService
 
 
 class AdminAPIView(APIView):

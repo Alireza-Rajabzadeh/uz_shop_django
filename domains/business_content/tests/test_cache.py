@@ -6,7 +6,7 @@ from rest_framework.test import APIClient
 from domains.business.models import BusinessProfile
 
 from ..models import LandingPage, Page, SEORecord
-from ..services import public_business_id
+from ..services.public import public_business_id
 from .factories import storefront_business
 
 

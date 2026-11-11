@@ -6,7 +6,9 @@ from django.test import TestCase
 
 from core.management.seeders.shipment import ShipmentSeeder
 from domains.business.models import BusinessProfile, BusinessShipment
-from domains.business.services import BusinessShipmentService
+from domains.business.services.business_shipment_service import (
+    BusinessShipmentService,
+)
 from domains.shipment.models import ShipmentMethod, ShipmentPricingMethod
 from domains.shipment.services import ShipmentPricingService
 from domains.vendor.models import Vendor, VendorStatus

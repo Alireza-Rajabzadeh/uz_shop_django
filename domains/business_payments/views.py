@@ -16,7 +16,10 @@ from .serializers import (
     ListQuerySerializer,
     PaymentListQuerySerializer,
 )
-from .services import BusinessPaymentService, resolve_business
+from .services.business_payment_service import (
+    BusinessPaymentService,
+    resolve_business,
+)
 
 
 service = BusinessPaymentService()

@@ -68,13 +68,13 @@ class StorefrontProductService:
         }
 
     def _seo_payload(self, product):
-        from domains.content.services import SEOService
+        from domains.content.services.seo_service import SEOService
         return SEOService.get_for("product", product.id)
 
     def _resolve_json_description(self, json_description):
         if not json_description or not json_description.get("components"):
             return json_description or {}
-        from domains.content.services import LandingPageContentResolver
+        from domains.content.services.landing_page_content_resolver import LandingPageContentResolver
         return LandingPageContentResolver().resolve(json_description)
 
     def get_content_items(self, ids, *, include_unlisted=False):

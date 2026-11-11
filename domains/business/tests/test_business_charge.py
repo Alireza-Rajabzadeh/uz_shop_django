@@ -11,7 +11,9 @@ from domains.business.models import (
     BusinessChargeType,
     BusinessProfile,
 )
-from domains.business.services import BusinessChargeService
+from domains.business.services.business_charge_service import (
+    BusinessChargeService,
+)
 from domains.vendor.models import Vendor, VendorStatus
 
 

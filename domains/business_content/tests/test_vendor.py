@@ -11,7 +11,8 @@ from domains.vendor.models import Vendor, VendorStatus
 from ..cache import HOME_CACHE_KEY, landing_page_cache_key
 from ..contracts import empty_draft_content
 from ..models import LandingPage, Page, SEORecord
-from ..services import PageService, public_business_id
+from ..services.page_service import PageService
+from ..services.public import public_business_id
 from .factories import storefront_business
 
 CONTENT = {"schema_version": 1, "contract_version": 4, "components": []}

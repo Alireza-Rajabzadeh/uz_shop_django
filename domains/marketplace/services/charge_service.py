@@ -3,7 +3,9 @@ from decimal import Decimal
 from django.db import transaction
 
 from domains.business.models import BusinessChargeCalculationType
-from domains.business.services import BusinessShipmentService
+from domains.business.services.business_shipment_service import (
+    BusinessShipmentService,
+)
 
 from ..models import OrderCharge
 

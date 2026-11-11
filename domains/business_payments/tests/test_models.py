@@ -24,7 +24,7 @@ from ..models import (
     BusinessPaymentStatus,
 )
 from ..online_payment_providers import provider_availability, provider_class
-from ..services import BusinessPaymentService
+from ..services.business_payment_service import BusinessPaymentService
 
 
 def _make_vendor(phone, national_id, vendor_status):

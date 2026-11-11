@@ -15,7 +15,9 @@ from domains.users.auth import AdminJWTAuthentication
 
 from .contracts import CONTRACTS_FILE
 from .cache import HOME_CACHE_KEY, landing_page_cache_key, page_cache_key
-from .models import LandingPage, Page, SEORecord
+from .models.landing_page import LandingPage
+from .models.page import Page
+from .models.seo_record import SEORecord
 from .serializers import (
     LandingPageContentSerializer,
     LandingPageDetailSerializer,
@@ -25,12 +27,10 @@ from .serializers import (
     PageSerializer,
     SEORecordSerializer,
 )
-from .services import (
-    LandingPageContentResolver,
-    LandingPageService,
-    PageService,
-    SEOService,
-)
+from .services.landing_page_content_resolver import LandingPageContentResolver
+from .services.landing_page_service import LandingPageService
+from .services.page_service import PageService
+from .services.seo_service import SEOService
 
 
 def paginate_content(queryset, request, view, serializer=None):

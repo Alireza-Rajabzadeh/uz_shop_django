@@ -12,7 +12,9 @@ from domains.business.models import (
     BusinessProfileServiceMode,
     BusinessShipment,
 )
-from domains.business.services import BusinessOnboardingService
+from domains.business.services.business_onboarding_service import (
+    BusinessOnboardingService,
+)
 from domains.vendor.models import Vendor, VendorStatus
 
 

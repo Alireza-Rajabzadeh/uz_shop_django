@@ -1,6 +1,8 @@
 from django.contrib import admin
 
-from .models import LandingPage, Page, SEORecord
+from .models.landing_page import LandingPage
+from .models.page import Page
+from .models.seo_record import SEORecord
 
 
 @admin.register(LandingPage)

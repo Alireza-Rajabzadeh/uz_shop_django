@@ -3,7 +3,9 @@ from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 
 from .cache import invalidate_landing_page, invalidate_page
-from .models import LandingPage, Page, SEORecord
+from .models.landing_page import LandingPage
+from .models.page import Page
+from .models.seo_record import SEORecord
 
 
 def _after_commit(callback):

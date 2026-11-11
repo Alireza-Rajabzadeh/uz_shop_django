@@ -26,12 +26,10 @@ from .serializers import (
     SEORecordSerializer,
     SuggestionPageSerializer,
 )
-from .services import (
-    LandingPageContentResolver,
-    LandingPageService,
-    PageService,
-    public_business_id,
-)
+from .services.landing_page_content_resolver import LandingPageContentResolver
+from .services.landing_page_service import LandingPageService
+from .services.page_service import PageService
+from .services.public import public_business_id
 
 
 def paginate_content(queryset, request, view, serializer=None):

@@ -3,7 +3,10 @@ from decimal import Decimal
 from rest_framework import serializers
 
 from domains.business.models import BusinessCategory, BusinessCharge, BusinessPhone, BusinessProfile, BusinessSocialLink, BusinessWorkingDay, SocialMedia, SocialMediaIcon
-from domains.business.services import BusinessChargeService, BusinessService
+from domains.business.services.business_charge_service import (
+    BusinessChargeService,
+)
+from domains.business.services.business_service import BusinessService
 from domains.files.models import File
 from domains.files.services import FileService
 

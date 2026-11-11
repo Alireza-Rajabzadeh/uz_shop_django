@@ -11,7 +11,7 @@ from ..models.offer_price_history import SOURCE_ADMIN
 # The enum is the vocabulary: it validates incoming codes, seeds the
 # PricingStrategy table, and drives the cost-basis formulas. The table only
 # carries display data (labels and the user guide), so a code must exist in
-# both places — domains.marketplace.tests_pricing_strategy asserts that.
+# both places — domains.marketplace.tests.test_pricing_strategy asserts that.
 COST_STRATEGY_CODES = {member.value for member in VariantCostStrategyEnum}
 
 

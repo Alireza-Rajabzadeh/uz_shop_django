@@ -94,7 +94,7 @@ class BusinessPaymentMethodReadSerializer(serializers.ModelSerializer):
         ]
 
     def get_icon(self, obj):
-        from .services import BusinessPaymentService
+        from .services.business_payment_service import BusinessPaymentService
 
         return BusinessPaymentService.file_payload(obj.icon_file)
 
