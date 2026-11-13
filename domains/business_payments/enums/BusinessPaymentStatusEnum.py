@@ -5,3 +5,7 @@ class BusinessPaymentStatusEnum(Enum):
     PENDING = 1
     SUCCESSFUL = 2
     FAILED = 3
+
+    @property
+    def code(self) -> str:
+        return self.name.lower()

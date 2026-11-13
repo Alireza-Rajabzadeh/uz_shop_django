@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 
-from core.management.seeders.social_media import SocialMediaSeeder
+from core.management.seeders.configs.social_media import SocialMediaSeeder
 
 
 class Command(BaseCommand):

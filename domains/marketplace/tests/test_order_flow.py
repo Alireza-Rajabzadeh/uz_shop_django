@@ -1,12 +1,12 @@
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 
-from core.management.seeders.order import (
+from core.management.seeders.configs.order import (
     ORDER_ACTIONS,
     ORDER_STATUSES,
     ORDER_STATUS_ACTIONS,
 )
-from core.management.seeders.marketplace_order import MarketplaceOrderSeeder
+from core.management.seeders.configs.marketplace_order import MarketplaceOrderSeeder
 from domains.business.models import BusinessProfile
 from domains.business_payments.models import (
     BusinessPaymentMethod,

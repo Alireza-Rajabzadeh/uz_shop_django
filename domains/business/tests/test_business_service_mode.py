@@ -2,7 +2,7 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 
-from core.management.seeders.business_service_modes import (
+from core.management.seeders.configs.business_service_modes import (
     BusinessServiceModeSeeder,
 )
 from domains.business.data.business_service_modes import BUSINESS_SERVICE_MODE_SEED

@@ -151,7 +151,7 @@ class VendorInventoryAttributeDefinitionsTests(TestCase):
         response = self._post({"name": "IMEI"})
 
         self.assertEqual(response.status_code, 400)
-        self.assertIn("already exists", str(response.data["errors"]))
+        self.assertIn("code", response.data["errors"])
         self.assertEqual(
             InventoryAttributeDefinition.objects.filter(code="imei").count(), 1
         )

@@ -3,7 +3,7 @@ from io import StringIO
 from django.core.management import call_command
 from django.test import TestCase
 
-from core.management.seeders.business_payments import BusinessPaymentMethodsSeeder
+from core.management.seeders.configs.business_payments import BusinessPaymentMethodsSeeder
 from domains.banks.models import Bank
 from domains.business.models import BusinessProfile, BusinessStatus
 from domains.business.enums.BusinessStatusEnum import BusinessStatusEnum

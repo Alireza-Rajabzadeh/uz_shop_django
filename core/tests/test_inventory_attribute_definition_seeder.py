@@ -1,6 +1,6 @@
 from django.test import TestCase
 
-from core.management.seeders.inventory_attribute_definitions import (
+from core.management.seeders.configs.inventory_attribute_definitions import (
     InventoryAttributeDefinitionSeeder,
 )
 from domains.business.models import BusinessProfile

@@ -11,9 +11,9 @@ missing so the panel can say "not set" instead of hiding the section.
 
 from decimal import Decimal
 
-from core.management.seeders.business_service_modes import BusinessServiceModeSeeder
-from core.management.seeders.packages import PackagesSeeder
-from core.management.seeders.shipment import ShipmentSeeder
+from core.management.seeders.configs.business_service_modes import BusinessServiceModeSeeder
+from core.management.seeders.configs.packages import PackagesSeeder
+from core.management.seeders.configs.shipment import ShipmentSeeder
 from domains.business.models import (
     BusinessCategory,
     BusinessCharge,

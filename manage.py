@@ -7,6 +7,11 @@ import sys
 def main():
     """Run administrative tasks."""
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "seed:fake":
+            sys.argv[1] = "seed_fake"
+        elif sys.argv[1] == "seed:config":
+            sys.argv[1] = "seed"
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:

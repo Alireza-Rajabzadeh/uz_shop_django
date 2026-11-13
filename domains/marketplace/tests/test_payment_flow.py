@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from django.utils import timezone
 
-from core.management.seeders.order import OrderSeeder
+from core.management.seeders.configs.order import OrderSeeder
 from domains.business_payments.models import (
     BusinessPayment,
     BusinessPaymentMethod,

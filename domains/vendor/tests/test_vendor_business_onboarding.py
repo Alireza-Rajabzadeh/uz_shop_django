@@ -3,10 +3,10 @@ from decimal import Decimal
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from core.management.seeders.business_service_modes import (
+from core.management.seeders.configs.business_service_modes import (
     BusinessServiceModeSeeder,
 )
-from core.management.seeders.shipment import ShipmentSeeder
+from core.management.seeders.configs.shipment import ShipmentSeeder
 from domains.business.models import (
     BusinessProfile,
     BusinessProfileServiceMode,

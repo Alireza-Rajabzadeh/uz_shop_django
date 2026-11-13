@@ -5,8 +5,8 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.utils import timezone
 
-from core.management.seeders.marketplace_order import MarketplaceOrderSeeder
-from core.management.seeders.order import OrderSeeder
+from core.management.seeders.configs.marketplace_order import MarketplaceOrderSeeder
+from core.management.seeders.configs.order import OrderSeeder
 from domains.business.models import BusinessProfile
 from domains.catalog.models import Category, CategoryStatus, Product, ProductStatus, ProductVariants
 from domains.customer.models import Customer, CustomerStatus

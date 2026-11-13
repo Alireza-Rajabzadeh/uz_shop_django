@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 
 from core.management.data.vendor_marketplace_fixtures import SHARED_PASSWORD
-from core.management.seeders.vendor_marketplace_fixtures import (
+from core.management.seeders.developing.vendor_marketplace_fixtures import (
     VendorMarketplaceSeeder,
 )
 

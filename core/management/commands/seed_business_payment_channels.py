@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from core.management.seeders.business_payments import BusinessPaymentMethodsSeeder
+from core.management.seeders.configs.business_payments import BusinessPaymentMethodsSeeder
 from domains.banks.models import Bank
 from domains.business.models import BusinessProfile
 from domains.business_payments.models import (

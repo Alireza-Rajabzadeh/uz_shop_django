@@ -4,7 +4,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import ProtectedError
 from django.test import TestCase
 
-from core.management.seeders.shipment import ShipmentSeeder
+from core.management.seeders.configs.shipment import ShipmentSeeder
 from domains.business.models import BusinessProfile, BusinessShipment
 from domains.business.services.business_shipment_service import (
     BusinessShipmentService,

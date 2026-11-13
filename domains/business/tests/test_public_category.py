@@ -1,6 +1,6 @@
 from rest_framework.test import APITestCase
 
-from core.management.seeders.business_service_modes import (
+from core.management.seeders.configs.business_service_modes import (
     BusinessServiceModeSeeder,
 )
 from domains.business.enums.BusinessStatusEnum import BusinessStatusEnum

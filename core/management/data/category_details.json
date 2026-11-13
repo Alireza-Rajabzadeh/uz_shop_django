@@ -2,6 +2,7 @@
   "schema_version": 1,
   "details": [
     {
+      "id": 1,
       "name": "وزن",
       "type": "text",
       "required": false,
@@ -9,6 +10,7 @@
       "filterable": false
     },
     {
+      "id": 2,
       "name": "نوع اتصال به منبع برق",
       "type": "text",
       "required": false,
@@ -16,6 +18,7 @@
       "filterable": false
     },
     {
+      "id": 3,
       "name": "اقلام همراه",
       "type": "text",
       "required": false,
@@ -23,6 +26,7 @@
       "filterable": false
     },
     {
+      "id": 4,
       "name": "بازه طول کابل",
       "type": "text",
       "required": false,
@@ -30,6 +34,7 @@
       "filterable": false
     },
     {
+      "id": 5,
       "name": "نوع کابل همراه/متصل",
       "type": "text",
       "required": false,
@@ -37,6 +42,7 @@
       "filterable": false
     },
     {
+      "id": 6,
       "name": "نوع شارژر تبلت و موبایل",
       "type": "text",
       "required": false,
@@ -44,6 +50,7 @@
       "filterable": false
     },
     {
+      "id": 7,
       "name": "مدل",
       "type": "text",
       "required": false,
@@ -51,6 +58,7 @@
       "filterable": false
     },
     {
+      "id": 8,
       "name": "تعداد درگاه خروجی",
       "type": "text",
       "required": false,
@@ -58,6 +66,7 @@
       "filterable": false
     },
     {
+      "id": 9,
       "name": "توان خروجی کلی",
       "type": "text",
       "required": false,
@@ -65,6 +74,7 @@
       "filterable": false
     },
     {
+      "id": 10,
       "name": "درگاه خروجی شارژر",
       "type": "text",
       "required": false,
@@ -72,6 +82,7 @@
       "filterable": false
     },
     {
+      "id": 11,
       "name": "بازه بیشترین توان خروجی یک پورت",
       "type": "text",
       "required": false,
@@ -79,6 +90,7 @@
       "filterable": false
     },
     {
+      "id": 12,
       "name": "ولتاژ ورودی",
       "type": "text",
       "required": false,
@@ -86,6 +98,7 @@
       "filterable": false
     },
     {
+      "id": 13,
       "name": "ولتاژ خروجی",
       "type": "text",
       "required": false,
@@ -93,6 +106,7 @@
       "filterable": false
     },
     {
+      "id": 14,
       "name": "شدت جریان خروجی",
       "type": "text",
       "required": false,
@@ -100,6 +114,7 @@
       "filterable": false
     },
     {
+      "id": 15,
       "name": "بیشترین جریان خروجی",
       "type": "text",
       "required": false,
@@ -107,6 +122,7 @@
       "filterable": false
     },
     {
+      "id": 16,
       "name": "تکنولوژی شارژ",
       "type": "text",
       "required": false,
@@ -114,6 +130,7 @@
       "filterable": false
     },
     {
+      "id": 17,
       "name": "قابلیت‌های شارژر",
       "type": "text",
       "required": false,
@@ -121,13 +138,7 @@
       "filterable": false
     },
     {
-      "name": "توضیحات",
-      "type": "text",
-      "required": false,
-      "options": "",
-      "filterable": false
-    },
-    {
+      "id": 18,
       "name": "توضیحات سازگاری",
       "type": "text",
       "required": false,
@@ -135,6 +146,7 @@
       "filterable": false
     },
     {
+      "id": 19,
       "name": "جنس بدنه",
       "type": "text",
       "required": false,
@@ -142,6 +154,7 @@
       "filterable": false
     },
     {
+      "id": 20,
       "name": "طول کابل",
       "type": "text",
       "required": false,
@@ -149,6 +162,7 @@
       "filterable": false
     },
     {
+      "id": 21,
       "name": "درگاه‌های ارتباطی",
       "type": "text",
       "required": false,
@@ -156,6 +170,7 @@
       "filterable": false
     },
     {
+      "id": 22,
       "name": "بیشترین توان خروجی یک پورت",
       "type": "text",
       "required": false,
@@ -163,6 +178,7 @@
       "filterable": false
     },
     {
+      "id": 23,
       "name": "قابلیت‌های دستگاه",
       "type": "text",
       "required": false,
@@ -170,6 +186,7 @@
       "filterable": false
     },
     {
+      "id": 24,
       "name": "حافظه منشی",
       "type": "text",
       "required": false,
@@ -177,6 +194,7 @@
       "filterable": false
     },
     {
+      "id": 25,
       "name": "شارژدهی مکالمه",
       "type": "text",
       "required": false,
@@ -184,6 +202,7 @@
       "filterable": false
     },
     {
+      "id": 26,
       "name": "تعداد گوشی های بی سیم",
       "type": "text",
       "required": false,
@@ -191,6 +210,7 @@
       "filterable": false
     },
     {
+      "id": 27,
       "name": "توضیحات دفترچه تلفن",
       "type": "text",
       "required": false,
@@ -198,13 +218,7 @@
       "filterable": false
     },
     {
-      "name": "ویژگی‌ها",
-      "type": "text",
-      "required": false,
-      "options": "",
-      "filterable": false
-    },
-    {
+      "id": 28,
       "name": "فرکانس",
       "type": "text",
       "required": false,
@@ -212,13 +226,7 @@
       "filterable": false
     },
     {
-      "name": "امکانات و قابلیت‌ها",
-      "type": "text",
-      "required": false,
-      "options": "",
-      "filterable": false
-    },
-    {
+      "id": 29,
       "name": "توضیحات صفحه نمایش",
       "type": "text",
       "required": false,
@@ -226,6 +234,7 @@
       "filterable": false
     },
     {
+      "id": 30,
       "name": "تعداد خطوط",
       "type": "text",
       "required": false,
@@ -233,6 +242,7 @@
       "filterable": false
     },
     {
+      "id": 31,
       "name": "ابعاد گوشی",
       "type": "text",
       "required": false,
@@ -240,6 +250,7 @@
       "filterable": false
     },
     {
+      "id": 32,
       "name": "ابعاد پایه",
       "type": "text",
       "required": false,
@@ -247,6 +258,7 @@
       "filterable": false
     },
     {
+      "id": 33,
       "name": "برد",
       "type": "text",
       "required": false,
@@ -254,6 +266,7 @@
       "filterable": false
     },
     {
+      "id": 34,
       "name": "منبع تغذیه",
       "type": "text",
       "required": false,
@@ -261,6 +274,7 @@
       "filterable": false
     },
     {
+      "id": 35,
       "name": "شارژدهی",
       "type": "text",
       "required": false,
@@ -268,6 +282,7 @@
       "filterable": false
     },
     {
+      "id": 36,
       "name": "نوع تلفن",
       "type": "text",
       "required": false,
@@ -275,6 +290,7 @@
       "filterable": false
     },
     {
+      "id": 37,
       "name": "توضیحات قابلیت ضبط مکالمه",
       "type": "text",
       "required": false,
@@ -282,6 +298,7 @@
       "filterable": false
     },
     {
+      "id": 38,
       "name": "نوع باتری",
       "type": "text",
       "required": false,
@@ -289,6 +306,7 @@
       "filterable": false
     },
     {
+      "id": 39,
       "name": "نوع کلید تلفن",
       "type": "text",
       "required": false,
@@ -296,6 +314,7 @@
       "filterable": false
     },
     {
+      "id": 40,
       "name": "زمان معرفی",
       "type": "text",
       "required": false,
@@ -303,6 +322,7 @@
       "filterable": false
     },
     {
+      "id": 41,
       "name": "ابعاد",
       "type": "text",
       "required": false,
@@ -310,6 +330,7 @@
       "filterable": false
     },
     {
+      "id": 42,
       "name": "توضیحات بدنه",
       "type": "text",
       "required": false,
@@ -317,6 +338,7 @@
       "filterable": false
     },
     {
+      "id": 43,
       "name": "تعداد سیم کارت",
       "type": "text",
       "required": false,
@@ -324,6 +346,7 @@
       "filterable": false
     },
     {
+      "id": 44,
       "name": "نوع سیم کارت",
       "type": "text",
       "required": false,
@@ -331,20 +354,7 @@
       "filterable": false
     },
     {
-      "name": "ویژگی‌های کلیدی",
-      "type": "text",
-      "required": false,
-      "options": "",
-      "filterable": false
-    },
-    {
-      "name": "شناسه کالا",
-      "type": "text",
-      "required": false,
-      "options": "",
-      "filterable": false
-    },
-    {
+      "id": 45,
       "name": "فناوری صفحه‌ نمایش",
       "type": "text",
       "required": false,
@@ -352,6 +362,7 @@
       "filterable": false
     },
     {
+      "id": 46,
       "name": "تعداد رنگ",
       "type": "text",
       "required": false,
@@ -359,6 +370,7 @@
       "filterable": false
     },
     {
+      "id": 47,
       "name": "اندازه",
       "type": "text",
       "required": false,
@@ -366,6 +378,7 @@
       "filterable": false
     },
     {
+      "id": 48,
       "name": "نسبت صفحه‌ نمایش به بدنه",
       "type": "text",
       "required": false,
@@ -373,6 +386,7 @@
       "filterable": false
     },
     {
+      "id": 49,
       "name": "نسبت تصویر",
       "type": "text",
       "required": false,
@@ -380,6 +394,7 @@
       "filterable": false
     },
     {
+      "id": 50,
       "name": "رزولوشن صفحه نمایش",
       "type": "text",
       "required": false,
@@ -387,6 +402,7 @@
       "filterable": false
     },
     {
+      "id": 51,
       "name": "تراکم پیکسلی",
       "type": "text",
       "required": false,
@@ -394,6 +410,7 @@
       "filterable": false
     },
     {
+      "id": 52,
       "name": "تراشه",
       "type": "text",
       "required": false,
@@ -401,6 +418,7 @@
       "filterable": false
     },
     {
+      "id": 53,
       "name": "پردازنده‌",
       "type": "text",
       "required": false,
@@ -408,6 +426,7 @@
       "filterable": false
     },
     {
+      "id": 54,
       "name": "حافظه داخلی",
       "type": "text",
       "required": false,
@@ -415,6 +434,7 @@
       "filterable": false
     },
     {
+      "id": 55,
       "name": "پشتیبانی از کارت حافظه",
       "type": "text",
       "required": false,
@@ -422,6 +442,7 @@
       "filterable": false
     },
     {
+      "id": 56,
       "name": "حداکثر ظرفیت کارت حافظه",
       "type": "text",
       "required": false,
@@ -429,6 +450,7 @@
       "filterable": false
     },
     {
+      "id": 57,
       "name": "شبکه‌های مخابراتی",
       "type": "text",
       "required": false,
@@ -436,6 +458,7 @@
       "filterable": false
     },
     {
+      "id": 58,
       "name": "رادیو",
       "type": "text",
       "required": false,
@@ -443,6 +466,7 @@
       "filterable": false
     },
     {
+      "id": 59,
       "name": "درگاه‌ها و فناوری‌های ارتباطی",
       "type": "text",
       "required": false,
@@ -450,6 +474,7 @@
       "filterable": false
     },
     {
+      "id": 60,
       "name": "شبکه‌های ارتباطی قابل پشتیبانی",
       "type": "text",
       "required": false,
@@ -457,6 +482,7 @@
       "filterable": false
     },
     {
+      "id": 61,
       "name": "تعداد دوربین‌های پشت گوشی",
       "type": "text",
       "required": false,
@@ -464,6 +490,7 @@
       "filterable": false
     },
     {
+      "id": 62,
       "name": "مشخصات دوربین سلفی",
       "type": "text",
       "required": false,
@@ -471,6 +498,7 @@
       "filterable": false
     },
     {
+      "id": 63,
       "name": "سیستم عامل",
       "type": "text",
       "required": false,
@@ -478,6 +506,7 @@
       "filterable": false
     },
     {
+      "id": 64,
       "name": "مشخصات باتری",
       "type": "text",
       "required": false,
@@ -485,6 +514,7 @@
       "filterable": false
     },
     {
+      "id": 65,
       "name": "میزان شارژ آماده به کار",
       "type": "text",
       "required": false,
@@ -492,6 +522,7 @@
       "filterable": false
     },
     {
+      "id": 66,
       "name": "میزان شارژ مکالمه",
       "type": "text",
       "required": false,
@@ -499,6 +530,7 @@
       "filterable": false
     },
     {
+      "id": 67,
       "name": "قابلیت‌های موبایل",
       "type": "text",
       "required": false,
@@ -506,6 +538,7 @@
       "filterable": false
     },
     {
+      "id": 68,
       "name": "نوع گوشی موبایل",
       "type": "text",
       "required": false,
@@ -513,13 +546,7 @@
       "filterable": false
     },
     {
-      "name": "دسته ‌بندی",
-      "type": "text",
-      "required": false,
-      "options": "",
-      "filterable": false
-    },
-    {
+      "id": 69,
       "name": "نرخ به‌روزرسانی تصویر",
       "type": "text",
       "required": false,
@@ -527,6 +554,7 @@
       "filterable": false
     },
     {
+      "id": 70,
       "name": "روشنایی صفحه نمایش",
       "type": "text",
       "required": false,
@@ -534,6 +562,7 @@
       "filterable": false
     },
     {
+      "id": 71,
       "name": "نوع محافظ صفحه نمایش گوشی",
       "type": "text",
       "required": false,
@@ -541,13 +570,7 @@
       "filterable": false
     },
     {
-      "name": "سایر قابلیت‌ها",
-      "type": "text",
-      "required": false,
-      "options": "",
-      "filterable": false
-    },
-    {
+      "id": 72,
       "name": "فرکانس پردازنده‌ مرکزی",
       "type": "text",
       "required": false,
@@ -555,6 +578,7 @@
       "filterable": false
     },
     {
+      "id": 73,
       "name": "پردازنده‌ گرافیکی",
       "type": "text",
       "required": false,
@@ -562,6 +586,7 @@
       "filterable": false
     },
     {
+      "id": 74,
       "name": "مقدار RAM",
       "type": "text",
       "required": false,
@@ -569,6 +594,7 @@
       "filterable": false
     },
     {
+      "id": 75,
       "name": "نسخه بلوتوث",
       "type": "text",
       "required": false,
@@ -576,6 +602,7 @@
       "filterable": false
     },
     {
+      "id": 76,
       "name": "مشخصات بلوتوث",
       "type": "text",
       "required": false,
@@ -583,6 +610,7 @@
       "filterable": false
     },
     {
+      "id": 77,
       "name": "تکنولوژی‌های مکان‌یابی (GPS)",
       "type": "text",
       "required": false,
@@ -590,6 +618,7 @@
       "filterable": false
     },
     {
+      "id": 78,
       "name": "نوع لنز دوربین اصلی",
       "type": "text",
       "required": false,
@@ -597,6 +626,7 @@
       "filterable": false
     },
     {
+      "id": 79,
       "name": "رزولوشن دوربین اصلی",
       "type": "text",
       "required": false,
@@ -604,6 +634,7 @@
       "filterable": false
     },
     {
+      "id": 80,
       "name": "مشخصات دوربین اصلی",
       "type": "text",
       "required": false,
@@ -611,6 +642,7 @@
       "filterable": false
     },
     {
+      "id": 81,
       "name": "نوع لنز دوربین دوم",
       "type": "text",
       "required": false,
@@ -618,6 +650,7 @@
       "filterable": false
     },
     {
+      "id": 82,
       "name": "رزولوشن دوربین دوم",
       "type": "text",
       "required": false,
@@ -625,6 +658,7 @@
       "filterable": false
     },
     {
+      "id": 83,
       "name": "مشخصات دوربین دوم",
       "type": "text",
       "required": false,
@@ -632,6 +666,7 @@
       "filterable": false
     },
     {
+      "id": 84,
       "name": "نوع لنز دوربین سوم",
       "type": "text",
       "required": false,
@@ -639,6 +674,7 @@
       "filterable": false
     },
     {
+      "id": 85,
       "name": "رزولوشن دوربین سوم",
       "type": "text",
       "required": false,
@@ -646,6 +682,7 @@
       "filterable": false
     },
     {
+      "id": 86,
       "name": "مشخصات دوربین سوم",
       "type": "text",
       "required": false,
@@ -653,6 +690,7 @@
       "filterable": false
     },
     {
+      "id": 87,
       "name": "فناوری فوکوس",
       "type": "text",
       "required": false,
@@ -660,6 +698,7 @@
       "filterable": false
     },
     {
+      "id": 88,
       "name": "سایر مشخصات فیلمبرداری",
       "type": "text",
       "required": false,
@@ -667,6 +706,7 @@
       "filterable": false
     },
     {
+      "id": 89,
       "name": "فلش",
       "type": "text",
       "required": false,
@@ -674,6 +714,7 @@
       "filterable": false
     },
     {
+      "id": 90,
       "name": "رزولوشن دوربین سلفی",
       "type": "text",
       "required": false,
@@ -681,6 +722,7 @@
       "filterable": false
     },
     {
+      "id": 91,
       "name": "خروجی صدا",
       "type": "text",
       "required": false,
@@ -688,6 +730,7 @@
       "filterable": false
     },
     {
+      "id": 92,
       "name": "نسخه سیستم عامل",
       "type": "text",
       "required": false,
@@ -695,6 +738,7 @@
       "filterable": false
     },
     {
+      "id": 93,
       "name": "حس‌گرها",
       "type": "text",
       "required": false,
@@ -702,6 +746,7 @@
       "filterable": false
     },
     {
+      "id": 94,
       "name": "ظرفیت باتری",
       "type": "text",
       "required": false,
@@ -709,6 +754,7 @@
       "filterable": false
     },
     {
+      "id": 95,
       "name": "توان شارژ",
       "type": "text",
       "required": false,
@@ -716,6 +762,7 @@
       "filterable": false
     },
     {
+      "id": 96,
       "name": "قابلیت‌های شارژ",
       "type": "text",
       "required": false,
@@ -723,6 +770,7 @@
       "filterable": false
     },
     {
+      "id": 97,
       "name": "ریجن",
       "type": "text",
       "required": false,
@@ -730,6 +778,7 @@
       "filterable": false
     },
     {
+      "id": 98,
       "name": "قابلیت‌های مقاومتی",
       "type": "text",
       "required": false,
@@ -737,6 +786,7 @@
       "filterable": false
     },
     {
+      "id": 99,
       "name": "رزولوشن فیلمبرداری",
       "type": "text",
       "required": false,
@@ -744,6 +794,7 @@
       "filterable": false
     },
     {
+      "id": 100,
       "name": "اسپیکر",
       "type": "text",
       "required": false,
@@ -751,6 +802,7 @@
       "filterable": false
     },
     {
+      "id": 101,
       "name": "سایر توضیحات اقلام همراه",
       "type": "text",
       "required": false,
@@ -758,6 +810,7 @@
       "filterable": false
     },
     {
+      "id": 102,
       "name": "توضیحات تکمیلی صدا",
       "type": "text",
       "required": false,
@@ -765,6 +818,7 @@
       "filterable": false
     },
     {
+      "id": 103,
       "name": "تکنولوژی حافظه",
       "type": "text",
       "required": false,
@@ -772,6 +826,7 @@
       "filterable": false
     },
     {
+      "id": 104,
       "name": "نوع قرارگیری کارت حافظه",
       "type": "text",
       "required": false,
@@ -779,6 +834,7 @@
       "filterable": false
     },
     {
+      "id": 105,
       "name": "زبان‌های قابل پشتیبانی",
       "type": "text",
       "required": false,
@@ -786,6 +842,7 @@
       "filterable": false
     },
     {
+      "id": 106,
       "name": "نوع طراحی بدنه",
       "type": "text",
       "required": false,
@@ -793,6 +850,7 @@
       "filterable": false
     },
     {
+      "id": 107,
       "name": "توضیحات صفحه نمایش دوم",
       "type": "text",
       "required": false,
@@ -800,6 +858,7 @@
       "filterable": false
     },
     {
+      "id": 108,
       "name": "نوع لنز دوربین چهارم",
       "type": "text",
       "required": false,
@@ -807,6 +866,7 @@
       "filterable": false
     },
     {
+      "id": 109,
       "name": "رزولوشن دوربین چهارم",
       "type": "text",
       "required": false,
@@ -814,6 +874,7 @@
       "filterable": false
     },
     {
+      "id": 110,
       "name": "مشخصات دوربین چهارم",
       "type": "text",
       "required": false,
@@ -824,616 +885,697 @@
   "relations": [
     {
       "category_id": 1001,
+      "detail_id": 1,
       "detail": "وزن",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 3,
       "detail": "اقلام همراه",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 7,
       "detail": "مدل",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 38,
       "detail": "نوع باتری",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 40,
       "detail": "زمان معرفی",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 41,
       "detail": "ابعاد",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 42,
       "detail": "توضیحات بدنه",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 43,
       "detail": "تعداد سیم کارت",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 44,
       "detail": "نوع سیم کارت",
       "value": ""
     },
     {
       "category_id": 1001,
-      "detail": "ویژگی‌های کلیدی",
-      "value": ""
-    },
-    {
-      "category_id": 1001,
-      "detail": "شناسه کالا",
-      "value": ""
-    },
-    {
-      "category_id": 1001,
+      "detail_id": 45,
       "detail": "فناوری صفحه‌ نمایش",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 46,
       "detail": "تعداد رنگ",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 47,
       "detail": "اندازه",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 48,
       "detail": "نسبت صفحه‌ نمایش به بدنه",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 49,
       "detail": "نسبت تصویر",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 50,
       "detail": "رزولوشن صفحه نمایش",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 51,
       "detail": "تراکم پیکسلی",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 52,
       "detail": "تراشه",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 53,
       "detail": "پردازنده‌",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 54,
       "detail": "حافظه داخلی",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 55,
       "detail": "پشتیبانی از کارت حافظه",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 56,
       "detail": "حداکثر ظرفیت کارت حافظه",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 57,
       "detail": "شبکه‌های مخابراتی",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 58,
       "detail": "رادیو",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 59,
       "detail": "درگاه‌ها و فناوری‌های ارتباطی",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 60,
       "detail": "شبکه‌های ارتباطی قابل پشتیبانی",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 61,
       "detail": "تعداد دوربین‌های پشت گوشی",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 62,
       "detail": "مشخصات دوربین سلفی",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 63,
       "detail": "سیستم عامل",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 64,
       "detail": "مشخصات باتری",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 65,
       "detail": "میزان شارژ آماده به کار",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 66,
       "detail": "میزان شارژ مکالمه",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 67,
       "detail": "قابلیت‌های موبایل",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 68,
       "detail": "نوع گوشی موبایل",
       "value": ""
     },
     {
       "category_id": 1001,
-      "detail": "دسته ‌بندی",
-      "value": ""
-    },
-    {
-      "category_id": 1001,
+      "detail_id": 69,
       "detail": "نرخ به‌روزرسانی تصویر",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 70,
       "detail": "روشنایی صفحه نمایش",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 71,
       "detail": "نوع محافظ صفحه نمایش گوشی",
       "value": ""
     },
     {
       "category_id": 1001,
-      "detail": "سایر قابلیت‌ها",
-      "value": ""
-    },
-    {
-      "category_id": 1001,
+      "detail_id": 72,
       "detail": "فرکانس پردازنده‌ مرکزی",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 73,
       "detail": "پردازنده‌ گرافیکی",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 74,
       "detail": "مقدار RAM",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 75,
       "detail": "نسخه بلوتوث",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 76,
       "detail": "مشخصات بلوتوث",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 77,
       "detail": "تکنولوژی‌های مکان‌یابی (GPS)",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 78,
       "detail": "نوع لنز دوربین اصلی",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 79,
       "detail": "رزولوشن دوربین اصلی",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 80,
       "detail": "مشخصات دوربین اصلی",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 81,
       "detail": "نوع لنز دوربین دوم",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 82,
       "detail": "رزولوشن دوربین دوم",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 83,
       "detail": "مشخصات دوربین دوم",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 84,
       "detail": "نوع لنز دوربین سوم",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 85,
       "detail": "رزولوشن دوربین سوم",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 86,
       "detail": "مشخصات دوربین سوم",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 87,
       "detail": "فناوری فوکوس",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 88,
       "detail": "سایر مشخصات فیلمبرداری",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 89,
       "detail": "فلش",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 90,
       "detail": "رزولوشن دوربین سلفی",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 91,
       "detail": "خروجی صدا",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 92,
       "detail": "نسخه سیستم عامل",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 93,
       "detail": "حس‌گرها",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 94,
       "detail": "ظرفیت باتری",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 95,
       "detail": "توان شارژ",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 96,
       "detail": "قابلیت‌های شارژ",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 97,
       "detail": "ریجن",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 98,
       "detail": "قابلیت‌های مقاومتی",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 99,
       "detail": "رزولوشن فیلمبرداری",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 100,
       "detail": "اسپیکر",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 101,
       "detail": "سایر توضیحات اقلام همراه",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 102,
       "detail": "توضیحات تکمیلی صدا",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 103,
       "detail": "تکنولوژی حافظه",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 104,
       "detail": "نوع قرارگیری کارت حافظه",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 105,
       "detail": "زبان‌های قابل پشتیبانی",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 106,
       "detail": "نوع طراحی بدنه",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 107,
       "detail": "توضیحات صفحه نمایش دوم",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 108,
       "detail": "نوع لنز دوربین چهارم",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 109,
       "detail": "رزولوشن دوربین چهارم",
       "value": ""
     },
     {
       "category_id": 1001,
+      "detail_id": 110,
       "detail": "مشخصات دوربین چهارم",
       "value": ""
     },
     {
       "category_id": 1003,
+      "detail_id": 1,
       "detail": "وزن",
       "value": ""
     },
     {
       "category_id": 1003,
+      "detail_id": 2,
       "detail": "نوع اتصال به منبع برق",
       "value": ""
     },
     {
       "category_id": 1003,
+      "detail_id": 3,
       "detail": "اقلام همراه",
       "value": ""
     },
     {
       "category_id": 1003,
+      "detail_id": 4,
       "detail": "بازه طول کابل",
       "value": ""
     },
     {
       "category_id": 1003,
+      "detail_id": 5,
       "detail": "نوع کابل همراه/متصل",
       "value": ""
     },
     {
       "category_id": 1003,
+      "detail_id": 6,
       "detail": "نوع شارژر تبلت و موبایل",
       "value": ""
     },
     {
       "category_id": 1003,
+      "detail_id": 7,
       "detail": "مدل",
       "value": ""
     },
     {
       "category_id": 1003,
+      "detail_id": 8,
       "detail": "تعداد درگاه خروجی",
       "value": ""
     },
     {
       "category_id": 1003,
+      "detail_id": 9,
       "detail": "توان خروجی کلی",
       "value": ""
     },
     {
       "category_id": 1003,
+      "detail_id": 10,
       "detail": "درگاه خروجی شارژر",
       "value": ""
     },
     {
       "category_id": 1003,
+      "detail_id": 11,
       "detail": "بازه بیشترین توان خروجی یک پورت",
       "value": ""
     },
     {
       "category_id": 1003,
+      "detail_id": 12,
       "detail": "ولتاژ ورودی",
       "value": ""
     },
     {
       "category_id": 1003,
+      "detail_id": 13,
       "detail": "ولتاژ خروجی",
       "value": ""
     },
     {
       "category_id": 1003,
+      "detail_id": 14,
       "detail": "شدت جریان خروجی",
       "value": ""
     },
     {
       "category_id": 1003,
+      "detail_id": 15,
       "detail": "بیشترین جریان خروجی",
       "value": ""
     },
     {
       "category_id": 1003,
+      "detail_id": 16,
       "detail": "تکنولوژی شارژ",
       "value": ""
     },
     {
       "category_id": 1003,
+      "detail_id": 17,
       "detail": "قابلیت‌های شارژر",
       "value": ""
     },
     {
       "category_id": 1003,
-      "detail": "توضیحات",
-      "value": ""
-    },
-    {
-      "category_id": 1003,
+      "detail_id": 18,
       "detail": "توضیحات سازگاری",
       "value": ""
     },
     {
       "category_id": 1003,
+      "detail_id": 19,
       "detail": "جنس بدنه",
       "value": ""
     },
     {
       "category_id": 1003,
+      "detail_id": 20,
       "detail": "طول کابل",
       "value": ""
     },
     {
       "category_id": 1003,
+      "detail_id": 21,
       "detail": "درگاه‌های ارتباطی",
       "value": ""
     },
     {
       "category_id": 1003,
+      "detail_id": 22,
       "detail": "بیشترین توان خروجی یک پورت",
       "value": ""
     },
     {
-      "category_id": 1059,
+      "category_id": 1058,
+      "detail_id": 1,
       "detail": "وزن",
       "value": ""
     },
     {
-      "category_id": 1059,
+      "category_id": 1058,
+      "detail_id": 3,
       "detail": "اقلام همراه",
       "value": ""
     },
     {
-      "category_id": 1059,
+      "category_id": 1058,
+      "detail_id": 23,
       "detail": "قابلیت‌های دستگاه",
       "value": ""
     },
     {
-      "category_id": 1059,
+      "category_id": 1058,
+      "detail_id": 24,
       "detail": "حافظه منشی",
       "value": ""
     },
     {
-      "category_id": 1059,
+      "category_id": 1058,
+      "detail_id": 25,
       "detail": "شارژدهی مکالمه",
       "value": ""
     },
     {
-      "category_id": 1059,
+      "category_id": 1058,
+      "detail_id": 26,
       "detail": "تعداد گوشی های بی سیم",
       "value": ""
     },
     {
-      "category_id": 1059,
+      "category_id": 1058,
+      "detail_id": 27,
       "detail": "توضیحات دفترچه تلفن",
       "value": ""
     },
     {
-      "category_id": 1059,
-      "detail": "ویژگی‌ها",
-      "value": ""
-    },
-    {
-      "category_id": 1059,
+      "category_id": 1058,
+      "detail_id": 28,
       "detail": "فرکانس",
       "value": ""
     },
     {
-      "category_id": 1059,
-      "detail": "امکانات و قابلیت‌ها",
-      "value": ""
-    },
-    {
-      "category_id": 1059,
+      "category_id": 1058,
+      "detail_id": 29,
       "detail": "توضیحات صفحه نمایش",
       "value": ""
     },
     {
-      "category_id": 1059,
+      "category_id": 1058,
+      "detail_id": 30,
       "detail": "تعداد خطوط",
       "value": ""
     },
     {
-      "category_id": 1059,
+      "category_id": 1058,
+      "detail_id": 31,
       "detail": "ابعاد گوشی",
       "value": ""
     },
     {
-      "category_id": 1059,
+      "category_id": 1058,
+      "detail_id": 32,
       "detail": "ابعاد پایه",
       "value": ""
     },
     {
-      "category_id": 1059,
+      "category_id": 1058,
+      "detail_id": 33,
       "detail": "برد",
       "value": ""
     },
     {
-      "category_id": 1059,
+      "category_id": 1058,
+      "detail_id": 34,
       "detail": "منبع تغذیه",
       "value": ""
     },
     {
-      "category_id": 1059,
+      "category_id": 1058,
+      "detail_id": 35,
       "detail": "شارژدهی",
       "value": ""
     },
     {
-      "category_id": 1059,
+      "category_id": 1058,
+      "detail_id": 36,
       "detail": "نوع تلفن",
       "value": ""
     },
     {
-      "category_id": 1059,
+      "category_id": 1058,
+      "detail_id": 37,
       "detail": "توضیحات قابلیت ضبط مکالمه",
       "value": ""
     },
     {
-      "category_id": 1059,
+      "category_id": 1058,
+      "detail_id": 38,
       "detail": "نوع باتری",
       "value": ""
     },
     {
-      "category_id": 1059,
+      "category_id": 1058,
+      "detail_id": 39,
       "detail": "نوع کلید تلفن",
       "value": ""
     }

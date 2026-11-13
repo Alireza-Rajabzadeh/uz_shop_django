@@ -1,6 +1,6 @@
 from django.test import TestCase
 
-from core.management.seeders.customers import CustomerSeeder, TEST_CUSTOMER_PASSWORD
+from core.management.seeders.developing.customers import CustomerSeeder, TEST_CUSTOMER_PASSWORD
 from domains.customer.models import Customer, CustomerAddress, CustomerPreference
 from domains.location.models import City, Country, State
 

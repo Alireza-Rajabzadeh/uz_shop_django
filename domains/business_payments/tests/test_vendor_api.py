@@ -6,8 +6,8 @@ from django.test import override_settings
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
-from core.management.seeders.order import OrderSeeder
-from core.management.seeders.payments import PaymentsSeeder
+from core.management.seeders.configs.order import OrderSeeder
+from core.management.seeders.configs.payments import PaymentsSeeder
 from domains.business.enums.BusinessStatusEnum import BusinessStatusEnum
 from domains.business.models import BusinessProfile
 from domains.customer.models import Customer, CustomerStatus

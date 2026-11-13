@@ -1,6 +1,6 @@
 from django.test import TestCase
 
-from core.management.seeders.vendors_club import VendorsClubSeeder
+from core.management.seeders.configs.vendors_club import VendorsClubSeeder
 from domains.vendors_club.data.activities import VENDOR_CLUB_ACTIVITY_SEED
 from domains.vendors_club.data.transaction_types import (
     VENDOR_CLUB_TRANSACTION_TYPE_SEED,

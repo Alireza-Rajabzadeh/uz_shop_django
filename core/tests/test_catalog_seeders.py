@@ -6,9 +6,9 @@ from django.core.management import call_command
 from django.test import TestCase
 from django.test.utils import captured_stdout
 
-from core.management.seeders.brands import BrandSeeder
-from core.management.seeders.category_details import CategoryDetailSeeder
-from core.management.seeders.variant_attributes import VariantAttributeSeeder
+from core.management.seeders.configs.brands import BrandSeeder
+from core.management.seeders.configs.category_details import CategoryDetailSeeder
+from core.management.seeders.configs.variant_attributes import VariantAttributeSeeder
 from domains.catalog.models import (
     Brand,
     Category,

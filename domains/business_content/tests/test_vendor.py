@@ -1,6 +1,6 @@
 from rest_framework.test import APITestCase
 
-from core.management.seeders.packages import PackagesSeeder
+from core.management.seeders.configs.packages import PackagesSeeder
 from core.services import CacheService
 from domains.business.models import BusinessCategory, BusinessProfile
 from domains.catalog.models import Category, CategoryStatus, Product, ProductStatus

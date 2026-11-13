@@ -5,8 +5,8 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase
 from rest_framework.test import APITestCase
 
-from core.management.seeders.order import ORDER_ACTIONS, ORDER_STATUSES, ORDER_STATUS_ACTIONS, OrderSeeder
-from core.management.seeders.payments import PaymentsSeeder
+from core.management.seeders.configs.order import ORDER_ACTIONS, ORDER_STATUSES, ORDER_STATUS_ACTIONS, OrderSeeder
+from core.management.seeders.configs.payments import PaymentsSeeder
 from domains.customer.models import Customer, CustomerStatus
 from domains.order.models import Order, OrderAction, OrderStatus, OrderStatusAction
 

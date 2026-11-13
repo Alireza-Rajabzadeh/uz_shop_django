@@ -11,7 +11,7 @@ even though the seeded action table marks them admin-usable.
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from core.management.seeders.marketplace_order import MarketplaceOrderSeeder
+from core.management.seeders.configs.marketplace_order import MarketplaceOrderSeeder
 from domains.business.models import BusinessProfile
 from domains.customer.models import Customer, CustomerStatus
 from domains.location.models import Country, State

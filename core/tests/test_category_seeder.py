@@ -4,7 +4,7 @@ from tempfile import TemporaryDirectory
 
 from django.test import TestCase
 
-from core.management.seeders.categories import CategorySeeder
+from core.management.seeders.configs.categories import CategorySeeder
 from domains.catalog.models import Category, CategoryStatus
 
 

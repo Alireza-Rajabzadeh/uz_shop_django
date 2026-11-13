@@ -4,8 +4,8 @@ from unittest.mock import patch
 from django.test import TestCase
 from django.utils import timezone
 
-from core.management.seeders.order import ORDER_STATUSES, OrderSeeder
-from core.management.seeders.payments import PaymentsSeeder
+from core.management.seeders.configs.order import ORDER_STATUSES, OrderSeeder
+from core.management.seeders.configs.payments import PaymentsSeeder
 from domains.business.models import BusinessProfile
 from domains.catalog.models import (
     Category,

@@ -3,7 +3,7 @@ from decimal import Decimal
 from django.core.management import call_command
 from django.test import TestCase
 
-from core.management.seeders.packages import PackagesSeeder
+from core.management.seeders.configs.packages import PackagesSeeder
 from domains.packages.data.features import FEATURE_SEED
 from domains.packages.data.packages import PACKAGE_FEATURE_SEED, PACKAGE_SEED
 from domains.packages.models import Feature, Package, PackageFeature, PackagePriceHistory

@@ -12,8 +12,8 @@ with no provisioned tier denies nothing: only an existing tier can say no.
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from core.management.seeders.marketplace_order import MarketplaceOrderSeeder
-from core.management.seeders.packages import PackagesSeeder
+from core.management.seeders.configs.marketplace_order import MarketplaceOrderSeeder
+from core.management.seeders.configs.packages import PackagesSeeder
 from domains.business.enums.BusinessStatusEnum import BusinessStatusEnum
 from domains.business.models import BusinessProfile
 from domains.inventory.models import Warehouse, WarehouseStatus

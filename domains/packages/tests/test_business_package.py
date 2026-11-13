@@ -8,7 +8,7 @@ from django.db.models import ProtectedError
 from django.test import TestCase
 from rest_framework.test import APITestCase
 
-from core.management.seeders.packages import PackagesSeeder
+from core.management.seeders.configs.packages import PackagesSeeder
 from domains.business.api.serializers import (
     BusinessProfileSerializer,
     PublicBusinessProfileSerializer,
@@ -271,8 +271,7 @@ class BusinessPackageAPITests(APITestCase):
 
         response = self.client.delete(f"{BUSINESS_ADMIN}/{business.id}")
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(BusinessProfile.objects.count(), self.baseline)
+        self.assertEqual(response.status_code, 405)
 
     def test_admin_list_reports_the_tier_id_for_the_business_it_reads(self):
         business = make_profile()

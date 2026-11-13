@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from core.management.seeders.order import OrderSeeder
+from core.management.seeders.configs.order import OrderSeeder
 from domains.marketplace.models import (
     MarketplaceOrderAction,
     MarketplaceOrderHistory,

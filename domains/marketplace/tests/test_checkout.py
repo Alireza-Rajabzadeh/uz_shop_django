@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from rest_framework.test import APITestCase
 
-from core.management.seeders.marketplace_order import MarketplaceOrderSeeder
+from core.management.seeders.configs.marketplace_order import MarketplaceOrderSeeder
 from domains.business.models import BusinessProfile
 from domains.business_payments.models import (
     BusinessPaymentChannel,

@@ -1,7 +1,7 @@
 from django.test import TestCase
 
-from core.management.seeders.product_statuses import ProductStatusSeeder
-from core.management.seeders.vendor_product_statuses import VendorProductStatusSeeder
+from core.management.seeders.configs.product_statuses import ProductStatusSeeder
+from core.management.seeders.configs.vendor_product_statuses import VendorProductStatusSeeder
 from domains.catalog.models import ProductStatus, VendorProductStatus
 
 

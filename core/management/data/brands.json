@@ -1,137 +1,231 @@
 {
-  "schema_version": 1,
   "brands": [
-    {
-      "name": "Alcatel",
-      "fa_name": "آلکاتل"
-    },
-    {
-      "name": "Anker",
-      "fa_name": "انکر"
-    },
-    {
-      "name": "Apple",
-      "fa_name": "اپل"
-    },
-    {
-      "name": "Baseus",
-      "fa_name": "بیسوس"
-    },
-    {
-      "name": "Beniuse",
-      "fa_name": "بنیوس"
-    },
-    {
-      "name": "Beyond",
-      "fa_name": "بیاند"
-    },
-    {
-      "name": "Cypher",
-      "fa_name": "سایفر"
-    },
-    {
-      "name": "Daria",
-      "fa_name": "داریا"
-    },
-    {
-      "name": "DEKKIN",
-      "fa_name": "دکین"
-    },
-    {
-      "name": "DOX",
-      "fa_name": "داکس"
-    },
-    {
-      "name": "Gigaset",
-      "fa_name": "گیگاست"
-    },
-    {
-      "name": "GLX",
-      "fa_name": "جی ال ایکس"
-    },
-    {
-      "name": "Hanofer",
-      "fa_name": "هانوفر"
-    },
-    {
-      "name": "Honor",
-      "fa_name": "آنر"
-    },
-    {
-      "name": "JUBITER",
-      "fa_name": "ژوبیتر"
-    },
-    {
-      "name": "Mcdodo",
-      "fa_name": "مک دودو"
-    },
-    {
-      "name": "microtel",
-      "fa_name": "میکروتل"
-    },
-    {
-      "name": "Miscellaneous",
-      "fa_name": "متفرقه"
-    },
-    {
-      "name": "Motorola",
-      "fa_name": "موتورولا"
-    },
-    {
-      "name": "Nokia",
-      "fa_name": "نوکیا"
-    },
-    {
-      "name": "Panasonic",
-      "fa_name": "پاناسونیک"
-    },
-    {
-      "name": "realme",
-      "fa_name": "ریلمی"
-    },
-    {
-      "name": "RedTone",
-      "fa_name": "ردتون"
-    },
-    {
-      "name": "Remax",
-      "fa_name": "ریمکس"
-    },
-    {
-      "name": "Samsung",
-      "fa_name": "سامسونگ"
-    },
-    {
-      "name": "SOMOSTEL",
-      "fa_name": "سوموس تل"
-    },
-    {
-      "name": "Sony Ericsson",
-      "fa_name": "سونی اریکسون"
-    },
-    {
-      "name": "tch",
-      "fa_name": "تی سی اچ"
-    },
-    {
-      "name": "TECNO mobile",
-      "fa_name": "تکنو موبایل"
-    },
-    {
-      "name": "TSCO",
-      "fa_name": "تسکو"
-    },
-    {
-      "name": "VOCAL",
-      "fa_name": "وکال"
-    },
-    {
-      "name": "Xiaomi",
-      "fa_name": "شیائومی"
-    },
-    {
-      "name": "Zhivaco",
-      "fa_name": "ژیواکو"
-    }
+    {"id": 1081, "name": "Adidas", "fa_name": "آدیداس"},
+    {"id": 1082, "name": "Nike", "fa_name": "نایکی"},
+    {"id": 1083, "name": "Puma", "fa_name": "پوما"},
+    {"id": 1084, "name": "Reebok", "fa_name": "ریباک"},
+    {"id": 1085, "name": "New Balance", "fa_name": "نیو بالانس"},
+    {"id": 1086, "name": "Skechers", "fa_name": "اسکیچرز"},
+    {"id": 1087, "name": "ASICS", "fa_name": "اسیکس"},
+    {"id": 1088, "name": "Under Armour", "fa_name": "آندر آرمور"},
+    {"id": 1089, "name": "Converse", "fa_name": "کانورس"},
+    {"id": 1090, "name": "Vans", "fa_name": "ونس"},
+    {"id": 1091, "name": "Crocs", "fa_name": "کروکس"},
+    {"id": 1092, "name": "The North Face", "fa_name": "نورث فیس"},
+    {"id": 1093, "name": "Columbia", "fa_name": "کلمبیا"},
+    {"id": 1094, "name": "Levi's", "fa_name": "لیوایز"},
+    {"id": 1095, "name": "Zara", "fa_name": "زارا"},
+    {"id": 1096, "name": "H&M", "fa_name": "اچ اند ام"},
+    {"id": 1097, "name": "Mango", "fa_name": "مانگو"},
+    {"id": 1098, "name": "LC Waikiki", "fa_name": "ال سی وایکیکی"},
+    {"id": 1099, "name": "DeFacto", "fa_name": "دفاکتو"},
+    {"id": 1100, "name": "Koton", "fa_name": "کوتون"},
+    {"id": 1101, "name": "Bershka", "fa_name": "برشکا"},
+    {"id": 1102, "name": "Pull&Bear", "fa_name": "پول اند بیر"},
+    {"id": 1103, "name": "Calvin Klein", "fa_name": "کلوین کلاین"},
+    {"id": 1104, "name": "Tommy Hilfiger", "fa_name": "تامی هیلفیگر"},
+    {"id": 1105, "name": "Lacoste", "fa_name": "لاکوست"},
+    {"id": 1106, "name": "Timberland", "fa_name": "تیمبرلند"},
+    {"id": 1107, "name": "Dr. Martens", "fa_name": "دکتر مارتینز"},
+    {"id": 1108, "name": "Guess", "fa_name": "گس"},
+    {"id": 1109, "name": "Diesel", "fa_name": "دیزل"},
+    {"id": 1110, "name": "New Era", "fa_name": "نیو ارا"},
+
+    {"id": 1111, "name": "L'Oreal", "fa_name": "لورآل"},
+    {"id": 1112, "name": "Maybelline", "fa_name": "میبلین"},
+    {"id": 1113, "name": "Nivea", "fa_name": "نیوا"},
+    {"id": 1114, "name": "Dove", "fa_name": "داو"},
+    {"id": 1115, "name": "Garnier", "fa_name": "گارنیر"},
+    {"id": 1116, "name": "Neutrogena", "fa_name": "نوتروژینا"},
+    {"id": 1117, "name": "CeraVe", "fa_name": "سراوی"},
+    {"id": 1118, "name": "The Ordinary", "fa_name": "اور دینری"},
+    {"id": 1119, "name": "La Roche-Posay", "fa_name": "لاروش پوزای"},
+    {"id": 1120, "name": "Vichy", "fa_name": "وichy"},
+    {"id": 1121, "name": "Bioderma", "fa_name": "بایودرما"},
+    {"id": 1122, "name": "Eucerin", "fa_name": "اوسرین"},
+    {"id": 1123, "name": "Clinique", "fa_name": "کلینیک"},
+    {"id": 1124, "name": "Estee Lauder", "fa_name": "استی لادر"},
+    {"id": 1125, "name": "MAC Cosmetics", "fa_name": "مک"},
+    {"id": 1126, "name": "NYX", "fa_name": "نیکس"},
+    {"id": 1127, "name": "Revlon", "fa_name": "رولون"},
+    {"id": 1128, "name": "Essence", "fa_name": "اسنس"},
+    {"id": 1129, "name": "COSRX", "fa_name": "کازرکس"},
+    {"id": 1130, "name": "Some By Mi", "fa_name": "سام بای می"},
+    {"id": 1131, "name": "The Body Shop", "fa_name": "بادی شاپ"},
+    {"id": 1132, "name": "Yves Rocher", "fa_name": "ایو روشه"},
+    {"id": 1133, "name": "Gillette", "fa_name": "ژیلت"},
+    {"id": 1134, "name": "Oral-B", "fa_name": "اورال بی"},
+    {"id": 1135, "name": "Sensodyne", "fa_name": "سنسوداین"},
+    {"id": 1136, "name": "Pantene", "fa_name": "پنتن"},
+    {"id": 1137, "name": "Head & Shoulders", "fa_name": "هد اند شولدرز"},
+    {"id": 1138, "name": "Schwarzkopf", "fa_name": "شوارتسکف"},
+    {"id": 1139, "name": "TRESemme", "fa_name": "ترزمه"},
+    {"id": 1140, "name": "Dior", "fa_name": "دیور"},
+    {"id": 1141, "name": "Chanel", "fa_name": "شنل"},
+    {"id": 1142, "name": "Armani", "fa_name": "آرمانی"},
+    {"id": 1143, "name": "Hugo Boss", "fa_name": "هوگو باس"},
+    {"id": 1144, "name": "Versace", "fa_name": "ورساچه"},
+
+    {"id": 1145, "name": "Bosch", "fa_name": "بوش"},
+    {"id": 1146, "name": "Siemens", "fa_name": "زیمنس"},
+    {"id": 1147, "name": "LG", "fa_name": "ال جی"},
+    {"id": 1148, "name": "Whirlpool", "fa_name": "ویرپول"},
+    {"id": 1149, "name": "Electrolux", "fa_name": "الکترولوکس"},
+    {"id": 1150, "name": "Miele", "fa_name": "میله"},
+    {"id": 1151, "name": "Beko", "fa_name": "بکو"},
+    {"id": 1152, "name": "Ariston", "fa_name": "آریستون"},
+    {"id": 1153, "name": "Daewoo", "fa_name": "دوو"},
+    {"id": 1154, "name": "Snowa", "fa_name": "اسنوا"},
+    {"id": 1155, "name": "Pakshoma", "fa_name": "پاکشوما"},
+    {"id": 1156, "name": "G Plus", "fa_name": "جی پلاس"},
+    {"id": 1157, "name": "X.Vision", "fa_name": "ایکس ویژن"},
+    {"id": 1158, "name": "Pars Khazar", "fa_name": "پارس خزر"},
+    {"id": 1159, "name": "Absal", "fa_name": "آبسال"},
+    {"id": 1160, "name": "Himalia", "fa_name": "هیمالیا"},
+    {"id": 1161, "name": "Emersun", "fa_name": "امرسان"},
+    {"id": 1162, "name": "DePoint", "fa_name": "دیپوینت"},
+    {"id": 1163, "name": "Tulips", "fa_name": "تولیپس"},
+    {"id": 1164, "name": "Meygel", "fa_name": "میگل"},
+    {"id": 1165, "name": "Dyson", "fa_name": "دایسون"},
+    {"id": 1166, "name": "Braun", "fa_name": "براون"},
+    {"id": 1167, "name": "Tefal", "fa_name": "تفال"},
+    {"id": 1168, "name": "Moulinex", "fa_name": "مولینکس"},
+    {"id": 1169, "name": "Kenwood", "fa_name": "کنوود"},
+    {"id": 1170, "name": "DeLonghi", "fa_name": "دلونگی"},
+    {"id": 1171, "name": "KitchenAid", "fa_name": "کیتچن اید"},
+    {"id": 1172, "name": "Russell Hobbs", "fa_name": "راسل هابز"},
+    {"id": 1173, "name": "Ninja", "fa_name": "نینجا"},
+    {"id": 1174, "name": "Karcher", "fa_name": "کارچر"},
+
+    {"id": 1175, "name": "IKEA", "fa_name": "ایکیا"},
+    {"id": 1176, "name": "JYSK", "fa_name": "جیسک"},
+    {"id": 1177, "name": "Ashley Furniture", "fa_name": "اشلی"},
+    {"id": 1178, "name": "Vitra", "fa_name": "ویترآ"},
+    {"id": 1179, "name": "Fakir", "fa_name": "فکر"},
+    {"id": 1180, "name": "English Home", "fa_name": "انگلیش هوم"},
+    {"id": 1181, "name": "Madame Coco", "fa_name": "مادام کوکو"},
+    {"id": 1182, "name": "Karaca", "fa_name": "کاراجا"},
+    {"id": 1183, "name": "Korkmaz", "fa_name": "کرکماز"},
+    {"id": 1184, "name": "Paşabahçe", "fa_name": "پاشاباغچه"},
+    {"id": 1185, "name": "Luminarc", "fa_name": "لومینارک"},
+    {"id": 1186, "name": "Pyrex", "fa_name": "پیرکس"},
+    {"id": 1187, "name": "Tupperware", "fa_name": "تاپرویر"},
+    {"id": 1188, "name": "Joseph Joseph", "fa_name": "جوزف جوزف"},
+
+    {"id": 1189, "name": "Nestle", "fa_name": "نستله"},
+    {"id": 1190, "name": "Coca-Cola", "fa_name": "کوکاکولا"},
+    {"id": 1191, "name": "Pepsi", "fa_name": "پپسی"},
+    {"id": 1192, "name": "Mondelez", "fa_name": "موندلیز"},
+    {"id": 1193, "name": "Kellogg's", "fa_name": "کلگز"},
+    {"id": 1194, "name": "Danone", "fa_name": "دانون"},
+    {"id": 1195, "name": "Barilla", "fa_name": "باریلا"},
+    {"id": 1196, "name": "Lavazza", "fa_name": "لاوازا"},
+    {"id": 1197, "name": "Nescafe", "fa_name": "نسکافه"},
+    {"id": 1198, "name": "Lipton", "fa_name": "لیپتون"},
+    {"id": 1199, "name": "Haribo", "fa_name": "هاریبو"},
+    {"id": 1200, "name": "Ferrero", "fa_name": "فررو"},
+    {"id": 1201, "name": "Heinz", "fa_name": "هاینز"},
+    {"id": 1202, "name": "Mihan", "fa_name": "میهن"},
+    {"id": 1203, "name": "Kalleh", "fa_name": "کاله"},
+    {"id": 1204, "name": "Pegah", "fa_name": "پگاه"},
+    {"id": 1205, "name": "Shirin Asal", "fa_name": "شیرین عسل"},
+    {"id": 1206, "name": "Minoo", "fa_name": "مینو"},
+    {"id": 1207, "name": "Golestan", "fa_name": "گلستان"},
+    {"id": 1208, "name": "Mahram", "fa_name": "مهرام"},
+    {"id": 1209, "name": "Behrouz", "fa_name": "بهروز"},
+    {"id": 1210, "name": "Oila", "fa_name": "اویلا"},
+    {"id": 1211, "name": "Tak Makaron", "fa_name": "تک ماکارون"},
+    {"id": 1212, "name": "Zar Macaron", "fa_name": "زر ماکارون"},
+    {"id": 1213, "name": "Sunich", "fa_name": "سن ایچ"},
+    {"id": 1214, "name": "Zamzam", "fa_name": "زمزم"},
+
+    {"id": 1215, "name": "Wilson", "fa_name": "ویلسون"},
+    {"id": 1216, "name": "Head", "fa_name": "هد"},
+    {"id": 1217, "name": "Yonex", "fa_name": "یونکس"},
+    {"id": 1218, "name": "Spalding", "fa_name": "اسپالدینگ"},
+    {"id": 1219, "name": "Speedo", "fa_name": "اسپیدو"},
+    {"id": 1220, "name": "Arena", "fa_name": "آرنا"},
+    {"id": 1221, "name": "Decathlon", "fa_name": "دکاتلون"},
+    {"id": 1222, "name": "Quechua", "fa_name": "کچوا"},
+    {"id": 1223, "name": "Coleman", "fa_name": "کولمن"},
+    {"id": 1224, "name": "Salomon", "fa_name": "سالومون"},
+    {"id": 1225, "name": "Merrell", "fa_name": "مرل"},
+    {"id": 1226, "name": "Jack Wolfskin", "fa_name": "جک ولف اسکین"},
+
+    {"id": 1227, "name": "Michelin", "fa_name": "میشلن"},
+    {"id": 1228, "name": "Bridgestone", "fa_name": "بریجستون"},
+    {"id": 1229, "name": "Continental", "fa_name": "کنتیننتال"},
+    {"id": 1230, "name": "Pirelli", "fa_name": "پیرلی"},
+    {"id": 1231, "name": "Goodyear", "fa_name": "گودیر"},
+    {"id": 1232, "name": "Castrol", "fa_name": "کاسترول"},
+    {"id": 1233, "name": "Mobil", "fa_name": "موبیل"},
+    {"id": 1234, "name": "Shell", "fa_name": "شل"},
+    {"id": 1235, "name": "TotalEnergies", "fa_name": "توتال"},
+    {"id": 1236, "name": "Valeo", "fa_name": "والئو"},
+    {"id": 1237, "name": "Denso", "fa_name": "دنسو"},
+    {"id": 1238, "name": "NGK", "fa_name": "ان جی کی"},
+    {"id": 1239, "name": "Brembo", "fa_name": "برمبو"},
+    {"id": 1240, "name": "MANN-FILTER", "fa_name": "مان فیلتر"},
+    {"id": 1241, "name": "KYB", "fa_name": "کی وای بی"},
+    {"id": 1242, "name": "Monroe", "fa_name": "مونرو"},
+
+    {"id": 1243, "name": "LEGO", "fa_name": "لگو"},
+    {"id": 1244, "name": "Mattel", "fa_name": "متل"},
+    {"id": 1245, "name": "Hasbro", "fa_name": "هزبرو"},
+    {"id": 1246, "name": "Playmobil", "fa_name": "پلی موبیل"},
+    {"id": 1247, "name": "Fisher-Price", "fa_name": "فیشر پرایس"},
+    {"id": 1248, "name": "Nerf", "fa_name": "نرف"},
+    {"id": 1249, "name": "Ravensburger", "fa_name": "راونزبرگر"},
+    {"id": 1250, "name": "Spin Master", "fa_name": "اسپین مستر"},
+    {"id": 1251, "name": "Barbie", "fa_name": "باربی"},
+    {"id": 1252, "name": "Hot Wheels", "fa_name": "هات ویلز"},
+
+    {"id": 1253, "name": "Chicco", "fa_name": "چیکو"},
+    {"id": 1254, "name": "Philips Avent", "fa_name": "فیلیپس اونت"},
+    {"id": 1255, "name": "NUK", "fa_name": "نوک"},
+    {"id": 1256, "name": "Pigeon", "fa_name": "پیجن"},
+    {"id": 1257, "name": "BabyBjorn", "fa_name": "بیبی بیورن"},
+    {"id": 1258, "name": "Joie", "fa_name": "جوی"},
+    {"id": 1259, "name": "Graco", "fa_name": "گراکو"},
+    {"id": 1260, "name": "Maxi-Cosi", "fa_name": "مکسی کوزی"},
+    {"id": 1261, "name": "Pampers", "fa_name": "پمپرز"},
+    {"id": 1262, "name": "Huggies", "fa_name": "هاگیز"},
+    {"id": 1263, "name": "Mustela", "fa_name": "موستلا"},
+
+    {"id": 1264, "name": "Royal Canin", "fa_name": "رویال کنین"},
+    {"id": 1265, "name": "Purina", "fa_name": "پورینا"},
+    {"id": 1266, "name": "Whiskas", "fa_name": "ویسکاس"},
+    {"id": 1267, "name": "Pedigree", "fa_name": "پدیگری"},
+    {"id": 1268, "name": "Sheba", "fa_name": "شبا"},
+    {"id": 1269, "name": "Hill's", "fa_name": "هیلز"},
+    {"id": 1270, "name": "Brit", "fa_name": "بریت"},
+
+    {"id": 1271, "name": "Faber-Castell", "fa_name": "فابر کاستل"},
+    {"id": 1272, "name": "Parker", "fa_name": "پارکر"},
+    {"id": 1273, "name": "Pilot", "fa_name": "پایلوت"},
+    {"id": 1274, "name": "Stabilo", "fa_name": "استابیلو"},
+    {"id": 1275, "name": "Maped", "fa_name": "مپد"},
+    {"id": 1276, "name": "Staedtler", "fa_name": "اشتدلر"},
+    {"id": 1277, "name": "Oxford", "fa_name": "آکسفورد"},
+    {"id": 1278, "name": "Scholastic", "fa_name": "اسکولاستیک"},
+    {"id": 1279, "name": "Cheshmeh", "fa_name": "نشر چشمه"},
+    {"id": 1280, "name": "Ghoghnoos", "fa_name": "نشر ققنوس"},
+    {"id": 1281, "name": "Ofogh", "fa_name": "نشر افق"},
+    {"id": 1282, "name": "Gaj", "fa_name": "گاج"},
+    {"id": 1283, "name": "Kheili Sabz", "fa_name": "خیلی سبز"},
+    {"id": 1284, "name": "Nashr Olgoo", "fa_name": "نشر الگو"},
+
+    {"id": 1285, "name": "DeWalt", "fa_name": "دیوالت"},
+    {"id": 1286, "name": "Makita", "fa_name": "ماکیتا"},
+    {"id": 1287, "name": "Stanley", "fa_name": "استنلی"},
+    {"id": 1288, "name": "Black+Decker", "fa_name": "بلک اند دکر"},
+    {"id": 1289, "name": "Milwaukee", "fa_name": "میلواکی"},
+    {"id": 1290, "name": "Einhell", "fa_name": "آینهل"},
+    {"id": 1291, "name": "Total Tools", "fa_name": "توتال"},
+    {"id": 1292, "name": "Ronix", "fa_name": "رونیکس"},
+    {"id": 1293, "name": "Arva", "fa_name": "آروا"},
+    {"id": 1294, "name": "Tosan", "fa_name": "توسن"},
+    {"id": 1295, "name": "Mahak", "fa_name": "محک"},
+    {"id": 1296, "name": "Ingco", "fa_name": "اینگکو"}
   ]
 }

@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 
-from core.management.seeders.categories import CategorySeeder
+from core.management.seeders.configs.categories import CategorySeeder
 
 
 class Command(BaseCommand):

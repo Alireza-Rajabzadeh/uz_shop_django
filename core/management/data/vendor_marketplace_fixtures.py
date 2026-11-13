@@ -1,7 +1,7 @@
 """Static data for realistic vendor/marketplace development fixtures.
 
 Pure data: no model imports.  The seeder in
-``core.management.seeders.vendor_marketplace_fixtures`` resolves these
+``core.management.seeders.developing.vendor_marketplace_fixtures`` resolves these
 records against the seeded reference data (categories, brands, variant
 attributes, cities) and creates the fixture rows.
 

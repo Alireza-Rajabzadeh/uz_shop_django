@@ -8,7 +8,7 @@ from urllib.parse import urlsplit
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
 
-from core.management.seeders.categories import CategorySeeder
+from core.management.seeders.configs.categories import CategorySeeder
 from domains.importing.integrations.digikala.client import DigikalaClient
 from domains.catalog.models import (
     Brand,

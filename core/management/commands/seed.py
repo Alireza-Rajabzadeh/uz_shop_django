@@ -1,69 +1,77 @@
-from django.core.management.base import BaseCommand
+from django.core.management import call_command
+from django.core.management.base import BaseCommand, CommandError
 
-from core.management.seeders.banks import BankSeeder
-from core.management.seeders.brands import BrandSeeder
-from core.management.seeders.business_payment_statuses import BusinessPaymentStatusSeeder
-from core.management.seeders.business_payments import BusinessPaymentMethodsSeeder
-
-from core.management.seeders.business_service_modes import BusinessServiceModeSeeder
-from core.management.seeders.business_statuses import BusinessStatusSeeder
-from core.management.seeders.categories import CategorySeeder
-from core.management.seeders.category_details import CategoryDetailSeeder
-from core.management.seeders.inventory import InventorySeeder
-from core.management.seeders.inventory_attribute_definitions import (
-    InventoryAttributeDefinitionSeeder,
+from core.management.seeders.configs import (
+    CONFIG_SEEDERS,
+    CONFIG_SEEDERS_MAP,
+    get_config_seeder,
 )
-from core.management.seeders.product_statuses import ProductStatusSeeder
-from core.management.seeders.product_variant_statuses import ProductVariantStatusSeeder
-from core.management.seeders.order import OrderSeeder
-from core.management.seeders.marketplace_order import MarketplaceOrderSeeder
-from core.management.seeders.packages import PackagesSeeder
-from core.management.seeders.payments import PaymentsSeeder
-from core.management.seeders.shipment import ShipmentSeeder
-from core.management.seeders.customers import CustomerSeeder
-from core.management.seeders.location import LocationSeeder
-from core.management.seeders.marketplace import MarketplaceSeeder
-from core.management.seeders.social_media import SocialMediaSeeder
-from core.management.seeders.variant_attributes import VariantAttributeSeeder
-from core.management.seeders.vendor_product_statuses import VendorProductStatusSeeder
-from core.management.seeders.vendor_statuses import VendorStatusSeeder
-from core.management.seeders.vendors_club import VendorsClubSeeder
 
 
 class Command(BaseCommand):
-    help = "Run all seeders"
+    help = "Run configuration and reference data seeders (or a specific config seeder by name)."
 
-    def handle(self, *args, **kwargs):
-        seeders = [
-            LocationSeeder(),
-            CategorySeeder(),
-            BrandSeeder(),
-            VariantAttributeSeeder(),
-            VendorStatusSeeder(),
-            BusinessStatusSeeder(),
-            BusinessServiceModeSeeder(),
-            BusinessPaymentStatusSeeder(),
-            BusinessPaymentMethodsSeeder(),
-            BankSeeder(),
-            CategoryDetailSeeder(),
-            ProductStatusSeeder(),
-            ProductVariantStatusSeeder(),
-            VendorProductStatusSeeder(),
-            InventorySeeder(),
-            InventoryAttributeDefinitionSeeder(),
-            MarketplaceSeeder(),
-            CustomerSeeder(),
-            OrderSeeder(),
-            MarketplaceOrderSeeder(),
-            PaymentsSeeder(),
-            SocialMediaSeeder(),
-            PackagesSeeder(),
-            ShipmentSeeder(),
-            VendorsClubSeeder(),
-        ]
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "seeder",
+            nargs="?",
+            default=None,
+            help=(
+                "Optional name of a specific config seeder to run "
+                f"({', '.join(sorted(CONFIG_SEEDERS_MAP.keys()))}). "
+                "If omitted, all configuration seeders are run."
+            ),
+        )
+        parser.add_argument(
+            "--list",
+            action="store_true",
+            help="List all available configuration seeders and exit.",
+        )
+        parser.add_argument(
+            "--fake",
+            action="store_true",
+            help="Also run development / fake data seeders after configuration seeders.",
+        )
 
-        for seeder in seeders:
-            self.stdout.write(f"Running {seeder.__class__.__name__}...")
-            seeder.run()
+    def handle(self, *args, **options):
+        if options.get("list"):
+            self.stdout.write("Available configuration seeders:")
+            for name in sorted(CONFIG_SEEDERS_MAP.keys()):
+                cls_name = CONFIG_SEEDERS_MAP[name].__name__
+                self.stdout.write(f"  - {name:<32} ({cls_name})")
+            return
 
-        self.stdout.write(self.style.SUCCESS("Seeding completed"))
+        target_name = options.get("seeder")
+        if target_name:
+            if target_name.lower() in ("list", "help"):
+                self.stdout.write("Available configuration seeders:")
+                for name in sorted(CONFIG_SEEDERS_MAP.keys()):
+                    cls_name = CONFIG_SEEDERS_MAP[name].__name__
+                    self.stdout.write(f"  - {name:<32} ({cls_name})")
+                return
+
+            seeder_cls = get_config_seeder(target_name)
+            if not seeder_cls:
+                available = ", ".join(sorted(CONFIG_SEEDERS_MAP.keys()))
+                raise CommandError(
+                    f"Unknown configuration seeder '{target_name}'.\n"
+                    f"Available seeders: {available}"
+                )
+
+            self.stdout.write(f"Running {seeder_cls.__name__}...")
+            seeder_cls().run()
+            self.stdout.write(
+                self.style.SUCCESS(f"{seeder_cls.__name__} completed successfully.")
+            )
+        else:
+            self.stdout.write("Running all configuration seeders...")
+            for seeder_cls in CONFIG_SEEDERS:
+                self.stdout.write(f"Running {seeder_cls.__name__}...")
+                seeder_cls().run()
+            self.stdout.write(
+                self.style.SUCCESS("Configuration seeding completed successfully.")
+            )
+
+        if options.get("fake"):
+            self.stdout.write("Running fake development seeders...")
+            call_command("seed_fake")
