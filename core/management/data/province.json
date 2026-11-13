@@ -1,0 +1,219 @@
+[
+  {
+    "id": 1001,
+    "country_id": 1,
+    "name": "مرکزی",
+    "slug": "مرکزی",
+    "tel_prefix": "086"
+  },
+  {
+    "id": 1002,
+    "country_id": 1,
+    "name": "گیلان",
+    "slug": "گیلان",
+    "tel_prefix": "013"
+  },
+  {
+    "id": 1003,
+    "country_id": 1,
+    "name": "مازندران",
+    "slug": "مازندران",
+    "tel_prefix": "011"
+  },
+  {
+    "id": 1004,
+    "country_id": 1,
+    "name": "آذربایجان شرقی",
+    "slug": "آذربایجان-شرقی",
+    "tel_prefix": "041"
+  },
+  {
+    "id": 1005,
+    "country_id": 1,
+    "name": "آذربایجان غربی",
+    "slug": "آذربایجان-غربی",
+    "tel_prefix": "044"
+  },
+  {
+    "id": 1006,
+    "country_id": 1,
+    "name": "کرمانشاه",
+    "slug": "کرمانشاه",
+    "tel_prefix": "083"
+  },
+  {
+    "id": 1007,
+    "country_id": 1,
+    "name": "خوزستان",
+    "slug": "خوزستان",
+    "tel_prefix": "061"
+  },
+  {
+    "id": 1008,
+    "country_id": 1,
+    "name": "فارس",
+    "slug": "فارس",
+    "tel_prefix": "071"
+  },
+  {
+    "id": 1009,
+    "country_id": 1,
+    "name": "کرمان",
+    "slug": "کرمان",
+    "tel_prefix": "034"
+  },
+  {
+    "id": 1010,
+    "country_id": 1,
+    "name": "خراسان رضوی",
+    "slug": "خراسان-رضوی",
+    "tel_prefix": "051"
+  },
+  {
+    "id": 1011,
+    "country_id": 1,
+    "name": "اصفهان",
+    "slug": "اصفهان",
+    "tel_prefix": "031"
+  },
+  {
+    "id": 1012,
+    "country_id": 1,
+    "name": "سیستان و بلوچستان",
+    "slug": "سیستان-و-بلوچستان",
+    "tel_prefix": "054"
+  },
+  {
+    "id": 1013,
+    "country_id": 1,
+    "name": "کردستان",
+    "slug": "کردستان",
+    "tel_prefix": "087"
+  },
+  {
+    "id": 1014,
+    "country_id": 1,
+    "name": "همدان",
+    "slug": "همدان",
+    "tel_prefix": "081"
+  },
+  {
+    "id": 1015,
+    "country_id": 1,
+    "name": "چهارمحال و بختیاری",
+    "slug": "چهارمحال-و-بختیاری",
+    "tel_prefix": "038"
+  },
+  {
+    "id": 1016,
+    "country_id": 1,
+    "name": "لرستان",
+    "slug": "لرستان",
+    "tel_prefix": "066"
+  },
+  {
+    "id": 1017,
+    "country_id": 1,
+    "name": "ایلام",
+    "slug": "ایلام",
+    "tel_prefix": "084"
+  },
+  {
+    "id": 1018,
+    "country_id": 1,
+    "name": "کهگیلویه و بویراحمد",
+    "slug": "کهگیلویه-و-بویراحمد",
+    "tel_prefix": "074"
+  },
+  {
+    "id": 1019,
+    "country_id": 1,
+    "name": "بوشهر",
+    "slug": "بوشهر",
+    "tel_prefix": "077"
+  },
+  {
+    "id": 1020,
+    "country_id": 1,
+    "name": "زنجان",
+    "slug": "زنجان",
+    "tel_prefix": "024"
+  },
+  {
+    "id": 1021,
+    "country_id": 1,
+    "name": "سمنان",
+    "slug": "سمنان",
+    "tel_prefix": "023"
+  },
+  {
+    "id": 1022,
+    "country_id": 1,
+    "name": "یزد",
+    "slug": "یزد",
+    "tel_prefix": "035"
+  },
+  {
+    "id": 1023,
+    "country_id": 1,
+    "name": "هرمزگان",
+    "slug": "هرمزگان",
+    "tel_prefix": "076"
+  },
+  {
+    "id": 1024,
+    "country_id": 1,
+    "name": "تهران",
+    "slug": "تهران",
+    "tel_prefix": "021"
+  },
+  {
+    "id": 1025,
+    "country_id": 1,
+    "name": "اردبیل",
+    "slug": "اردبیل",
+    "tel_prefix": "045"
+  },
+  {
+    "id": 1026,
+    "country_id": 1,
+    "name": "قم",
+    "slug": "قم",
+    "tel_prefix": "025"
+  },
+  {
+    "id": 1027,
+    "country_id": 1,
+    "name": "قزوین",
+    "slug": "قزوین",
+    "tel_prefix": "028"
+  },
+  {
+    "id": 1028,
+    "country_id": 1,
+    "name": "گلستان",
+    "slug": "گلستان",
+    "tel_prefix": "017"
+  },
+  {
+    "id": 1029,
+    "country_id": 1,
+    "name": "خراسان شمالی",
+    "slug": "خراسان-شمالی",
+    "tel_prefix": "058"
+  },
+  {
+    "id": 1030,
+    "country_id": 1,
+    "name": "خراسان جنوبی",
+    "slug": "خراسان-جنوبی",
+    "tel_prefix": "056"
+  },
+  {
+    "id": 1031,
+    "country_id": 1,
+    "name": "البرز",
+    "slug": "البرز",
+    "tel_prefix": "026"
+  }
+]
