@@ -122,3 +122,23 @@ def to_english_letters(value: str) -> str:
     text = ''.join(ch for ch in text if not unicodedata.combining(ch))
     text = text.translate(_POST_FOLD)
     return ' '.join(text.split())
+
+
+def to_finglish(value: str) -> str:
+    """Convert Persian text to Finglish (Persian written with ASCII English letters)."""
+    return to_english_letters(value)
+
+
+def persian_to_finglish(value: str) -> str:
+    """Alias for to_finglish."""
+    return to_finglish(value)
+
+
+def to_slug(value: str) -> str:
+    """Convert Persian or English text into a clean, lowercase ASCII URL slug."""
+    if not value:
+        return ""
+    text = to_finglish(str(value)).lower()
+    text = re.sub(r"[^a-z0-9]+", "-", text).strip("-")
+    text = re.sub(r"-+", "-", text)
+    return text

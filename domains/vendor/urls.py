@@ -32,6 +32,9 @@ from .views.business import (
     VendorBusinessServiceModeListCreateView,
     VendorBusinessServiceModeDetailView,
     VendorBusinessServiceModeOptionsView,
+    VendorBusinessSubdomainCheckView,
+    VendorBusinessSubdomainHistoryView,
+    VendorBusinessSubdomainView,
 )
 from .views.products import (
     VendorProductFilterOptionsView,
@@ -113,6 +116,9 @@ urlpatterns = [
     path("me/password", VendorChangePassword.as_view()),
     path("preferences", VendorPreferenceView.as_view()),
     path("business/profile", VendorBusinessProfileView.as_view()),
+    path("business/subdomain", VendorBusinessSubdomainView.as_view()),
+    path("business/subdomain/check", VendorBusinessSubdomainCheckView.as_view()),
+    path("business/subdomain/history", VendorBusinessSubdomainHistoryView.as_view()),
     path("business/phones", VendorBusinessPhoneListCreateView.as_view()),
     path("business/phones/reorder", VendorBusinessPhoneReorderView.as_view()),
     path("business/phones/<int:pk>", VendorBusinessPhoneDetailView.as_view()),

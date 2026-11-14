@@ -16,9 +16,11 @@ class StorefrontProductService:
     inventory_service = InventoryService()
     variant_service = VariantService()
 
-    def get_quick_view(self, slug):
+    def get_quick_view(self, slug, *, business=None):
         product = self._get_product(slug)
-        payload = self._base_payload(product)
+        payload = self._base_payload(product, business=business)
+        if business is not None and not payload.get("pricing", {}).get("minimum_effective_price"):
+            raise Product.DoesNotExist
         payload.update({
             "description": product.description or "",
             "json_description": self._resolve_json_description(product.json_description),
@@ -26,21 +28,28 @@ class StorefrontProductService:
         })
         return payload
 
-    def get_detail(self, slug):
+    def get_detail(self, slug, *, business=None):
         product = self._get_product(slug)
-        payload = self._base_payload(product)
+        payload = self._base_payload(product, business=business)
+        variants = [
+            self._variant_payload(variant)
+            for variant in product.storefront_variants
+            if business is None or getattr(variant, "_business_offer", None) is not None
+        ]
+        if business is not None and not variants:
+            raise Product.DoesNotExist
         payload.update({
             "description": product.description or "",
             "json_description": self._resolve_json_description(product.json_description),
             "details": self._detail_payload(product.storefront_details),
-            "variants": [self._variant_payload(variant) for variant in product.storefront_variants],
+            "variants": variants,
             "similar_products": self._similar_products(product),
             "suggested_products": self._suggestion_products(product),
             "seo": self._seo_payload(product),
         })
         return payload
 
-    def get_variant_offers(self, slug, variant_id, *, page=1, page_size=20):
+    def get_variant_offers(self, slug, variant_id, *, page=1, page_size=20, business=None):
         """Paginated seller offers for one variant.
 
         Product detail only carries a short preview so a product with many
@@ -54,7 +63,7 @@ class StorefrontProductService:
         )
         if variant is None:
             raise Product.DoesNotExist
-        self._attach_offers([variant])
+        self._attach_offers([variant], business=business)
         offers = list(getattr(variant, "_business_offers", []))
         start = (page - 1) * page_size
         return {
@@ -221,10 +230,10 @@ class StorefrontProductService:
             if current is None or current.status.name.casefold() != "active":
                 raise Product.DoesNotExist
 
-    def _attach_offers(self, variants):
+    def _attach_offers(self, variants, *, business=None):
         from domains.marketplace.offer_selection import attach_offers
 
-        attach_offers(variants)
+        attach_offers(variants, business=business)
 
     @staticmethod
     def _available(variant):
@@ -232,9 +241,9 @@ class StorefrontProductService:
             variant, "_business_offer_available", variant.available_item_count
         )
 
-    def _base_payload(self, product):
+    def _base_payload(self, product, *, business=None):
         variants = product.storefront_variants
-        self._attach_offers(variants)
+        self._attach_offers(variants, business=business)
         listed_variants = [
             row for row in variants if getattr(row, "_business_offer", None) is not None
         ]

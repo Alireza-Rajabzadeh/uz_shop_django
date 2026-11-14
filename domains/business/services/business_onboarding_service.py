@@ -45,7 +45,17 @@ class BusinessOnboardingService:
     def initialize(cls, business):
         cls._enable_default_service_mode(business)
         cls._create_draft_shipment(business)
+        cls._ensure_subdomain(business)
         return business
+
+    @staticmethod
+    def _ensure_subdomain(business):
+        from .business_subdomain_service import BusinessSubdomainService
+
+        try:
+            BusinessSubdomainService.ensure_initial_subdomain(business)
+        except Exception:
+            pass
 
     @staticmethod
     def _enable_default_service_mode(business):

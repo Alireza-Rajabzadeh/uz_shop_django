@@ -68,8 +68,9 @@ class StorefrontProductQuickView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, slug):
+        business = getattr(request, "business", None)
         try:
-            data = StorefrontProductService().get_quick_view(slug)
+            data = StorefrontProductService().get_quick_view(slug, business=business)
         except Product.DoesNotExist as exc:
             raise NotFound("Product not found.") from exc
         return api_response(True, "", data)
@@ -80,8 +81,9 @@ class StorefrontProductDetail(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, slug):
+        business = getattr(request, "business", None)
         try:
-            data = StorefrontProductService().get_detail(slug)
+            data = StorefrontProductService().get_detail(slug, business=business)
         except Product.DoesNotExist as exc:
             raise NotFound("Product not found.") from exc
         return api_response(True, "", data)
@@ -94,12 +96,14 @@ class StorefrontProductVariantOffers(APIView):
     def get(self, request, slug, variant_id):
         serializer = StorefrontOfferQuerySerializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)
+        business = getattr(request, "business", None)
         try:
             data = StorefrontProductService().get_variant_offers(
                 slug,
                 variant_id,
                 page=serializer.validated_data["page"],
                 page_size=serializer.validated_data["page_size"],
+                business=business,
             )
         except Product.DoesNotExist as exc:
             raise NotFound("Product variant not found.") from exc

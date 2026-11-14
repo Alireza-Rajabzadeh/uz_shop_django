@@ -16,6 +16,7 @@ from domains.location.models import City, Country, State
 CARD_FIELDS = {
     "id",
     "name",
+    "slug",
     "city",
     "logo_url",
     "availability_status",

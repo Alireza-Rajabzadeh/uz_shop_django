@@ -1,6 +1,19 @@
 from django.contrib import admin
 
-from .models import BusinessCategory, BusinessCharge, BusinessPhone, BusinessProfile, BusinessServiceMode, BusinessShipment, BusinessSocialLink, BusinessWorkingDay, SocialMedia, SocialMediaIcon
+from .models import (
+    BusinessCategory,
+    BusinessCharge,
+    BusinessPhone,
+    BusinessProfile,
+    BusinessServiceMode,
+    BusinessShipment,
+    BusinessSocialLink,
+    BusinessSubdomain,
+    BusinessSubdomainStatus,
+    BusinessWorkingDay,
+    SocialMedia,
+    SocialMediaIcon,
+)
 
 
 @admin.register(BusinessProfile)
@@ -102,3 +115,17 @@ class BusinessServiceModeAdmin(admin.ModelAdmin):
     # immutability guard from ever surfacing as an error on save.
     readonly_fields = ("code", "created_at", "updated_at")
     ordering = ("id",)
+
+
+@admin.register(BusinessSubdomainStatus)
+class BusinessSubdomainStatusAdmin(admin.ModelAdmin):
+    list_display = ("code", "name", "title")
+    search_fields = ("code", "name", "title")
+
+
+@admin.register(BusinessSubdomain)
+class BusinessSubdomainAdmin(admin.ModelAdmin):
+    list_display = ("subdomain", "business", "status", "created_at", "updated_at")
+    list_filter = ("status",)
+    search_fields = ("subdomain", "business__business_name", "business__display_name")
+    raw_id_fields = ("business",)

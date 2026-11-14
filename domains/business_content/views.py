@@ -13,7 +13,12 @@ from domains.catalog.services import CategoryService, ProductService
 from domains.packages.permissions import RequiresContentLandingPage
 from domains.vendor.auth import VendorJWTAuthentication
 
-from .cache import HOME_CACHE_KEY, landing_page_cache_key, page_cache_key
+from .cache import (
+    HOME_CACHE_KEY,
+    home_cache_key,
+    landing_page_cache_key,
+    page_cache_key,
+)
 from .contracts import CONTRACTS_FILE
 from .models import LandingPage, Page, SEORecord, SuggestionPage
 from .serializers import (
@@ -145,8 +150,9 @@ class PublicHomePage(APIView):
     permission_classes = [AllowAny]
 
     def resolve_payload(self):
+        business_id = getattr(self.request, "business_id", None)
         try:
-            page = PageService().get_home_page()
+            page = PageService().get_home_page(business_id=business_id)
         except Page.DoesNotExist as exc:
             raise NotFound(_("Page not found.")) from exc
 
@@ -159,10 +165,12 @@ class PublicHomePage(APIView):
         return PageContentSerializer(page).data, page.cache_ttl
 
     def get(self, request):
-        cached = CacheService().get_public(HOME_CACHE_KEY)
+        business_id = getattr(request, "business_id", None)
+        key = home_cache_key(business_id)
+        cached = CacheService().get_public(key)
         if cached is not None:
             return api_response(data=cached)
-        data = CacheService().get_or_set_public(HOME_CACHE_KEY, self.resolve_payload)
+        data = CacheService().get_or_set_public(key, self.resolve_payload)
         return api_response(data=data)
 
 

@@ -433,3 +433,51 @@ class VendorBusinessServiceModeCreateSerializer(serializers.Serializer):
 
 class VendorBusinessServiceModeUpdateSerializer(serializers.Serializer):
     is_active = serializers.BooleanField()
+
+
+class VendorBusinessSubdomainSerializer(serializers.ModelSerializer):
+    status = serializers.CharField(source="status.code", read_only=True)
+    status_title = serializers.CharField(source="status.title", read_only=True)
+
+    class Meta:
+        from domains.business.models import BusinessSubdomain
+
+        model = BusinessSubdomain
+        fields = [
+            "id",
+            "subdomain",
+            "status",
+            "status_id",
+            "status_title",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "status", "status_id", "status_title", "created_at", "updated_at"]
+
+
+class VendorSubdomainEligibilitySerializer(serializers.Serializer):
+    can_change = serializers.BooleanField()
+    is_first_change = serializers.BooleanField()
+    days_remaining = serializers.IntegerField()
+    next_allowed_date = serializers.CharField(allow_null=True)
+    message = serializers.CharField()
+
+
+class VendorSubdomainOverviewSerializer(serializers.Serializer):
+    current_subdomain = serializers.CharField(allow_null=True)
+    status = serializers.CharField(allow_null=True)
+    eligibility = VendorSubdomainEligibilitySerializer()
+
+
+class VendorSubdomainChangeSerializer(serializers.Serializer):
+    subdomain = serializers.CharField(max_length=30, min_length=3, trim_whitespace=True)
+    confirmed = serializers.BooleanField(required=True)
+
+    def validate_subdomain(self, value):
+        from domains.business.models import validate_subdomain_format
+
+        return validate_subdomain_format(value)
+
+
+class VendorSubdomainCheckQuerySerializer(serializers.Serializer):
+    subdomain = serializers.CharField(max_length=100, trim_whitespace=True)

@@ -4,13 +4,16 @@ from .views import (
     AdminBusinessProfileCategoryView,
     PhoneDetail, PhoneList, ProfileDetail, ProfileList,
     PublicBusinessByCategoryView, PublicBusinessDetailView, PublicBusinessView,
-    PublicSocialMediaListView, SocialLinkDetail, SocialLinkList,
+    PublicSocialMediaListView, PublicSubdomainCheckView, PublicSubdomainResolveView,
+    SocialLinkDetail, SocialLinkList,
     SocialMediaDetail, SocialMediaIconDetail, SocialMediaIconList, SocialMediaList,
     WorkingDayDetail, WorkingDayList,
 )
 
 urlpatterns = [
     path("public", PublicBusinessView.as_view(), name="business-public"),
+    path("public/subdomain/check", PublicSubdomainCheckView.as_view(), name="business-public-subdomain-check"),
+    path("public/subdomain/resolve", PublicSubdomainResolveView.as_view(), name="business-public-subdomain-resolve"),
     path("public/<int:pk>", PublicBusinessDetailView.as_view(), name="business-public-detail"),
     path("public/social-medias", PublicSocialMediaListView.as_view(), name="business-public-social-medias"),
     path("category/<str:slug>", PublicBusinessByCategoryView.as_view(), name="business-public-category"),

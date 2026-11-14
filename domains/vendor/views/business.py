@@ -18,6 +18,9 @@ from domains.business.services.business_service_mode_service import (
 from domains.business.services.business_shipment_service import (
     BusinessShipmentService,
 )
+from domains.business.services.business_subdomain_service import (
+    BusinessSubdomainService,
+)
 from domains.shipment.models import ShipmentMethod, ShipmentPricingMethod
 from domains.shipment.services import ShipmentPricingService
 from domains.vendor.auth import VendorJWTAuthentication
@@ -33,10 +36,13 @@ from ..serializers.business import (
     VendorBusinessServiceModeUpdateSerializer,
     VendorBusinessShipmentSerializer,
     VendorBusinessSocialLinkSerializer,
+    VendorBusinessSubdomainSerializer,
     VendorBusinessWorkingDaySerializer,
     VendorBusinessWorkingDayUpsertSerializer,
     VendorPhoneReorderSerializer,
     VendorSocialLinkReorderSerializer,
+    VendorSubdomainChangeSerializer,
+    VendorSubdomainCheckQuerySerializer,
 )
 from domains.business.api.serializers import (
     BusinessCategorySerializer,
@@ -52,7 +58,12 @@ from domains.packages.permissions import RequiresShopOrders
 
 
 def _get_business(request):
-    return BusinessProfile.objects.filter(vendor=request.user).first()
+    vendor_business = BusinessProfile.objects.filter(vendor=request.user).first()
+    tenant_business = getattr(request, "business", None)
+    if tenant_business is not None:
+        if not vendor_business or vendor_business.id != tenant_business.id:
+            raise NotFound(_("Business profile not found."))
+    return vendor_business
 
 
 def _activity_summary(business):
@@ -745,3 +756,83 @@ class VendorBusinessServiceModeDetailView(APIView):
         return api_response(
             data=VendorBusinessServiceModeSerializer(configuration).data
         )
+
+
+class VendorBusinessSubdomainView(APIView):
+    """Retrieve or change the subdomain for the authenticated vendor's business."""
+
+    authentication_classes = [VendorJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        business = _get_business(request)
+        if not business:
+            raise NotFound(_("Business profile not found."))
+
+        active = BusinessSubdomainService.get_active_subdomain(business)
+        eligibility = BusinessSubdomainService.check_eligibility(business)
+
+        return api_response(
+            data={
+                "current_subdomain": active.subdomain if active else None,
+                "status": active.status.code if active else None,
+                "subdomain_id": active.id if active else None,
+                "eligibility": eligibility,
+            }
+        )
+
+    def post(self, request):
+        business = _get_business(request)
+        if not business:
+            raise NotFound(_("Business profile not found."))
+
+        serializer = VendorSubdomainChangeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        new_subdomain = serializer.validated_data["subdomain"]
+        confirmed = serializer.validated_data["confirmed"]
+
+        new_active = BusinessSubdomainService.change_subdomain(
+            business=business,
+            new_subdomain=new_subdomain,
+            confirmed=confirmed,
+        )
+
+        return api_response(
+            data=VendorBusinessSubdomainSerializer(new_active).data,
+            message=_("Subdomain successfully updated."),
+        )
+
+
+class VendorBusinessSubdomainCheckView(APIView):
+    """Check availability of a desired subdomain."""
+
+    authentication_classes = [VendorJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        business = _get_business(request)
+        serializer = VendorSubdomainCheckQuerySerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+
+        result = BusinessSubdomainService.check_availability(
+            subdomain=serializer.validated_data["subdomain"],
+            current_business=business,
+        )
+        return api_response(data=result)
+
+
+class VendorBusinessSubdomainHistoryView(APIView):
+    """Retrieve full subdomain history for the authenticated vendor's business."""
+
+    authentication_classes = [VendorJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        business = _get_business(request)
+        if not business:
+            raise NotFound(_("Business profile not found."))
+
+        history = BusinessSubdomainService.get_subdomain_history(business)
+        return api_response(data=VendorBusinessSubdomainSerializer(history, many=True).data)
+

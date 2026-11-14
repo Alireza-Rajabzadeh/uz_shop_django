@@ -16,8 +16,57 @@ from domains.business.models import (
 
 class BusinessService:
     @staticmethod
-    def public_data():
-        profile = BusinessProfile.objects.first()
+    def get_active_by_slug(slug: str):
+        """Resolve the active BusinessProfile by its subdomain, slug, or business_name.
+
+        Prioritizes the authoritative `BusinessSubdomain` model (handling ACTIVE and
+        REDIRECT historical subdomains), while gracefully falling back to
+        case-insensitive `business_name`. Only active businesses are resolved.
+        """
+        if not slug or not slug.strip():
+            return None
+
+        slug = slug.strip().lower()
+        active_status = BusinessStatusEnum.ACTIVE.value
+
+        # 1. Authoritative lookup in BusinessSubdomain (ACTIVE or historical REDIRECT)
+        from domains.business.models import BusinessSubdomain
+        from domains.business.enums import BusinessSubdomainEnum
+
+        subdomain_record = (
+            BusinessSubdomain.objects.filter(subdomain__iexact=slug)
+            .select_related("business", "status")
+            .first()
+        )
+        if subdomain_record:
+            if subdomain_record.status_id in (
+                BusinessSubdomainEnum.ACTIVE.value,
+                BusinessSubdomainEnum.REDIRECT.value,
+            ):
+                business = subdomain_record.business
+                if business and business.status_id == active_status:
+                    return business
+            return None
+
+        # 2. Fallback to business_name for backwards compatibility
+        business = BusinessProfile.objects.filter(
+            business_name__iexact=slug, status_id=active_status
+        ).first()
+        if business:
+            return business
+
+        if "-" in slug:
+            business = BusinessProfile.objects.filter(
+                business_name__iexact=slug.replace("-", " "), status_id=active_status
+            ).first()
+            if business:
+                return business
+
+        return None
+
+    @staticmethod
+    def public_data(business=None):
+        profile = business if business is not None else BusinessProfile.objects.first()
         if profile is None:
             return {
                 "profile": None,

@@ -11,6 +11,15 @@ class IsCustomer(BasePermission):
         return isinstance(request.user, Customer)
 
 
+class RequiresTenant(BasePermission):
+    """Requires an authoritative tenant context (resolved Business) on the request."""
+
+    message = "Tenant context is required."
+
+    def has_permission(self, request, view):
+        return bool(getattr(request, "business", None) and getattr(request, "business_id", None))
+
+
 class AdminModelPermissions(DjangoModelPermissions):
     perms_map = {
         "GET": ["%(app_label)s.view_%(model_name)s"],

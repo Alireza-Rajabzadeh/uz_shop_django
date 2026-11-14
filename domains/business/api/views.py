@@ -110,7 +110,7 @@ class PublicBusinessView(APIView):
         A business without a profile is still a valid response, but there
         is no `cache_ttl` to honour, so nothing is stored.
         """
-        objects = BusinessService.public_data()
+        objects = BusinessService.public_data(business=getattr(self.request, "business", None))
         profile = objects["profile"]
         data = {
             "profile": PublicBusinessProfileSerializer(profile).data if profile else None,
@@ -122,10 +122,12 @@ class PublicBusinessView(APIView):
 
     def get(self, request):
         cache = CacheService()
-        cached = cache.get_public(BUSINESS_CACHE_KEY)
+        business_id = getattr(request, "business_id", None)
+        cache_key = f"{BUSINESS_CACHE_KEY}:{business_id}" if business_id else BUSINESS_CACHE_KEY
+        cached = cache.get_public(cache_key)
         if cached is not None:
             return api_response(data=cached)
-        data = cache.get_or_set_public(BUSINESS_CACHE_KEY, self.resolve_payload)
+        data = cache.get_or_set_public(cache_key, self.resolve_payload)
         return api_response(data=data)
 
 
@@ -273,6 +275,10 @@ class VendorBusinessChargeBase(APIView):
 
     def get_business(self, request):
         business = BusinessProfile.objects.filter(vendor=request.user).first()
+        tenant_business = getattr(request, "business", None)
+        if tenant_business is not None:
+            if not business or business.id != tenant_business.id:
+                raise NotFound("Business profile not found.")
         if business is None:
             raise NotFound("Business profile not found.")
         return business
@@ -294,6 +300,10 @@ class VendorBusinessChargeBase(APIView):
 class VendorBusinessChargeListCreateView(VendorBusinessChargeBase):
     def get(self, request):
         business = BusinessProfile.objects.filter(vendor=request.user).first()
+        tenant_business = getattr(request, "business", None)
+        if tenant_business is not None:
+            if not business or business.id != tenant_business.id:
+                raise NotFound("Business profile not found.")
         if business is None:
             return api_response(data=[])
         charges = BusinessChargeService.list_charges(business)
@@ -370,3 +380,39 @@ class AdminBusinessProfileCategoryView(APIView):
             business, serializer.validated_data["category_ids"]
         )
         return api_response(data=BusinessCategorySerializer(categories, many=True).data)
+
+
+class PublicSubdomainCheckView(APIView):
+    """Public check for business subdomain availability."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        subdomain = request.query_params.get("subdomain", "")
+        from domains.business.services.business_subdomain_service import BusinessSubdomainService
+
+        result = BusinessSubdomainService.check_availability(subdomain)
+        return api_response(data=result)
+
+
+class PublicSubdomainResolveView(APIView):
+    """Public resolution of subdomain status, business, and canonical target."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        subdomain = request.query_params.get("subdomain", "")
+        from domains.business.services.business_subdomain_service import BusinessSubdomainService
+
+        result = BusinessSubdomainService.resolve_subdomain(subdomain)
+        return api_response(data={
+            "status": result["status"],
+            "subdomain": result["subdomain"],
+            "canonical_subdomain": result["canonical_subdomain"],
+            "business_id": result["business"].id if result["business"] else None,
+            "error": result.get("error"),
+        })
+
+

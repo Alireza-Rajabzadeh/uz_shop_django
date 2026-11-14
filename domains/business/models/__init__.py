@@ -8,6 +8,12 @@ from .business_service_mode import BusinessServiceMode
 from .business_shipment import BusinessShipment
 from .business_social_link import BusinessSocialLink
 from .business_status import BusinessStatus
+from .business_subdomain import (
+    RESERVED_SUBDOMAINS,
+    BusinessSubdomain,
+    validate_subdomain_format,
+)
+from .business_subdomain_status import BusinessSubdomainStatus
 from .business_working_day import BusinessWorkingDay
 from .choices import (
     BusinessChargeCalculationType,
@@ -37,4 +43,8 @@ __all__ = [
     "BusinessServiceMode",
     "BusinessProfileServiceMode",
     "BusinessCharge",
+    "BusinessSubdomainStatus",
+    "BusinessSubdomain",
+    "validate_subdomain_format",
+    "RESERVED_SUBDOMAINS",
 ]

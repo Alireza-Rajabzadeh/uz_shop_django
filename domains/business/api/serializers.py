@@ -240,6 +240,7 @@ class BusinessWorkingDaySerializer(serializers.ModelSerializer):
 class PublicBusinessProfileSerializer(serializers.ModelSerializer):
     light_logo_url = serializers.SerializerMethodField()
     dark_logo_url = serializers.SerializerMethodField()
+    subdomain = serializers.SerializerMethodField()
 
     class Meta:
         model = BusinessProfile
@@ -262,18 +263,40 @@ class PublicBusinessProfileSerializer(serializers.ModelSerializer):
     def get_dark_logo_url(self, obj):
         return self._get_logo_url(obj.dark_logo)
 
+    def get_subdomain(self, obj):
+        if hasattr(obj, "subdomains"):
+            active = obj.subdomains.filter(status_id=1).first()
+            if active:
+                return active.subdomain
+        return getattr(obj, "subdomain", None) or getattr(obj, "business_name", "")
+
 
 class PublicBusinessCardSerializer(serializers.ModelSerializer):
     """The business fields a category directory may expose."""
 
     name = serializers.CharField(source="display_name", read_only=True)
+    slug = serializers.SerializerMethodField()
     city = serializers.SerializerMethodField()
     logo_url = serializers.SerializerMethodField()
     service_modes = serializers.SerializerMethodField()
 
     class Meta:
         model = BusinessProfile
-        fields = ["id", "name", "city", "logo_url", "availability_status", "service_modes"]
+        fields = ["id", "name", "slug", "city", "logo_url", "availability_status", "service_modes"]
+
+    def get_slug(self, obj):
+        active_subdomain = getattr(obj, "active_subdomain_value", None)
+        if active_subdomain:
+            return active_subdomain
+        if hasattr(obj, "subdomains"):
+            active_rec = obj.subdomains.filter(status_id=1).first()
+            if active_rec:
+                return active_rec.subdomain
+        for attr in ("subdomain", "slug", "business_name"):
+            val = getattr(obj, attr, None)
+            if val:
+                return str(val).strip().lower().replace(" ", "-")
+        return ""
 
     def get_city(self, obj):
         if obj.city_id is None:

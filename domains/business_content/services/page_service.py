@@ -7,11 +7,11 @@ from .public import public_business_id
 class PageService:
     HOME_SLUG = "home"
 
-    def get_by_slug(self, slug):
-        return Page.objects.get(slug=slug, business_id=public_business_id())
+    def get_by_slug(self, slug, business_id=None):
+        return Page.objects.get(slug=slug, business_id=public_business_id(business_id))
 
-    def get_home_page(self):
-        return self.get_by_slug(self.HOME_SLUG)
+    def get_home_page(self, business_id=None):
+        return self.get_by_slug(self.HOME_SLUG, business_id=business_id)
 
     def delete_page(self, instance):
         instance.delete()

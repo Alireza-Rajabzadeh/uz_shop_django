@@ -4,6 +4,7 @@ from .business_payment_statuses import BusinessPaymentStatusSeeder
 from .business_payments import BusinessPaymentMethodsSeeder
 from .business_service_modes import BusinessServiceModeSeeder
 from .business_statuses import BusinessStatusSeeder
+from .business_subdomain_statuses import BusinessSubdomainStatusSeeder
 from .categories import CategorySeeder
 from .category_details import CategoryDetailSeeder
 from .customer_statuses import CustomerStatusSeeder
@@ -31,6 +32,7 @@ CONFIG_SEEDERS = [
     VariantAttributeSeeder,
     VendorStatusSeeder,
     BusinessStatusSeeder,
+    BusinessSubdomainStatusSeeder,
     BusinessServiceModeSeeder,
     BusinessPaymentStatusSeeder,
     BusinessPaymentMethodsSeeder,
@@ -59,6 +61,7 @@ CONFIG_SEEDERS_MAP = {
     "variant_attributes": VariantAttributeSeeder,
     "vendor_statuses": VendorStatusSeeder,
     "business_statuses": BusinessStatusSeeder,
+    "business_subdomain_statuses": BusinessSubdomainStatusSeeder,
     "business_service_modes": BusinessServiceModeSeeder,
     "business_payment_statuses": BusinessPaymentStatusSeeder,
     "business_payments": BusinessPaymentMethodsSeeder,
@@ -127,6 +130,7 @@ __all__ = [
     "BusinessPaymentStatusSeeder",
     "BusinessServiceModeSeeder",
     "BusinessStatusSeeder",
+    "BusinessSubdomainStatusSeeder",
     "CategoryDetailSeeder",
     "CategorySeeder",
     "CustomerStatusSeeder",

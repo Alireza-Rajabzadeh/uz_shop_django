@@ -21,7 +21,7 @@ class BusinessServiceModeSeeder(BaseSeeder):
 
     def run(self):
         for mode_enum, defaults in self.MODES.items():
-            BusinessServiceMode.objects.update_or_create(
+            BusinessServiceMode.objects.get_or_create(
                 id=mode_enum.value,
                 defaults={
                     "code": mode_enum.code,
