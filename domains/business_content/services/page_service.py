@@ -1,6 +1,10 @@
 from django.utils import timezone
 
+from domains.packages.enums import PackageFeatureEnum
+from domains.packages.services import PackageService
+
 from ..models import Page
+from .landing_page_content_resolver import LandingPageContentResolver
 from .public import public_business_id
 
 
@@ -12,6 +16,51 @@ class PageService:
 
     def get_home_page(self, business_id=None):
         return self.get_by_slug(self.HOME_SLUG, business_id=business_id)
+
+    def allows_custom_homepage(self, business):
+        """Check whether the business's package/subscription allows custom homepage content."""
+        if business is None:
+            return False
+        package = PackageService.resolve_package(business)
+        if package is None:
+            # When no default tier exists, fail open as documented in packages domain
+            return True
+        if not package.is_active:
+            return False
+        grant = package.package_features.select_related("feature").filter(
+            feature__code=PackageFeatureEnum.CONTENT_LANDINGPAGE.code
+        ).first()
+        return bool(grant and grant.config.get("enabled", True))
+
+    def is_content_valid_for_rendering(self, content):
+        """Validate that the content structure is available and valid for public rendering."""
+        if content in ({}, None):
+            return True
+        if not isinstance(content, dict):
+            return False
+        components = content.get("components")
+        if components is not None and not isinstance(components, list):
+            return False
+        return True
+
+    def get_published_home_page(self, business):
+        """Retrieve the published homepage for a business if one exists."""
+        if business is None:
+            return None
+        return Page.objects.filter(
+            business=business,
+            slug=self.HOME_SLUG,
+            status=Page.Status.PUBLISHED,
+        ).first()
+
+    def resolve_home_page_data(self, page):
+        """Resolve model references and serialize the published page content."""
+        from ..serializers import PageContentSerializer
+
+        page.selected_content = LandingPageContentResolver().resolve(
+            page.published_content
+        )
+        return PageContentSerializer(page).data, page.cache_ttl
 
     def delete_page(self, instance):
         instance.delete()

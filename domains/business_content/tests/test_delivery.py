@@ -3,6 +3,7 @@ from rest_framework.test import APITestCase
 from core.services import CacheService
 from domains.catalog.models import Category, CategoryStatus, Product, ProductStatus
 
+from ..cache import home_cache_key, invalidate_page
 from ..models import LandingPage, Page, SEORecord
 from ..services.landing_page_service import LandingPageService
 from ..services.page_service import PageService
@@ -213,8 +214,9 @@ class LandingPageDeliveryAPITests(APITestCase):
 
 class PageDeliveryAPITests(APITestCase):
     def setUp(self):
-        CacheService().delete_public("business-content:home")
         self.business = storefront_business()
+        invalidate_page("home", self.business.id)
+        CacheService().delete_public("business-content:home")
         self.business.business_name = "Delivery Business"
         self.business.display_name = "Delivery Business"
         self.business.save()

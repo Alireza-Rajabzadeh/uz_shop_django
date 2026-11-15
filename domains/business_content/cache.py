@@ -2,6 +2,7 @@ from core.services import CacheService
 
 
 HOME_CACHE_KEY = "business-content:home"
+NEGATIVE_CACHE_TTL = 60
 
 
 def home_cache_key(business_id=None):

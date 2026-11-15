@@ -115,8 +115,11 @@ class ContentCacheInvalidationTests(TestCase):
             deleted,
             {
                 "business-content:pages:home",
+                f"business-content:pages:home:{self.business.id}",
                 "business-content:home",
+                f"business-content:home:{self.business.id}",
                 "business-content:pages:start",
+                f"business-content:pages:start:{self.business.id}",
             },
         )
 

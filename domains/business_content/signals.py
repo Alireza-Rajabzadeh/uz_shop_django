@@ -32,14 +32,23 @@ def remember_previous_seo_resource(sender, instance, **kwargs):
 @receiver(post_delete, sender=LandingPage)
 def invalidate_landing_page_cache(sender, instance, **kwargs):
     slugs = {instance.slug, getattr(instance, "_cache_previous_slug", None)} - {None}
-    _after_commit(lambda: [invalidate_landing_page(slug) for slug in slugs])
+    _after_commit(
+        lambda: [
+            invalidate_landing_page(slug, business_id=instance.business_id)
+            for slug in slugs
+        ]
+    )
 
 
 @receiver(post_save, sender=Page)
 @receiver(post_delete, sender=Page)
 def invalidate_page_cache(sender, instance, **kwargs):
     slugs = {instance.slug, getattr(instance, "_cache_previous_slug", None)} - {None}
-    _after_commit(lambda: [invalidate_page(slug) for slug in slugs])
+    _after_commit(
+        lambda: [
+            invalidate_page(slug, business_id=instance.business_id) for slug in slugs
+        ]
+    )
 
 
 @receiver(post_save, sender=SEORecord)
@@ -55,9 +64,18 @@ def invalidate_seo_cache(sender, instance, **kwargs):
             model = {"landing_page": LandingPage, "page": Page}.get(resource_type)
             if model is None:
                 continue
-            slug = model.objects.filter(pk=resource_id).values_list("slug", flat=True).first()
-            if slug:
-                invalidator = invalidate_landing_page if model is LandingPage else invalidate_page
-                invalidator(slug)
+            row = (
+                model.objects.filter(pk=resource_id)
+                .values_list("slug", "business_id")
+                .first()
+            )
+            if row:
+                slug, business_id = row
+                invalidator = (
+                    invalidate_landing_page
+                    if model is LandingPage
+                    else invalidate_page
+                )
+                invalidator(slug, business_id=business_id)
 
     _after_commit(invalidate)

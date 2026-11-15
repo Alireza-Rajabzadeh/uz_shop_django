@@ -15,6 +15,7 @@ from domains.vendor.auth import VendorJWTAuthentication
 
 from .cache import (
     HOME_CACHE_KEY,
+    NEGATIVE_CACHE_TTL,
     home_cache_key,
     landing_page_cache_key,
     page_cache_key,
@@ -149,28 +150,51 @@ class PublicHomePage(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
 
-    def resolve_payload(self):
-        business_id = getattr(self.request, "business_id", None)
-        try:
-            page = PageService().get_home_page(business_id=business_id)
-        except Page.DoesNotExist as exc:
-            raise NotFound(_("Page not found.")) from exc
+    def _resolve_business(self, request):
+        business = getattr(request, "business", None)
+        if business is not None:
+            return business
+        business_id = getattr(request, "business_id", None)
+        if business_id is not None:
+            return BusinessProfile.objects.filter(id=business_id).first()
+        if not request.headers.get("X-Tenant-Subdomain") and not request.META.get("HTTP_X_TENANT_SUBDOMAIN"):
+            default_id = public_business_id()
+            if default_id is not None:
+                return BusinessProfile.objects.filter(id=default_id).first()
+        return None
 
-        if page.status != Page.Status.PUBLISHED:
-            raise NotFound(_("Page not found."))
+    def resolve_payload(self, business):
+        service = PageService()
+        if not service.allows_custom_homepage(business):
+            return False, NEGATIVE_CACHE_TTL
 
-        page.selected_content = LandingPageContentResolver().resolve(
-            page.published_content
-        )
-        return PageContentSerializer(page).data, page.cache_ttl
+        page = service.get_published_home_page(business)
+        if page is None:
+            return False, NEGATIVE_CACHE_TTL
+
+        if not service.is_content_valid_for_rendering(page.published_content):
+            return False, NEGATIVE_CACHE_TTL
+
+        return service.resolve_home_page_data(page)
 
     def get(self, request):
-        business_id = getattr(request, "business_id", None)
-        key = home_cache_key(business_id)
-        cached = CacheService().get_public(key)
+        business = self._resolve_business(request)
+        if business is None:
+            raise NotFound(_("Page not found."))
+
+        key = home_cache_key(business.id)
+        cache = CacheService()
+
+        cached = cache.get_public(key)
         if cached is not None:
+            if cached is False:
+                raise NotFound(_("Page not found."))
             return api_response(data=cached)
-        data = CacheService().get_or_set_public(key, self.resolve_payload)
+
+        data = cache.get_or_set_public(key, lambda: self.resolve_payload(business))
+        if data is False:
+            raise NotFound(_("Page not found."))
+
         return api_response(data=data)
 
 
