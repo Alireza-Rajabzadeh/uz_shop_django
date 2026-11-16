@@ -338,6 +338,34 @@ class BusinessAPITests(APITestCase):
         response = self.client.get("/api/business/public")
         self.assertEqual(response.status_code, 200)
 
+    @patch("domains.business.api.views.CacheService")
+    def test_public_business_includes_selected_categories(self, cache_class):
+        cache_class.return_value.get_public.return_value = None
+        cache_class.return_value.get_or_set_public.side_effect = lambda key, builder: builder()[0]
+        cat_status, _ = CategoryStatus.objects.get_or_create(name="active")
+        root_cat = Category.objects.create(name="Electronics", fa_name="الکترونیک", slug="electronics", status=cat_status)
+        bc = BusinessCategory.objects.create(business=self.profile, category=root_cat)
+        try:
+            response = self.client.get("/api/business/public")
+            self.assertEqual(response.status_code, 200)
+            categories = response.data["data"]["categories"]
+            self.assertEqual(len(categories), 1)
+            self.assertEqual(categories[0]["id"], root_cat.id)
+            self.assertEqual(categories[0]["name"], "Electronics")
+            self.assertEqual(categories[0]["fa_name"], "الکترونیک")
+            self.assertEqual(categories[0]["slug"], "electronics")
+        finally:
+            bc.delete()
+            root_cat.delete()
+
+    @patch("domains.business.api.views.CacheService")
+    def test_public_business_without_selected_categories_returns_empty_list(self, cache_class):
+        cache_class.return_value.get_public.return_value = None
+        cache_class.return_value.get_or_set_public.side_effect = lambda key, builder: builder()[0]
+        response = self.client.get("/api/business/public")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["categories"], [])
+
 
 class BusinessInvalidationTests(TransactionTestCase):
     @patch("domains.business.signals.invalidate_business_cache")

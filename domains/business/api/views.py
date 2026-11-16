@@ -26,6 +26,7 @@ from .serializers import (
     BusinessChargeSerializer,
     BusinessPhoneSerializer, BusinessProfileSerializer, BusinessSocialLinkSerializer,
     BusinessWorkingDaySerializer, PublicBusinessCardSerializer,
+    PublicBusinessCategorySerializer,
     PublicBusinessPhoneSerializer, PublicBusinessProfileSerializer,
     PublicBusinessSocialLinkSerializer, PublicBusinessWorkingDaySerializer, PublicSocialMediaSerializer,
     SocialMediaIconSerializer, SocialMediaSerializer,
@@ -117,6 +118,7 @@ class PublicBusinessView(APIView):
             "phones": PublicBusinessPhoneSerializer(objects["phones"], many=True).data,
             "social_links": PublicBusinessSocialLinkSerializer(objects["social_links"], many=True).data,
             "working_hours": PublicBusinessWorkingDaySerializer(objects["working_hours"], many=True).data,
+            "categories": PublicBusinessCategorySerializer(objects["categories"], many=True).data,
         }
         return data, (profile.cache_ttl if profile else None)
 

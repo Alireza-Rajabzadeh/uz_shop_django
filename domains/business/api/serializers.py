@@ -362,6 +362,17 @@ class BusinessChargeSerializer(serializers.ModelSerializer):
         return attrs
 
 
+class PublicBusinessCategorySerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(source="category.id", read_only=True)
+    name = serializers.CharField(source="category.name", read_only=True)
+    fa_name = serializers.CharField(source="category.fa_name", read_only=True)
+    slug = serializers.CharField(source="category.slug", read_only=True)
+
+    class Meta:
+        model = BusinessCategory
+        fields = ["id", "name", "fa_name", "slug"]
+
+
 class BusinessCategorySerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source="category.name", read_only=True)
     category_fa_name = serializers.CharField(source="category.fa_name", read_only=True)

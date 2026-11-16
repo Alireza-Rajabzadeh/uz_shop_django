@@ -408,12 +408,15 @@ class E2ECrossTenantSecurityAndDataIsolationTests(BaseE2ETenantSetup):
         self.assertEqual(res_d.status_code, 200)
         self.assertEqual(res_d.json()["data"]["name"], "Delta Smartwatch X1")
 
-        # 2. Delta storefront requests Product Shopname (unowned) -> 404 Not Found
+        # 2. Delta storefront requests Product Shopname (unowned) -> 200 OK (out of stock, no Shopname offers)
         res_d_cross = self.client.get(
             f"/api/catalog/storefront/products/{self.product_shopname.slug}",
             HTTP_X_TENANT_SUBDOMAIN="delta",
         )
-        self.assertEqual(res_d_cross.status_code, 404)
+        self.assertEqual(res_d_cross.status_code, 200)
+        self.assertEqual(res_d_cross.json()["data"]["name"], "Shopname Classic Hoodie")
+        self.assertFalse(res_d_cross.json()["data"]["availability"]["in_stock"])
+        self.assertIsNone(res_d_cross.json()["data"]["default_variant"]["selected_offer"])
 
         # 3. Shopname storefront requests Product Shopname -> 200 OK
         res_s = self.client.get(
@@ -423,12 +426,15 @@ class E2ECrossTenantSecurityAndDataIsolationTests(BaseE2ETenantSetup):
         self.assertEqual(res_s.status_code, 200)
         self.assertEqual(res_s.json()["data"]["name"], "Shopname Classic Hoodie")
 
-        # 4. Shopname storefront requests Product Delta (unowned) -> 404 Not Found
+        # 4. Shopname storefront requests Product Delta (unowned) -> 200 OK (out of stock, no Delta offers)
         res_s_cross = self.client.get(
             f"/api/catalog/storefront/products/{self.product_delta.slug}",
             HTTP_X_TENANT_SUBDOMAIN="shopname",
         )
-        self.assertEqual(res_s_cross.status_code, 404)
+        self.assertEqual(res_s_cross.status_code, 200)
+        self.assertEqual(res_s_cross.json()["data"]["name"], "Delta Smartwatch X1")
+        self.assertFalse(res_s_cross.json()["data"]["availability"]["in_stock"])
+        self.assertIsNone(res_s_cross.json()["data"]["default_variant"]["selected_offer"])
 
     def test_storefront_search_list_isolation(self):
         # Delta storefront search only lists Delta's products

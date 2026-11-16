@@ -1,6 +1,5 @@
 from django.utils import timezone
 
-from domains.packages.enums import PackageFeatureEnum
 from domains.packages.services import PackageService
 
 from ..models import Page
@@ -27,10 +26,7 @@ class PageService:
             return True
         if not package.is_active:
             return False
-        grant = package.package_features.select_related("feature").filter(
-            feature__code=PackageFeatureEnum.CONTENT_LANDINGPAGE.code
-        ).first()
-        return bool(grant and grant.config.get("enabled", True))
+        return True
 
     def is_content_valid_for_rendering(self, content):
         """Validate that the content structure is available and valid for public rendering."""

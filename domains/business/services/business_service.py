@@ -73,6 +73,7 @@ class BusinessService:
                 "phones": BusinessPhone.objects.none(),
                 "social_links": BusinessSocialLink.objects.none(),
                 "working_hours": BusinessWorkingDay.objects.none(),
+                "categories": BusinessCategory.objects.none(),
             }
         working_hours = BusinessWorkingDay.objects.filter(vendor__isnull=True)
         if profile.vendor_id:
@@ -92,6 +93,9 @@ class BusinessService:
                 visibility=Visibility.PUBLIC,
             ).select_related("social_media", "icon__file__status"),
             "working_hours": working_hours,
+            "categories": BusinessCategory.objects.filter(
+                business=profile
+            ).select_related("category"),
         }
 
     @staticmethod

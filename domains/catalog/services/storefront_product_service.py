@@ -19,8 +19,6 @@ class StorefrontProductService:
     def get_quick_view(self, slug, *, business=None):
         product = self._get_product(slug)
         payload = self._base_payload(product, business=business)
-        if business is not None and not payload.get("pricing", {}).get("minimum_effective_price"):
-            raise Product.DoesNotExist
         payload.update({
             "description": product.description or "",
             "json_description": self._resolve_json_description(product.json_description),
@@ -34,10 +32,7 @@ class StorefrontProductService:
         variants = [
             self._variant_payload(variant)
             for variant in product.storefront_variants
-            if business is None or getattr(variant, "_business_offer", None) is not None
         ]
-        if business is not None and not variants:
-            raise Product.DoesNotExist
         payload.update({
             "description": product.description or "",
             "json_description": self._resolve_json_description(product.json_description),

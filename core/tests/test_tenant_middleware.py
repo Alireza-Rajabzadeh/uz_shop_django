@@ -518,22 +518,27 @@ class TenantDataAndCacheIsolationIntegrationTests(APITestCase):
         self.assertNotIn("Alpha Running Shoes", names_beta)
         self.assertIn("Beta Hiking Boots", names_beta)
 
-    # 15. Data Isolation: Storefront product detail returns 404 if product is not sold by tenant
+    # 15. Data Isolation: Storefront product detail returns product with only tenant's offers (out of stock if not sold by tenant)
     def test_storefront_product_detail_isolated_to_tenant(self):
-        # Alpha storefront can view product_a
+        # Alpha storefront can view product_a with Alpha's offer
         res_a_view_a = self.client.get(
             f"/api/catalog/storefront/products/{self.product_a.slug}",
             HTTP_X_TENANT_SUBDOMAIN="alpha-store",
         )
         self.assertEqual(res_a_view_a.status_code, 200)
         self.assertEqual(res_a_view_a.json()["data"]["name"], "Alpha Running Shoes")
+        self.assertTrue(res_a_view_a.json()["data"]["availability"]["in_stock"])
 
-        # Alpha storefront CANNOT view product_b (Beta's product) -> 404
+        # Alpha storefront viewing product_b (Beta's product) loads the product without Beta's offer
         res_a_view_b = self.client.get(
             f"/api/catalog/storefront/products/{self.product_b.slug}",
             HTTP_X_TENANT_SUBDOMAIN="alpha-store",
         )
-        self.assertEqual(res_a_view_b.status_code, 404)
+        self.assertEqual(res_a_view_b.status_code, 200)
+        self.assertEqual(res_a_view_b.json()["data"]["name"], "Beta Hiking Boots")
+        self.assertFalse(res_a_view_b.json()["data"]["availability"]["in_stock"])
+        self.assertIsNone(res_a_view_b.json()["data"]["default_variant"]["selected_offer"])
+        self.assertEqual(res_a_view_b.json()["data"]["offers"]["total"], 0)
 
     # 16. Authentication & Permissions: Vendor A cannot manage Business B
     def test_vendor_cannot_manage_another_business_via_subdomain_header(self):

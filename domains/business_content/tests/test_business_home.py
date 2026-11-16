@@ -185,27 +185,32 @@ class BusinessHomePageAPITests(TestCase):
         self.assertEqual(cached["title"], "Alpha Storefront Home")
 
     def test_business_without_package_permission_receives_404(self):
-        """Business on a package without custom homepage permission receives 404."""
-        # Beta is on 'free' tier which lacks content.landingpage
-        Page.objects.create(
-            business=self.business_beta,
-            title="Beta Home",
-            slug=PageService.HOME_SLUG,
-            status=Page.Status.PUBLISHED,
-            published_content=self.valid_content,
-        )
+        """Business on an inactive package receives 404."""
+        self.free_package.is_active = False
+        self.free_package.save()
+        try:
+            Page.objects.create(
+                business=self.business_beta,
+                title="Beta Home",
+                slug=PageService.HOME_SLUG,
+                status=Page.Status.PUBLISHED,
+                published_content=self.valid_content,
+            )
 
-        response = self.client.get(
-            "/api/business-content/home",
-            HTTP_X_TENANT_SUBDOMAIN="beta",
-        )
+            response = self.client.get(
+                "/api/business-content/home",
+                HTTP_X_TENANT_SUBDOMAIN="beta",
+            )
 
-        self.assertEqual(response.status_code, 404)
+            self.assertEqual(response.status_code, 404)
 
-        # Verify negative result was cached
-        cache_key = home_cache_key(self.business_beta.id)
-        cached = self.cache.get_public(cache_key)
-        self.assertIs(cached, False)
+            # Verify negative result was cached
+            cache_key = home_cache_key(self.business_beta.id)
+            cached = self.cache.get_public(cache_key)
+            self.assertIs(cached, False)
+        finally:
+            self.free_package.is_active = True
+            self.free_package.save()
 
     def test_business_without_published_content_receives_404(self):
         """Business without any published home page receives 404."""
