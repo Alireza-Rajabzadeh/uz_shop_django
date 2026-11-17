@@ -112,6 +112,7 @@ INSTALLED_APPS = [
     "domains.packages.apps.PackagesConfig",
     "domains.shipment.apps.ShipmentConfig",
     "domains.vendors_club.apps.VendorsClubConfig",
+    "domains.storefront.apps.StorefrontConfig",
     "core",
     "domains.users",
 ]
@@ -183,6 +184,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "core.middleware.trusted_proxy.TrustedProxyMiddleware",
     "core.middleware.tenant.TenantMiddleware",
     "core.middleware.business_status.BusinessStatusMiddleware",
 ]

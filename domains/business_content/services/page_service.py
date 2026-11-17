@@ -67,3 +67,32 @@ class PageService:
         instance.published_at = timezone.now()
         instance.save()
         return instance
+
+    def get_storefront_page(self, slug="home", business=None):
+        """Public storefront page retrieval and resolution for business context."""
+        from django.core.exceptions import ObjectDoesNotExist
+        from django.utils.translation import gettext as _
+        from rest_framework.exceptions import NotFound
+
+        if slug == self.HOME_SLUG:
+            if not self.allows_custom_homepage(business):
+                raise NotFound(_("Page not found."))
+            page = self.get_published_home_page(business)
+            if page is None:
+                raise NotFound(_("Page not found."))
+            if not self.is_content_valid_for_rendering(page.published_content):
+                raise NotFound(_("Page not found."))
+            return self.resolve_home_page_data(page)
+
+        try:
+            page = self.get_by_slug(slug, business_id=getattr(business, "id", business))
+        except ObjectDoesNotExist as exc:
+            raise NotFound(_("Page not found.")) from exc
+
+        if getattr(page, "status", None) != Page.Status.PUBLISHED:
+            raise NotFound(_("Page not found."))
+
+        if not self.is_content_valid_for_rendering(page.published_content):
+            raise NotFound(_("Page not found."))
+
+        return self.resolve_home_page_data(page)
