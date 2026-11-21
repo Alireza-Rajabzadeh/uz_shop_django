@@ -1,3 +1,4 @@
+from core.services import CacheService
 from .categories import (
     StorefrontCategoriesView,
     StorefrontStaticDataView,
@@ -12,6 +13,7 @@ from .products import (
 )
 
 __all__ = [
+    "CacheService",
     "StorefrontCategoriesView",
     "StorefrontLayoutView",
     "StorefrontPageView",

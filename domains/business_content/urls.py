@@ -6,20 +6,10 @@ from .views import (
     PublicHomePage,
     PublicLandingPage,
     PublicPage,
-    VendorCategoryOptionList,
-    VendorComponentContractList,
-    VendorLandingPageDetail,
-    VendorLandingPageList,
-    VendorLandingPagePreview,
-    VendorLandingPagePublish,
-    VendorLandingPageSEO,
-    VendorPageDetail,
-    VendorPageList,
-    VendorPagePreview,
-    VendorPagePublish,
-    VendorPageSEO,
-    VendorProductOptionList,
-    VendorSuggestionPageList,
+    VendorContentOptionsView,
+    VendorLandingPageView,
+    VendorPageView,
+    VendorSEOView,
 )
 
 urlpatterns = [
@@ -30,32 +20,66 @@ urlpatterns = [
     path("landing-pages/<str:slug>", PublicLandingPage.as_view()),
     path("pages/<str:slug>/preview", PagePreview.as_view()),
     path("pages/<str:slug>", PublicPage.as_view()),
+
     # Business authoring. The `vendor/` prefix keeps `<int:id>` detail routes
     # unambiguous against the `<str:slug>` delivery routes above.
-    path("vendor/landing-pages", VendorLandingPageList.as_view()),
+    path("vendor/landing-pages", VendorLandingPageView.as_view()),
     path(
         "vendor/landing-pages/<int:resource_id>",
-        VendorLandingPageDetail.as_view(),
+        VendorLandingPageView.as_view(),
     ),
     path(
         "vendor/landing-pages/<int:resource_id>/publish",
-        VendorLandingPagePublish.as_view(),
+        VendorLandingPageView.as_view(),
+        {"action": "publish"},
     ),
     path(
         "vendor/landing-pages/<int:resource_id>/preview",
-        VendorLandingPagePreview.as_view(),
+        VendorLandingPageView.as_view(),
+        {"action": "preview"},
     ),
     path(
         "vendor/landing-pages/<int:resource_id>/seo",
-        VendorLandingPageSEO.as_view(),
+        VendorSEOView.as_view(),
+        {"resource_type": "landing_page"},
     ),
-    path("vendor/pages", VendorPageList.as_view()),
-    path("vendor/pages/<int:resource_id>", VendorPageDetail.as_view()),
-    path("vendor/pages/<int:resource_id>/publish", VendorPagePublish.as_view()),
-    path("vendor/pages/<int:resource_id>/preview", VendorPagePreview.as_view()),
-    path("vendor/pages/<int:resource_id>/seo", VendorPageSEO.as_view()),
-    path("vendor/options/products", VendorProductOptionList.as_view()),
-    path("vendor/options/categories", VendorCategoryOptionList.as_view()),
-    path("vendor/component-contracts", VendorComponentContractList.as_view()),
-    path("vendor/suggestions", VendorSuggestionPageList.as_view()),
+
+    path("vendor/pages", VendorPageView.as_view()),
+    path("vendor/pages/<int:resource_id>", VendorPageView.as_view()),
+    path(
+        "vendor/pages/<int:resource_id>/publish",
+        VendorPageView.as_view(),
+        {"action": "publish"},
+    ),
+    path(
+        "vendor/pages/<int:resource_id>/preview",
+        VendorPageView.as_view(),
+        {"action": "preview"},
+    ),
+    path(
+        "vendor/pages/<int:resource_id>/seo",
+        VendorSEOView.as_view(),
+        {"resource_type": "page"},
+    ),
+
+    path(
+        "vendor/options/products",
+        VendorContentOptionsView.as_view(),
+        {"option_type": "products"},
+    ),
+    path(
+        "vendor/options/categories",
+        VendorContentOptionsView.as_view(),
+        {"option_type": "categories"},
+    ),
+    path(
+        "vendor/component-contracts",
+        VendorContentOptionsView.as_view(),
+        {"option_type": "contracts"},
+    ),
+    path(
+        "vendor/suggestions",
+        VendorContentOptionsView.as_view(),
+        {"option_type": "suggestions"},
+    ),
 ]

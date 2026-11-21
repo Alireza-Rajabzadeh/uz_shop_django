@@ -9,6 +9,8 @@ from domains.business.models import (
     BusinessSubdomainStatus,
 )
 from domains.catalog.models import Category, CategoryStatus
+from domains.business_content.models import Page as BusinessPage
+from domains.content.models import Page as ContentPage
 
 
 class StorefrontLayoutAPITests(APITestCase):
@@ -103,3 +105,54 @@ class StorefrontLayoutAPITests(APITestCase):
         self.assertEqual(data["theme"], {})
         self.assertEqual(data["header"], {})
         self.assertIsNone(data["footer"])
+
+    def test_platform_footer_resolution(self):
+        content_payload = {
+            "schema_version": 1,
+            "contract_version": 4,
+            "components": [],
+        }
+        page = ContentPage.objects.create(
+            title="Platform Footer",
+            slug="footer",
+            status=ContentPage.Status.PUBLISHED,
+            published_content=content_payload,
+            draft_content=content_payload,
+        )
+
+        response = self.client.get("/api/v1/storefront/layout")
+        self.assertEqual(response.status_code, 200)
+        footer = response.data["data"]["footer"]
+        self.assertIsNotNone(footer)
+        self.assertEqual(footer["slug"], "footer")
+
+        page.status = ContentPage.Status.DRAFT
+        page.save()
+
+        response = self.client.get("/api/v1/storefront/layout")
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.data["data"]["footer"])
+
+    def test_business_footer_resolution(self):
+        content_payload = {
+            "schema_version": 1,
+            "contract_version": 4,
+            "components": [],
+        }
+        BusinessPage.objects.create(
+            business=self.business,
+            title="Business Footer",
+            slug="footer",
+            status=BusinessPage.Status.PUBLISHED,
+            published_content=content_payload,
+            draft_content=content_payload,
+        )
+
+        response = self.client.get(
+            "/api/v1/storefront/layout",
+            HTTP_X_TENANT_SUBDOMAIN="apex-shop",
+        )
+        self.assertEqual(response.status_code, 200)
+        footer = response.data["data"]["footer"]
+        self.assertIsNotNone(footer)
+        self.assertEqual(footer["slug"], "footer")

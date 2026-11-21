@@ -1,20 +1,9 @@
 from django.core.exceptions import ObjectDoesNotExist
+from rest_framework.exceptions import NotFound
 
 from domains.business.services import BusinessService
-from domains.business_content.serializers import (
-    PageContentSerializer as BusinessPageContentSerializer,
-)
-from domains.business_content.services import (
-    LandingPageContentResolver as BusinessLandingPageContentResolver,
-)
 from domains.business_content.services import PageService as BusinessPageService
 from domains.catalog.services import CategoryService
-from domains.content.serializers import (
-    PageContentSerializer as ContentPageContentSerializer,
-)
-from domains.content.services import (
-    LandingPageContentResolver as ContentLandingPageContentResolver,
-)
 from domains.content.services import PageService as ContentPageService
 
 
@@ -59,29 +48,18 @@ class StorefrontLayoutService:
 
     def _get_platform_footer(self):
         try:
-            page = ContentPageService().get_by_slug("footer")
-            if page.status != "published":
-                return None
-            page.selected_content = ContentLandingPageContentResolver().resolve(
-                page.published_content
-            )
-            return ContentPageContentSerializer(page).data
-        except ObjectDoesNotExist:
+            data, _ttl = ContentPageService().get_storefront_page(slug="footer")
+            return data
+        except (ObjectDoesNotExist, NotFound):
             return None
 
     def _get_business_footer(self, business):
-        service = BusinessPageService()
         try:
-            page = service.get_by_slug("footer", business_id=business.id)
-            if page.status != "published":
-                return None
-            if not service.is_content_valid_for_rendering(page.published_content):
-                return None
-            page.selected_content = BusinessLandingPageContentResolver().resolve(
-                page.published_content
+            data, _ttl = BusinessPageService().get_storefront_page(
+                slug="footer", business=business
             )
-            return BusinessPageContentSerializer(page).data
-        except ObjectDoesNotExist:
+            return data
+        except (ObjectDoesNotExist, NotFound):
             return None
 
     def _get_business_header(self, business):

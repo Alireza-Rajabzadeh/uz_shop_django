@@ -51,7 +51,7 @@ class PageService:
 
     def resolve_home_page_data(self, page):
         """Resolve model references and serialize the published page content."""
-        from ..serializers import PageContentSerializer
+        from ..serializers.page_content_serializer import PageContentSerializer
 
         page.selected_content = LandingPageContentResolver().resolve(
             page.published_content

@@ -28,7 +28,7 @@ class PageService:
         from django.utils.translation import gettext as _
         from rest_framework.exceptions import NotFound
 
-        from ..serializers import PageContentSerializer
+        from ..serializers.page_content_serializer import PageContentSerializer
         from .landing_page_content_resolver import LandingPageContentResolver
 
         try:

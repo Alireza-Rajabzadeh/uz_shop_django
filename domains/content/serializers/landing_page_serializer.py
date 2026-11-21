@@ -1,0 +1,36 @@
+from django.core.validators import validate_unicode_slug
+from rest_framework import serializers
+
+from ..contracts import empty_draft_content, validate_draft_content
+from ..models.landing_page import LandingPage
+from .content_slug_scope_mixin import ContentSlugScopeMixin
+
+
+class LandingPageSerializer(ContentSlugScopeMixin, serializers.ModelSerializer):
+    slug = serializers.SlugField(
+        max_length=50,
+        allow_unicode=True,
+        validators=[validate_unicode_slug],
+    )
+    draft_content = serializers.JSONField(
+        required=False,
+        default=empty_draft_content,
+        validators=[validate_draft_content],
+    )
+
+    class Meta:
+        model = LandingPage
+        validators = []
+        fields = [
+            "id",
+            "title",
+            "slug",
+            "draft_content",
+            "published_content",
+            "status",
+            "published_at",
+            "cache_ttl",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]

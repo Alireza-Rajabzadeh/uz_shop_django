@@ -2,6 +2,10 @@ from django.db import transaction
 from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 
+from domains.storefront.cache import (
+    invalidate_layout_cache as invalidate_storefront_layout_cache,
+    invalidate_page_cache as invalidate_storefront_page_cache,
+)
 from .cache import invalidate_landing_page, invalidate_page
 from .models import LandingPage, Page, SEORecord
 
@@ -49,6 +53,18 @@ def invalidate_page_cache(sender, instance, **kwargs):
             invalidate_page(slug, business_id=instance.business_id) for slug in slugs
         ]
     )
+    _after_commit(
+        lambda: [
+            invalidate_storefront_page_cache(slug, business_id=instance.business_id)
+            for slug in slugs
+        ]
+    )
+    if "footer" in slugs:
+        _after_commit(
+            lambda: invalidate_storefront_layout_cache(
+                business_id=instance.business_id
+            )
+        )
 
 
 @receiver(post_save, sender=SEORecord)
@@ -77,5 +93,9 @@ def invalidate_seo_cache(sender, instance, **kwargs):
                     else invalidate_page
                 )
                 invalidator(slug, business_id=business_id)
+                if model is Page:
+                    invalidate_storefront_page_cache(slug, business_id=business_id)
+                    if slug == "footer":
+                        invalidate_storefront_layout_cache(business_id=business_id)
 
     _after_commit(invalidate)
