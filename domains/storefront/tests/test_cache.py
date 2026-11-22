@@ -275,14 +275,15 @@ class StorefrontPageCacheTests(APITestCase):
 
     def test_layout_cache_key_generation(self):
         self.assertEqual(layout_cache_key(), "storefront:layout:platform")
-        self.assertEqual(layout_cache_key(business_id=None), "storefront:layout:platform")
+        self.assertEqual(layout_cache_key(subdomain=None), "storefront:layout:platform")
+        self.assertEqual(layout_cache_key(subdomain="cache-shop"), "storefront:layout:cache-shop")
         self.assertEqual(
             layout_cache_key(business_id=self.business.id),
-            f"storefront:layout:{self.business.id}",
+            "storefront:layout:cache-shop",
         )
         self.assertEqual(
             layout_cache_key(business_id=self.business),
-            f"storefront:layout:{self.business.id}",
+            "storefront:layout:cache-shop",
         )
 
     @patch("domains.storefront.views.layout.StorefrontLayoutService")
@@ -316,7 +317,7 @@ class StorefrontPageCacheTests(APITestCase):
         self.assertTrue(response.data["success"])
         self.assertEqual(response.data["data"], cached_payload)
         cache_mock.return_value.get_public.assert_called_once_with(
-            f"storefront:layout:{self.business.id}"
+            "storefront:layout:cache-shop"
         )
         service_mock.assert_not_called()
 
@@ -350,7 +351,7 @@ class StorefrontPageCacheTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.data["success"])
 
-        expected_key = f"storefront:layout:{self.business.id}"
+        expected_key = "storefront:layout:cache-shop"
         cache_mock.return_value.get_public.assert_called_once_with(expected_key)
         cache_mock.return_value.put_public.assert_called_once_with(
             expected_key,
@@ -366,9 +367,15 @@ class StorefrontPageCacheTests(APITestCase):
         )
 
         cache_mock.return_value.delete_public.reset_mock()
+        invalidate_layout_cache(subdomain="cache-shop")
+        cache_mock.return_value.delete_public.assert_called_once_with(
+            "storefront:layout:cache-shop"
+        )
+
+        cache_mock.return_value.delete_public.reset_mock()
         invalidate_layout_cache(business_id=self.business.id)
         cache_mock.return_value.delete_public.assert_called_once_with(
-            f"storefront:layout:{self.business.id}"
+            "storefront:layout:cache-shop"
         )
 
     @patch("domains.storefront.cache.CacheService")
@@ -392,7 +399,7 @@ class StorefrontPageCacheTests(APITestCase):
             draft_content={"schema_version": 1, "contract_version": 4, "components": []},
         )
         cache_mock.return_value.delete_public.assert_any_call(
-            f"storefront:layout:{self.business.id}"
+            "storefront:layout:cache-shop"
         )
 
 

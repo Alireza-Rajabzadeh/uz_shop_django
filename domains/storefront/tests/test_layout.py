@@ -24,6 +24,10 @@ class StorefrontLayoutAPITests(APITestCase):
             id=BusinessSubdomainEnum.ACTIVE.value,
             defaults={"code": "active", "name": "Active", "title": "Active"},
         )
+        cls.redirect_sub_status, _ = BusinessSubdomainStatus.objects.get_or_create(
+            id=BusinessSubdomainEnum.REDIRECT.value,
+            defaults={"code": "redirect", "name": "Redirect", "title": "Redirect"},
+        )
 
         cls.business = BusinessProfile.objects.create(
             business_name="apex-shop",
@@ -87,14 +91,47 @@ class StorefrontLayoutAPITests(APITestCase):
         self.assertIn(self.cat1.id, cat_ids)
         self.assertNotIn(self.cat2.id, cat_ids)
 
-    def test_unresolved_business_serves_platform_layout(self):
+    def test_unresolved_business_returns_404_with_platform_domain(self):
         response = self.client.get(
             "/api/v1/storefront/layout",
             HTTP_X_TENANT_SUBDOMAIN="non-existent-subdomain",
         )
 
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(response.data["success"])
+        self.assertEqual(response.data["data"]["status"], "UNKNOWN")
+        self.assertEqual(response.data["data"]["subdomain"], "non-existent-subdomain")
+        self.assertEqual(response.data["data"]["platform_domain"], "charchu.com")
+
+    def test_historical_subdomain_returns_308_with_canonical(self):
+        BusinessSubdomain.objects.create(
+            business=self.business,
+            subdomain="old-apex",
+            status=self.redirect_sub_status,
+        )
+
+        response = self.client.get(
+            "/api/v1/storefront/layout",
+            HTTP_X_TENANT_SUBDOMAIN="old-apex",
+        )
+
+        self.assertEqual(response.status_code, 308)
+        self.assertFalse(response.data["success"])
+        self.assertEqual(response.data["data"]["status"], "REDIRECT")
+        self.assertEqual(response.data["data"]["subdomain"], "old-apex")
+        self.assertEqual(response.data["data"]["canonical_subdomain"], "apex-shop")
+        self.assertEqual(response.headers.get("X-Canonical-Subdomain"), "apex-shop")
+
+    def test_business_layout_contains_business_data(self):
+        response = self.client.get(
+            "/api/v1/storefront/layout",
+            HTTP_X_TENANT_SUBDOMAIN="apex-shop",
+        )
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.data["data"]["config"]["is_platform"])
+        tenant_config = response.data["data"]["config"]["tenant"]
+        self.assertIn("business", tenant_config)
+        self.assertIsNotNone(tenant_config["business"])
+        self.assertIn("profile", tenant_config["business"])
 
     def test_empty_layout_sections_are_valid(self):
         # Platform has no footer by default, empty theme and header

@@ -296,6 +296,8 @@ class BusinessSubdomainService:
             if current_active:
                 current_active.status_id = BusinessSubdomainEnum.REDIRECT.value
                 current_active.save(update_fields=["status", "updated_at"])
+                from domains.storefront.cache import invalidate_layout_cache
+                invalidate_layout_cache(subdomain=current_active.subdomain)
 
             # 2. New ACTIVE record is created
             new_active = BusinessSubdomain.objects.create(
@@ -303,6 +305,8 @@ class BusinessSubdomainService:
                 subdomain=cleaned,
                 status_id=BusinessSubdomainEnum.ACTIVE.value,
             )
+            from domains.storefront.cache import invalidate_layout_cache
+            invalidate_layout_cache(subdomain=cleaned)
 
             return new_active
 

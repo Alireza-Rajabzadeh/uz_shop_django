@@ -27,6 +27,14 @@ class StorefrontLayoutService:
         allowed_ids = set(
             profile_categories.values_list("category_id", flat=True)
         )
+        from domains.business.services.business_subdomain_service import (
+            BusinessSubdomainService,
+        )
+
+        active_sub = BusinessSubdomainService.get_active_subdomain(business)
+        subdomain = active_sub.subdomain if active_sub else getattr(business, "subdomain", "")
+        business_data = self._get_business_data(business)
+
         return {
             "header": self._get_business_header(business),
             "categories": [
@@ -41,10 +49,45 @@ class StorefrontLayoutService:
                 "tenant": {
                     "id": business.id,
                     "business_name": getattr(business, "business_name", ""),
-                    "subdomain": getattr(business, "subdomain", ""),
+                    "subdomain": subdomain,
+                    "business": business_data,
                 },
             },
         }
+
+    def _get_business_data(self, business):
+        try:
+            from domains.business.api.serializers import (
+                PublicBusinessCategorySerializer,
+                PublicBusinessPhoneSerializer,
+                PublicBusinessProfileSerializer,
+                PublicBusinessSocialLinkSerializer,
+                PublicBusinessWorkingDaySerializer,
+            )
+
+            objects = BusinessService.public_data(business=business)
+            profile = objects.get("profile")
+            return {
+                "profile": (
+                    PublicBusinessProfileSerializer(profile).data
+                    if profile
+                    else None
+                ),
+                "phones": PublicBusinessPhoneSerializer(
+                    objects.get("phones", []), many=True
+                ).data,
+                "social_links": PublicBusinessSocialLinkSerializer(
+                    objects.get("social_links", []), many=True
+                ).data,
+                "working_hours": PublicBusinessWorkingDaySerializer(
+                    objects.get("working_hours", []), many=True
+                ).data,
+                "categories": PublicBusinessCategorySerializer(
+                    objects.get("categories", []), many=True
+                ).data,
+            }
+        except Exception:
+            return None
 
     def _get_platform_footer(self):
         try:
