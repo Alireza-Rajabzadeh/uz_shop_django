@@ -1,14 +1,12 @@
 from django.urls import path
 
 from .views import (
-    StorefrontCategoriesView,
     StorefrontLayoutView,
     StorefrontPageView,
     StorefrontProductDetailView,
     StorefrontProductQuickView,
     StorefrontProductSearchView,
     StorefrontProductVariantOffersView,
-    StorefrontStaticDataView,
 )
 
 urlpatterns = [
@@ -26,8 +24,4 @@ urlpatterns = [
         StorefrontProductVariantOffersView.as_view(),
         name="product_variant_offers",
     ),
-
-    # Navigation & Categories APIs
-    path("categories", StorefrontCategoriesView.as_view(), name="categories"),
-    path("statics", StorefrontStaticDataView.as_view(), name="statics"),
 ]

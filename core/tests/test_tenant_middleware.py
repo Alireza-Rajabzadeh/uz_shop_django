@@ -492,7 +492,7 @@ class TenantDataAndCacheIsolationIntegrationTests(APITestCase):
     # 14. Data Isolation: Tenant header scopes storefront product search
     def test_tenant_header_scopes_storefront_products(self):
         # Without tenant header (marketplace view), products from all businesses are searched
-        response_all = self.client.get("/api/catalog/storefront/products")
+        response_all = self.client.get("/api/storefront/products")
         self.assertEqual(response_all.status_code, 200)
         names_all = [p["name"] for p in response_all.json()["data"]["results"]]
         self.assertIn("Alpha Running Shoes", names_all)
@@ -500,7 +500,7 @@ class TenantDataAndCacheIsolationIntegrationTests(APITestCase):
 
         # With Alpha tenant header, only Alpha's products are returned
         response_alpha = self.client.get(
-            "/api/catalog/storefront/products",
+            "/api/storefront/products",
             HTTP_X_TENANT_SUBDOMAIN="alpha-store",
         )
         self.assertEqual(response_alpha.status_code, 200)
@@ -510,7 +510,7 @@ class TenantDataAndCacheIsolationIntegrationTests(APITestCase):
 
         # With Beta tenant header, only Beta's products are returned
         response_beta = self.client.get(
-            "/api/catalog/storefront/products",
+            "/api/storefront/products",
             HTTP_X_TENANT_SUBDOMAIN="beta-store",
         )
         self.assertEqual(response_beta.status_code, 200)
@@ -522,7 +522,7 @@ class TenantDataAndCacheIsolationIntegrationTests(APITestCase):
     def test_storefront_product_detail_isolated_to_tenant(self):
         # Alpha storefront can view product_a with Alpha's offer
         res_a_view_a = self.client.get(
-            f"/api/catalog/storefront/products/{self.product_a.slug}",
+            f"/api/storefront/products/{self.product_a.slug}",
             HTTP_X_TENANT_SUBDOMAIN="alpha-store",
         )
         self.assertEqual(res_a_view_a.status_code, 200)
@@ -531,7 +531,7 @@ class TenantDataAndCacheIsolationIntegrationTests(APITestCase):
 
         # Alpha storefront viewing product_b (Beta's product) loads the product without Beta's offer
         res_a_view_b = self.client.get(
-            f"/api/catalog/storefront/products/{self.product_b.slug}",
+            f"/api/storefront/products/{self.product_b.slug}",
             HTTP_X_TENANT_SUBDOMAIN="alpha-store",
         )
         self.assertEqual(res_a_view_b.status_code, 200)

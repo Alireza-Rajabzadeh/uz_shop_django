@@ -136,10 +136,14 @@ DIGIKALA_CATEGORY_MAPPING_PATH = Path(
         BASE_DIR / "core" / "management" / "data" / "digikala_category_mappings.json",
     )
 )
-CATALOG_SEARCH_BACKEND = os.getenv(
-    "CATALOG_SEARCH_BACKEND",
-    "domains.catalog.search.postgres.PostgresProductSearchBackend",
+STOREFRONT_SEARCH_BACKEND = os.getenv(
+    "STOREFRONT_SEARCH_BACKEND",
+    os.getenv(
+        "CATALOG_SEARCH_BACKEND",
+        "domains.storefront.search.postgres.PostgresProductSearchBackend",
+    ),
 )
+CATALOG_SEARCH_BACKEND = STOREFRONT_SEARCH_BACKEND
 NOTIFICATIONS_ALLOW_FAKE_SMS = env_bool("NOTIFICATIONS_ALLOW_FAKE_SMS", False)
 CONFIRMED_REQUEST_DEV_CODE = os.getenv("CONFIRMED_REQUEST_DEV_CODE", "")
 CONFIRMED_REQUEST_DEV_MODE = env_bool("CONFIRMED_REQUEST_DEV_MODE", False)

@@ -198,7 +198,7 @@ class StorefrontProductSearchTests(TestCase):
         )
 
         response = self.client.get(
-            "/api/catalog/storefront/products",
+            "/api/storefront/products",
             {"q": "zeta"},
         )
 
@@ -221,19 +221,19 @@ class StorefrontProductSearchTests(TestCase):
         )
 
         ascending = self.client.get(
-            "/api/catalog/storefront/products",
+            "/api/storefront/products",
             {"q": "zeta", "ordering": "price_asc"},
         )
         descending = self.client.get(
-            "/api/catalog/storefront/products",
+            "/api/storefront/products",
             {"q": "zeta", "ordering": "price_desc"},
         )
         above_85 = self.client.get(
-            "/api/catalog/storefront/products",
+            "/api/storefront/products",
             {"q": "zeta", "price_min": "85"},
         )
         below_85 = self.client.get(
-            "/api/catalog/storefront/products",
+            "/api/storefront/products",
             {"q": "zeta", "price_max": "85"},
         )
 
@@ -270,7 +270,7 @@ class StorefrontProductSearchTests(TestCase):
         )
 
         response = self.client.get(
-            f"/api/catalog/storefront/products/{product.slug}"
+            f"/api/storefront/products/{product.slug}"
         )
 
         self.assertEqual(response.status_code, 200, response.data)
@@ -297,7 +297,7 @@ class StorefrontProductSearchTests(TestCase):
         )
 
         response = self.client.get(
-            f"/api/catalog/storefront/products/{product.slug}"
+            f"/api/storefront/products/{product.slug}"
         )
 
         self.assertEqual(response.status_code, 200, response.data)
@@ -325,7 +325,7 @@ class StorefrontProductSearchTests(TestCase):
         self.create_variant(visible, "blue", "100.00", [self.blue])
         self.create_variant(hidden, "black", "90.00", [self.black])
 
-        response = self.client.get("/api/catalog/storefront/products", {"q": "a55"})
+        response = self.client.get("/api/storefront/products", {"q": "a55"})
 
         self.assertEqual(response.status_code, 200, response.data)
         ids = [item["id"] for item in response.data["data"]["results"]]
@@ -351,9 +351,9 @@ class StorefrontProductSearchTests(TestCase):
         )
 
         quick = self.client.get(
-            f"/api/catalog/storefront/products/{product.slug}/quick-view"
+            f"/api/storefront/products/{product.slug}/quick-view"
         )
-        detail = self.client.get(f"/api/catalog/storefront/products/{product.slug}")
+        detail = self.client.get(f"/api/storefront/products/{product.slug}")
 
         self.assertEqual(quick.status_code, 200, quick.data)
         self.assertNotIn("variants", quick.data["data"])
@@ -377,7 +377,7 @@ class StorefrontProductSearchTests(TestCase):
         self.create_variant(same_category, "black", "200.00", [self.black])
         self.create_variant(other_product, "blue", "50.00", [self.blue])
 
-        response = self.client.get(f"/api/catalog/storefront/products/{target.slug}")
+        response = self.client.get(f"/api/storefront/products/{target.slug}")
 
         self.assertEqual(response.status_code, 200, response.data)
         similar_ids = [item["id"] for item in response.data["data"]["similar_products"]]
@@ -391,7 +391,7 @@ class StorefrontProductSearchTests(TestCase):
             sibling = self.create_product(f"Sibling {index}", self.samsung)
             self.create_variant(sibling, f"s{index}", "10.00", [self.blue])
 
-        response = self.client.get(f"/api/catalog/storefront/products/{target.slug}")
+        response = self.client.get(f"/api/storefront/products/{target.slug}")
 
         self.assertEqual(response.status_code, 200, response.data)
         self.assertLessEqual(len(response.data["data"]["similar_products"]), 15)
@@ -409,7 +409,7 @@ class StorefrontProductSearchTests(TestCase):
         )
         self.create_variant(regular, "black", "90.00", [self.black])
 
-        response = self.client.get(f"/api/catalog/storefront/products/{regular.slug}")
+        response = self.client.get(f"/api/storefront/products/{regular.slug}")
 
         self.assertEqual(response.status_code, 200, response.data)
         suggestion_ids = [item["id"] for item in response.data["data"]["suggested_products"]]
@@ -429,7 +429,7 @@ class StorefrontProductSearchTests(TestCase):
             canonical_url="https://example.com/products/samsung-galaxy-a55",
         )
 
-        response = self.client.get(f"/api/catalog/storefront/products/{product.slug}")
+        response = self.client.get(f"/api/storefront/products/{product.slug}")
 
         self.assertEqual(response.status_code, 200, response.data)
         seo = response.data["data"]["seo"]
@@ -443,7 +443,7 @@ class StorefrontProductSearchTests(TestCase):
         product = self.create_product("Samsung Galaxy A55", self.samsung)
         self.create_variant(product, "blue", "100.00", [self.blue])
 
-        response = self.client.get(f"/api/catalog/storefront/products/{product.slug}")
+        response = self.client.get(f"/api/storefront/products/{product.slug}")
 
         self.assertEqual(response.status_code, 200, response.data)
         self.assertIsNone(response.data["data"]["seo"])
@@ -453,7 +453,7 @@ class StorefrontProductSearchTests(TestCase):
         self.create_variant(product, "fa", "100.00", [self.blue])
 
         response = self.client.get(
-            "/api/catalog/storefront/products",
+            "/api/storefront/products",
             {"q": "گوشی"},
         )
 
@@ -477,7 +477,7 @@ class StorefrontProductSearchTests(TestCase):
         self.create_variant(xiaomi, "black", "80.00", [self.black])
 
         response = self.client.get(
-            "/api/catalog/storefront/products",
+            "/api/storefront/products",
             {"q": "a55", "brand": self.samsung.id},
         )
 
@@ -500,7 +500,7 @@ class StorefrontProductSearchTests(TestCase):
         self.create_variant(loose, "storage", "95.00", [self.storage_256])
 
         response = self.client.get(
-            "/api/catalog/storefront/products",
+            "/api/storefront/products",
             {
                 f"variant[{self.color.id}]": self.blue.id,
                 f"variant[{self.storage.id}]": self.storage_256.id,
@@ -526,7 +526,7 @@ class StorefrontProductSearchTests(TestCase):
         self.create_variant(child_product, "child", "110.00", [self.black])
 
         response = self.client.get(
-            "/api/catalog/storefront/products",
+            "/api/storefront/products",
             {"category": self.category.slug},
         )
 
@@ -541,7 +541,7 @@ class StorefrontProductSearchTests(TestCase):
         self.create_variant(xiaomi, "x", "90.00", [self.black])
 
         response = self.client.get(
-            "/api/catalog/storefront/products",
+            "/api/storefront/products",
             {"brand": self.samsung.slug},
         )
 
@@ -556,7 +556,7 @@ class StorefrontProductSearchTests(TestCase):
         self.create_variant(product, "mixed", "100.00", [self.blue])
 
         response = self.client.get(
-            "/api/catalog/storefront/products",
+            "/api/storefront/products",
             {"category": [str(self.category.id), self.category.slug]},
         )
 
@@ -568,7 +568,7 @@ class StorefrontProductSearchTests(TestCase):
 
     def test_search_rejects_unknown_category_slug(self):
         response = self.client.get(
-            "/api/catalog/storefront/products",
+            "/api/storefront/products",
             {"category": "does-not-exist"},
         )
 
@@ -577,7 +577,7 @@ class StorefrontProductSearchTests(TestCase):
 
     def test_search_rejects_unknown_brand_slug(self):
         response = self.client.get(
-            "/api/catalog/storefront/products",
+            "/api/storefront/products",
             {"brand": "does-not-exist"},
         )
 
@@ -597,7 +597,7 @@ class StorefrontProductSearchTests(TestCase):
         )
 
         response = self.client.get(
-            "/api/catalog/storefront/products",
+            "/api/storefront/products",
             {f"detail[{self.network.id}]": other_option.id},
         )
 
@@ -616,7 +616,7 @@ class StorefrontProductSearchTests(TestCase):
         )
 
         response = self.client.get(
-            f"/api/catalog/storefront/products/{product.slug}"
+            f"/api/storefront/products/{product.slug}"
         )
 
         self.assertEqual(response.status_code, 200, response.data)
@@ -652,7 +652,7 @@ class StorefrontProductSearchTests(TestCase):
         )
 
         response = self.client.get(
-            "/api/catalog/storefront/products", {"q": "seller count"}
+            "/api/storefront/products", {"q": "seller count"}
         )
 
         self.assertEqual(response.status_code, 200, response.data)
@@ -661,7 +661,7 @@ class StorefrontProductSearchTests(TestCase):
         self.assertEqual(item["offers"]["in_stock_seller_count"], 0)
 
         filtered = self.client.get(
-            "/api/catalog/storefront/products",
+            "/api/storefront/products",
             {"q": "seller count", "business": second.id},
         )
         self.assertEqual(filtered.status_code, 200, filtered.data)
@@ -684,14 +684,14 @@ class StorefrontProductSearchTests(TestCase):
         )
 
         global_result = self.client.get(
-            "/api/catalog/storefront/products", {"q": "scoped price"}
+            "/api/storefront/products", {"q": "scoped price"}
         )
         second_result = self.client.get(
-            "/api/catalog/storefront/products",
+            "/api/storefront/products",
             {"q": "scoped price", "business": second.id},
         )
         owner_result = self.client.get(
-            "/api/catalog/storefront/products",
+            "/api/storefront/products",
             {"q": "scoped price", "business": self.business.id},
         )
 
@@ -720,10 +720,10 @@ class StorefrontProductSearchTests(TestCase):
         )
 
         search = self.client.get(
-            "/api/catalog/storefront/products", {"q": "in stock seller"}
+            "/api/storefront/products", {"q": "in stock seller"}
         )
         detail = self.client.get(
-            f"/api/catalog/storefront/products/{product.slug}"
+            f"/api/storefront/products/{product.slug}"
         )
 
         self.assertEqual(search.status_code, 200, search.data)
@@ -734,7 +734,7 @@ class StorefrontProductSearchTests(TestCase):
         self.assertEqual(item["offers"]["in_stock_seller_count"], 1)
 
         second_search = self.client.get(
-            "/api/catalog/storefront/products",
+            "/api/storefront/products",
             {"q": "in stock seller", "business": second.id},
         )
         second_item = second_search.data["data"]["results"][0]
@@ -765,12 +765,12 @@ class StorefrontProductSearchTests(TestCase):
             )
 
         first = self.client.get(
-            f"/api/catalog/storefront/products/{product.slug}"
+            f"/api/storefront/products/{product.slug}"
             f"/variants/{variant.id}/offers",
             {"page_size": 2},
         )
         second = self.client.get(
-            f"/api/catalog/storefront/products/{product.slug}"
+            f"/api/storefront/products/{product.slug}"
             f"/variants/{variant.id}/offers",
             {"page_size": 2, "page": 2},
         )
@@ -796,7 +796,7 @@ class StorefrontProductSearchTests(TestCase):
         other_variant = self.create_variant(other, "black", "90.00", [self.black])
 
         response = self.client.get(
-            f"/api/catalog/storefront/products/{product.slug}"
+            f"/api/storefront/products/{product.slug}"
             f"/variants/{other_variant.id}/offers"
         )
 

@@ -9,34 +9,10 @@ from domains.catalog.models import (
     CategoryDetailOption,
     VariantOption,
 )
-from domains.catalog.search.contracts import FacetSelection, ProductSearchCriteria
+from domains.storefront.search.contracts import FacetSelection, ProductSearchCriteria
 
 
 FACET_PARAMETER = re.compile(r"^(detail|variant)\[(\d+)]$")
-
-
-class StorefrontStaticDataQuerySerializer(serializers.Serializer):
-    data = serializers.CharField(required=False, max_length=100)
-
-    def validate_data(self, value):
-        if value not in self.context["supported_data"]:
-            raise serializers.ValidationError("Unsupported static dataset.")
-        return value
-
-
-class StorefrontStaticCategorySerializer(serializers.Serializer):
-    id = serializers.IntegerField()
-    name = serializers.CharField()
-    icon = serializers.CharField(allow_null=True, allow_blank=True)
-    slug = serializers.CharField()
-    link = serializers.CharField()
-    category_market_picture = serializers.JSONField(allow_null=True)
-    children = serializers.SerializerMethodField()
-
-    def get_children(self, category):
-        return StorefrontStaticCategorySerializer(
-            category["children"], many=True
-        ).data
 
 
 class FacetSelectionSerializer(serializers.Serializer):
@@ -51,7 +27,9 @@ class FacetSelectionSerializer(serializers.Serializer):
 
 
 class StorefrontProductSearchQuerySerializer(serializers.Serializer):
-    q = serializers.CharField(required=False, allow_blank=True, max_length=200, trim_whitespace=True)
+    q = serializers.CharField(
+        required=False, allow_blank=True, max_length=200, trim_whitespace=True
+    )
     category_ids = serializers.ListField(
         child=serializers.CharField(), required=False, default=list
     )
@@ -75,14 +53,24 @@ class StorefrontProductSearchQuerySerializer(serializers.Serializer):
         default="relevance",
     )
     page = serializers.IntegerField(min_value=1, required=False, default=1)
-    page_size = serializers.IntegerField(min_value=1, max_value=100, required=False, default=24)
+    page_size = serializers.IntegerField(
+        min_value=1, max_value=100, required=False, default=24
+    )
     include_facets = serializers.BooleanField(required=False, default=True)
 
     @classmethod
     def from_query_params(cls, query_params):
         scalar_fields = (
-            "q", "business", "price_min", "price_max", "in_stock", "on_sale",
-            "ordering", "page", "page_size", "include_facets",
+            "q",
+            "business",
+            "price_min",
+            "price_max",
+            "in_stock",
+            "on_sale",
+            "ordering",
+            "page",
+            "page_size",
+            "include_facets",
         )
         payload = {
             field: query_params.get(field)
@@ -97,7 +85,10 @@ class StorefrontProductSearchQuerySerializer(serializers.Serializer):
             match = FACET_PARAMETER.match(key)
             if not match:
                 continue
-            selection = {"field_id": match.group(2), "value_ids": query_params.getlist(key)}
+            selection = {
+                "field_id": match.group(2),
+                "value_ids": query_params.getlist(key),
+            }
             target = detail_filters if match.group(1) == "detail" else variant_filters
             target.append(selection)
         payload["detail_filters"] = detail_filters
@@ -110,7 +101,9 @@ class StorefrontProductSearchQuerySerializer(serializers.Serializer):
                 raise serializers.ValidationError({
                     "price_max": "Maximum price must not be below minimum price."
                 })
-        attrs["category_ids"] = self._resolve_ids(Category, attrs["category_ids"], "category")
+        attrs["category_ids"] = self._resolve_ids(
+            Category, attrs["category_ids"], "category"
+        )
         attrs["brand_ids"] = self._resolve_ids(Brand, attrs["brand_ids"], "brand")
         business_id = attrs.get("business")
         if business_id is not None and not BusinessProfile.objects.filter(
@@ -162,14 +155,21 @@ class StorefrontProductSearchQuerySerializer(serializers.Serializer):
             }
             if detail:
                 filters["detail__filterable"] = True
-            found = set(option_model.objects.filter(**filters).values_list("id", flat=True))
+            found = set(
+                option_model.objects.filter(**filters).values_list("id", flat=True)
+            )
             if found != set(selection["value_ids"]):
                 raise serializers.ValidationError({
-                    error_field: "One or more selected options do not belong to this filter."
+                    error_field: (
+                        "One or more selected options do not belong to this filter."
+                    )
                 })
 
-    def to_criteria(self):
+    def to_criteria(self, business=None):
         data = self.validated_data
+        business_id = data.get("business")
+        if business_id is None and business is not None:
+            business_id = getattr(business, "id", business)
         return ProductSearchCriteria(
             query=data.get("q", ""),
             category_ids=tuple(dict.fromkeys(data["category_ids"])),
@@ -182,7 +182,7 @@ class StorefrontProductSearchQuerySerializer(serializers.Serializer):
                 FacetSelection(item["field_id"], tuple(item["value_ids"]))
                 for item in data["variant_filters"]
             ),
-            business_id=data.get("business"),
+            business_id=business_id,
             minimum_price=data.get("price_min"),
             maximum_price=data.get("price_max"),
             in_stock=data.get("in_stock"),

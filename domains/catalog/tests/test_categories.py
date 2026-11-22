@@ -1,6 +1,11 @@
+from unittest.mock import patch
+
 from django.contrib.auth.models import User
 from django.core.management import call_command
+from django.test import TestCase
 from rest_framework.test import APITestCase
+
+from domains.catalog.cache import invalidate_categories_cache
 
 from domains.catalog.category_icons import match_category_icon
 from domains.catalog.models import Category, CategoryStatus
@@ -183,3 +188,32 @@ class CategoryWriteTests(APITestCase):
         self.assertEqual(missing_required.status_code, 400)
         category.refresh_from_db()
         self.assertIsNone(category.category_market_picture)
+
+
+class CategoryCacheInvalidationTests(TestCase):
+    def setUp(self):
+        self.status = CategoryStatus.objects.create(name="active")
+
+    @patch("domains.catalog.cache.CacheService")
+    def test_category_create_update_and_delete_invalidate_the_tree(self, cache):
+        with self.captureOnCommitCallbacks(execute=True):
+            category = Category.objects.create(name="Electronics", status=self.status)
+        cache.return_value.delete_public.assert_called_with("categories")
+
+        cache.return_value.delete_public.reset_mock()
+        with self.captureOnCommitCallbacks(execute=True):
+            category.name = "Electronics & Photo"
+            category.save()
+        cache.return_value.delete_public.assert_called_with("categories")
+
+        cache.return_value.delete_public.reset_mock()
+        with self.captureOnCommitCallbacks(execute=True):
+            category.delete()
+        cache.return_value.delete_public.assert_called_with("categories")
+
+    @patch("domains.catalog.cache.CacheService")
+    def test_invalidation_drops_the_storefront_key(self, cache):
+        self.assertTrue(invalidate_categories_cache())
+
+        cache.return_value.delete_public.assert_called_once_with("categories")
+

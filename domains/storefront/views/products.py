@@ -4,12 +4,12 @@ from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 
 from core.responses import api_response
-from domains.catalog.api.storefront_serializers import (
+from domains.storefront.serializers import (
     StorefrontOfferQuerySerializer,
     StorefrontProductSearchQuerySerializer,
 )
-from domains.catalog.search import StorefrontSearchService
-from domains.catalog.services import StorefrontProductService
+from domains.storefront.search import StorefrontSearchService
+from domains.storefront.services import StorefrontProductService
 
 
 class StorefrontProductSearchView(APIView):
@@ -23,7 +23,10 @@ class StorefrontProductSearchView(APIView):
             request.query_params
         )
         serializer.is_valid(raise_exception=True)
-        result = StorefrontSearchService().search(serializer.to_criteria())
+        business = getattr(request, "business", None)
+        result = StorefrontSearchService().search(
+            serializer.to_criteria(business=business)
+        )
         data = {
             "count": result.count,
             "next": (

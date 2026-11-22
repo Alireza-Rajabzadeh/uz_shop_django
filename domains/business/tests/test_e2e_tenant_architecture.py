@@ -375,7 +375,7 @@ class E2EHistoricalRedirectAndTenantResolutionTests(BaseE2ETenantSetup):
     def test_middleware_returns_308_with_canonical_header(self):
         # Sending X-Tenant-Subdomain: delta-legacy to an API route triggers HTTP 308
         res = self.client.get(
-            "/api/catalog/storefront/products?page=2&sort=price_asc",
+            "/api/storefront/products?page=2&sort=price_asc",
             HTTP_X_TENANT_SUBDOMAIN="delta-legacy",
         )
         self.assertEqual(res.status_code, 308)
@@ -402,7 +402,7 @@ class E2ECrossTenantSecurityAndDataIsolationTests(BaseE2ETenantSetup):
     def test_storefront_catalog_product_scoping(self):
         # 1. Delta storefront requests Product Delta -> 200 OK
         res_d = self.client.get(
-            f"/api/catalog/storefront/products/{self.product_delta.slug}",
+            f"/api/storefront/products/{self.product_delta.slug}",
             HTTP_X_TENANT_SUBDOMAIN="delta",
         )
         self.assertEqual(res_d.status_code, 200)
@@ -410,7 +410,7 @@ class E2ECrossTenantSecurityAndDataIsolationTests(BaseE2ETenantSetup):
 
         # 2. Delta storefront requests Product Shopname (unowned) -> 200 OK (out of stock, no Shopname offers)
         res_d_cross = self.client.get(
-            f"/api/catalog/storefront/products/{self.product_shopname.slug}",
+            f"/api/storefront/products/{self.product_shopname.slug}",
             HTTP_X_TENANT_SUBDOMAIN="delta",
         )
         self.assertEqual(res_d_cross.status_code, 200)
@@ -420,7 +420,7 @@ class E2ECrossTenantSecurityAndDataIsolationTests(BaseE2ETenantSetup):
 
         # 3. Shopname storefront requests Product Shopname -> 200 OK
         res_s = self.client.get(
-            f"/api/catalog/storefront/products/{self.product_shopname.slug}",
+            f"/api/storefront/products/{self.product_shopname.slug}",
             HTTP_X_TENANT_SUBDOMAIN="shopname",
         )
         self.assertEqual(res_s.status_code, 200)
@@ -428,7 +428,7 @@ class E2ECrossTenantSecurityAndDataIsolationTests(BaseE2ETenantSetup):
 
         # 4. Shopname storefront requests Product Delta (unowned) -> 200 OK (out of stock, no Delta offers)
         res_s_cross = self.client.get(
-            f"/api/catalog/storefront/products/{self.product_delta.slug}",
+            f"/api/storefront/products/{self.product_delta.slug}",
             HTTP_X_TENANT_SUBDOMAIN="shopname",
         )
         self.assertEqual(res_s_cross.status_code, 200)
@@ -439,7 +439,7 @@ class E2ECrossTenantSecurityAndDataIsolationTests(BaseE2ETenantSetup):
     def test_storefront_search_list_isolation(self):
         # Delta storefront search only lists Delta's products
         res_delta_list = self.client.get(
-            "/api/catalog/storefront/products",
+            "/api/storefront/products",
             HTTP_X_TENANT_SUBDOMAIN="delta",
         )
         self.assertEqual(res_delta_list.status_code, 200)
@@ -449,7 +449,7 @@ class E2ECrossTenantSecurityAndDataIsolationTests(BaseE2ETenantSetup):
 
         # Shopname storefront search only lists Shopname's products
         res_shop_list = self.client.get(
-            "/api/catalog/storefront/products",
+            "/api/storefront/products",
             HTTP_X_TENANT_SUBDOMAIN="shopname",
         )
         self.assertEqual(res_shop_list.status_code, 200)
@@ -618,7 +618,7 @@ class E2EConcurrentRequestsTests(TransactionTestCase):
             client = APIClient()
             try:
                 res = client.get(
-                    "/api/catalog/storefront/products",
+                    "/api/storefront/products",
                     HTTP_X_TENANT_SUBDOMAIN=subdomain,
                 )
                 if res.status_code != 200:

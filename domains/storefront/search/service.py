@@ -7,7 +7,16 @@ from .contracts import ProductSearchCriteria, ProductSearchResult
 class StorefrontSearchService:
     def __init__(self, backend=None):
         if backend is None:
-            backend_class = import_string(settings.CATALOG_SEARCH_BACKEND)
+            backend_path = getattr(
+                settings,
+                "STOREFRONT_SEARCH_BACKEND",
+                getattr(
+                    settings,
+                    "CATALOG_SEARCH_BACKEND",
+                    "domains.storefront.search.postgres.PostgresProductSearchBackend",
+                ),
+            )
+            backend_class = import_string(backend_path)
             backend = backend_class()
         self.backend = backend
 

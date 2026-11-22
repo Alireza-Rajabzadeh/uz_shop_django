@@ -13,7 +13,7 @@ def invalidate_categories_cache() -> bool:
     """Drop the shared storefront category tree.
 
     The panels read this key straight from Redis and only fall back to
-    `/api/catalog/statics` when it is missing, so a key with no expiry
+    `/api/storefront/statics` when it is missing, so a key with no expiry
     would keep serving whatever was first built until a Redis flush.
     """
     return CacheService().delete_public(CATEGORIES_CACHE_KEY)

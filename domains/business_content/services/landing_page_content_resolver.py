@@ -2,21 +2,24 @@ from copy import deepcopy
 
 from domains.catalog.services.category_service import CategoryService
 from domains.catalog.services.product_service import ProductService
-from domains.catalog.services.storefront_product_service import (
-    StorefrontProductService,
-)
 
 from ..contracts import load_content_contracts
 
 
 class LandingPageContentResolver:
     def __init__(self, loaders=None, *, include_unlisted=False):
-        self.loaders = loaders or {
-            "products": lambda ids: StorefrontProductService().get_content_items(
-                ids, include_unlisted=include_unlisted
-            ),
-            "categories": lambda ids: CategoryService().get_storefront_content_items(ids),
-        }
+        if loaders is None:
+            from domains.storefront.services.product_service import (
+                StorefrontProductService,
+            )
+
+            loaders = {
+                "products": lambda ids: StorefrontProductService().get_content_items(
+                    ids, include_unlisted=include_unlisted
+                ),
+                "categories": lambda ids: CategoryService().get_storefront_content_items(ids),
+            }
+        self.loaders = loaders
 
     @classmethod
     def for_authoring(cls):

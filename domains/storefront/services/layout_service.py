@@ -2,9 +2,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from rest_framework.exceptions import NotFound
 
 from domains.business.services import BusinessService
-from domains.business_content.services import PageService as BusinessPageService
 from domains.catalog.services import CategoryService
-from domains.content.services import PageService as ContentPageService
 
 
 class StorefrontLayoutService:
@@ -91,6 +89,8 @@ class StorefrontLayoutService:
 
     def _get_platform_footer(self):
         try:
+            from domains.content.services import PageService as ContentPageService
+
             data, _ttl = ContentPageService().get_storefront_page(slug="footer")
             return data
         except (ObjectDoesNotExist, NotFound):
@@ -98,6 +98,8 @@ class StorefrontLayoutService:
 
     def _get_business_footer(self, business):
         try:
+            from domains.business_content.services import PageService as BusinessPageService
+
             data, _ttl = BusinessPageService().get_storefront_page(
                 slug="footer", business=business
             )
