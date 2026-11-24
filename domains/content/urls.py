@@ -5,22 +5,12 @@ from .views import (
     AdminLandingPageView,
     AdminPageView,
     AdminSEOView,
-    LandingPagePreview,
-    PagePreview,
-    PublicHomePage,
     PublicLandingPage,
-    PublicPage,
-    PublicResourceSEO,
 )
 
 urlpatterns = [
     # Public Storefront & Delivery
-    path("home", PublicHomePage.as_view()),
-    path("landing-pages/<str:slug>/preview", LandingPagePreview.as_view()),
     path("landing-pages/<str:slug>", PublicLandingPage.as_view()),
-    path("pages/<str:slug>/preview", PagePreview.as_view()),
-    path("pages/<str:slug>", PublicPage.as_view()),
-    path("seo/<str:resource_type>/<str:slug>", PublicResourceSEO.as_view()),
 
     # Admin Landing Pages
     path("admin/landing-pages", AdminLandingPageView.as_view()),

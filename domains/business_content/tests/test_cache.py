@@ -29,71 +29,44 @@ class PublicContentCacheTests(TestCase):
         resolver.assert_not_called()
 
     @patch("domains.business_content.views.CacheService")
-    def test_page_cache_miss_hands_the_model_ttl_to_the_cache(self, cache):
+    def test_landing_page_cache_miss_hands_the_model_ttl_to_the_cache(self, cache):
         cache.return_value.get_public.return_value = None
         cache.return_value.get_or_set_public.side_effect = lambda key, builder: builder()[0]
-        page = Page.objects.create(
-            title="About",
-            slug="about",
+        page = LandingPage.objects.create(
+            title="Promo",
+            slug="promo",
             business=self.business,
-            status=Page.Status.PUBLISHED,
+            status=LandingPage.Status.PUBLISHED,
             published_content=self.content,
             cache_ttl=45,
         )
 
-        response = self.client.get(f"/api/business-content/pages/{page.slug}")
+        response = self.client.get(f"/api/business-content/landing-pages/{page.slug}")
 
         self.assertEqual(response.status_code, 200)
         key, builder = cache.return_value.get_or_set_public.call_args.args
-        self.assertEqual(key, "business-content:pages:about")
+        self.assertEqual(key, "business-content:landing-pages:promo")
         self.assertEqual(builder()[1], 45)
 
     @patch("domains.business_content.views.CacheService")
-    def test_zero_ttl_is_handed_over_and_the_page_still_renders(self, cache):
+    def test_zero_ttl_is_handed_over_and_the_landing_page_still_renders(self, cache):
         cache.return_value.get_public.return_value = None
         cache.return_value.get_or_set_public.side_effect = lambda key, builder: builder()[0]
-        Page.objects.create(
-            title="Home",
-            slug="home",
+        LandingPage.objects.create(
+            title="Promo Zero",
+            slug="promo-zero",
             business=self.business,
-            status=Page.Status.PUBLISHED,
+            status=LandingPage.Status.PUBLISHED,
             published_content=self.content,
             cache_ttl=0,
         )
 
-        response = self.client.get("/api/business-content/home")
+        response = self.client.get("/api/business-content/landing-pages/promo-zero")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["data"]["title"], "Home")
+        self.assertEqual(response.data["data"]["title"], "Promo Zero")
         _, builder = cache.return_value.get_or_set_public.call_args.args
         self.assertEqual(builder()[1], 0)
-
-    @patch("domains.business_content.views.CacheService")
-    def test_delivery_reads_the_storefront_business(self, cache):
-        cache.return_value.get_public.return_value = None
-        cache.return_value.get_or_set_public.side_effect = lambda key, builder: builder()[0]
-        Page.objects.create(
-            title="Other business home",
-            slug="home",
-            # Explicit pk: `inventory.0022` inserts id=1 directly, so the
-            # sequence is behind and a plain create() would collide with it.
-            business=BusinessProfile.objects.create(
-                id=9988,
-                business_name="Other",
-                display_name="Other",
-            ),
-            status=Page.Status.PUBLISHED,
-            published_content=self.content,
-            cache_ttl=0,
-        )
-
-        response = self.client.get("/api/business-content/home")
-
-        self.assertEqual(response.status_code, 404)
-        self.assertEqual(
-            public_business_id(),
-            BusinessProfile.objects.order_by("id").first().id,
-        )
 
 
 class ContentCacheInvalidationTests(TestCase):

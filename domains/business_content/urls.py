@@ -1,11 +1,7 @@
 from django.urls import path
 
 from .views import (
-    LandingPagePreview,
-    PagePreview,
-    PublicHomePage,
     PublicLandingPage,
-    PublicPage,
     VendorContentOptionsView,
     VendorLandingPageView,
     VendorPageView,
@@ -15,11 +11,7 @@ from .views import (
 urlpatterns = [
     # Public delivery. These serve the singleton business profile's rows;
     # the platform storefront's own content stays under /api/content/.
-    path("home", PublicHomePage.as_view()),
-    path("landing-pages/<str:slug>/preview", LandingPagePreview.as_view()),
     path("landing-pages/<str:slug>", PublicLandingPage.as_view()),
-    path("pages/<str:slug>/preview", PagePreview.as_view()),
-    path("pages/<str:slug>", PublicPage.as_view()),
 
     # Business authoring. The `vendor/` prefix keeps `<int:id>` detail routes
     # unambiguous against the `<str:slug>` delivery routes above.

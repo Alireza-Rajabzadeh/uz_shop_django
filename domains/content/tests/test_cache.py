@@ -24,45 +24,43 @@ class PublicContentCacheTests(TestCase):
         resolver.assert_not_called()
 
     @patch("domains.content.views.CacheService")
-    def test_page_cache_miss_hands_the_model_ttl_to_the_cache(self, cache):
+    def test_landing_page_cache_miss_hands_the_model_ttl_to_the_cache(self, cache):
         cache.return_value.get_public.return_value = None
         cache.return_value.get_or_set_public.side_effect = lambda key, builder: builder()[0]
-        page = Page.objects.create(
-            title="About",
-            slug="about",
-            status=Page.Status.PUBLISHED,
+        page = LandingPage.objects.create(
+            title="Promo",
+            slug="promo",
+            status=LandingPage.Status.PUBLISHED,
             published_content=self.content,
             cache_ttl=45,
         )
 
-        response = self.client.get(f"/api/content/pages/{page.slug}")
+        response = self.client.get(f"/api/content/landing-pages/{page.slug}")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["data"]["title"], "About")
+        self.assertEqual(response.data["data"]["title"], "Promo")
         key, builder = cache.return_value.get_or_set_public.call_args.args
-        self.assertEqual(key, "content:pages:about")
-        # Storing vs. not storing is the cache's decision; the view's job is
-        # to hand over the page's own `cache_ttl` with the payload.
+        self.assertEqual(key, "content:landing-pages:promo")
         payload, ttl = builder()
-        self.assertEqual(payload["title"], "About")
+        self.assertEqual(payload["title"], "Promo")
         self.assertEqual(ttl, 45)
 
     @patch("domains.content.views.CacheService")
-    def test_zero_ttl_is_handed_over_and_the_page_still_renders(self, cache):
+    def test_zero_ttl_is_handed_over_and_the_landing_page_still_renders(self, cache):
         cache.return_value.get_public.return_value = None
         cache.return_value.get_or_set_public.side_effect = lambda key, builder: builder()[0]
-        Page.objects.create(
-            title="Home",
-            slug="home",
-            status=Page.Status.PUBLISHED,
+        LandingPage.objects.create(
+            title="Promo Zero",
+            slug="promo-zero",
+            status=LandingPage.Status.PUBLISHED,
             published_content=self.content,
             cache_ttl=0,
         )
 
-        response = self.client.get("/api/content/home")
+        response = self.client.get("/api/content/landing-pages/promo-zero")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["data"]["title"], "Home")
+        self.assertEqual(response.data["data"]["title"], "Promo Zero")
         _, builder = cache.return_value.get_or_set_public.call_args.args
         self.assertEqual(builder()[1], 0)
 

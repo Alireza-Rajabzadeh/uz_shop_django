@@ -5,8 +5,10 @@ from .public import public_business_id
 
 
 class LandingPageService:
-    def get_by_slug(self, slug):
-        return LandingPage.objects.get(slug=slug, business_id=public_business_id())
+    def get_by_slug(self, slug, business_id=None):
+        return LandingPage.objects.get(
+            slug=slug, business_id=public_business_id(business_id)
+        )
 
     def delete_page(self, instance):
         instance.delete()

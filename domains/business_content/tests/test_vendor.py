@@ -400,35 +400,3 @@ class VendorContentAPITests(APITestCase):
 
     def test_public_business_id_resolves_the_storefront_profile(self):
         self.assertEqual(public_business_id(), self.business.id)
-
-    def test_home_serves_the_storefront_business_home(self):
-        CacheService().delete_public(HOME_CACHE_KEY)
-        home = Page.objects.create(
-            title="Storefront home",
-            slug=PageService.HOME_SLUG,
-            business=self.business,
-            status=Page.Status.PUBLISHED,
-            published_content=CONTENT,
-            cache_ttl=0,
-        )
-        Page.objects.create(
-            title="Other home",
-            slug=PageService.HOME_SLUG,
-            business=self.other_business,
-            status=Page.Status.PUBLISHED,
-            published_content=CONTENT,
-            cache_ttl=0,
-        )
-
-        response = self.client.get("/api/business-content/home")
-
-        self.assertEqual(response.status_code, 200, response.data)
-        self.assertEqual(response.data["data"]["id"], home.id)
-
-    def test_home_returns_not_found_without_a_profile(self):
-        CacheService().delete_public(HOME_CACHE_KEY)
-        BusinessProfile.objects.all().delete()
-
-        response = self.client.get("/api/business-content/home")
-
-        self.assertEqual(response.status_code, 404)

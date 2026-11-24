@@ -14,7 +14,8 @@ from domains.business.models import (
 from domains.packages.models import Feature, Package, PackageFeature
 from domains.packages.enums import PackageFeatureEnum
 
-from ..cache import home_cache_key, invalidate_page
+from domains.storefront.cache import page_cache_key, invalidate_page_cache
+from ..cache import invalidate_page
 from ..models import Page
 from ..services.page_service import PageService
 
@@ -87,16 +88,16 @@ class BusinessHomePageAPITests(TestCase):
         }
 
         # Clear relevant cache keys
-        invalidate_page("home", self.business_alpha.id)
-        invalidate_page("home", self.business_beta.id)
+        invalidate_page_cache("home", self.business_alpha.id)
+        invalidate_page_cache("home", self.business_beta.id)
 
     def tearDown(self):
-        invalidate_page("home", self.business_alpha.id)
-        invalidate_page("home", self.business_beta.id)
+        invalidate_page_cache("home", self.business_alpha.id)
+        invalidate_page_cache("home", self.business_beta.id)
 
     def test_cached_homepage_content_returned_without_db_queries(self):
         """Cached homepage content is returned without additional database queries."""
-        cache_key = home_cache_key(self.business_alpha.id)
+        cache_key = page_cache_key("home", business_id=self.business_alpha.id)
         cached_payload = {
             "id": 999,
             "title": "Cached Storefront Home",
@@ -110,7 +111,7 @@ class BusinessHomePageAPITests(TestCase):
         # Query with business subdomain
         with patch.object(Page.objects, "filter") as mock_page_filter:
             response = self.client.get(
-                "/api/business-content/home",
+                "/api/v1/storefront/home",
                 HTTP_X_TENANT_SUBDOMAIN="alpha",
             )
             mock_page_filter.assert_not_called()
@@ -120,13 +121,13 @@ class BusinessHomePageAPITests(TestCase):
 
     def test_cached_negative_result_returned_without_db_queries(self):
         """Cached negative result returns 404 without additional database queries."""
-        cache_key = home_cache_key(self.business_alpha.id)
+        cache_key = page_cache_key("home", business_id=self.business_alpha.id)
         # Put negative cached result (False)
         self.cache.put_public(cache_key, False, ttl=60)
 
         with patch.object(Page.objects, "filter") as mock_page_filter:
             response = self.client.get(
-                "/api/business-content/home",
+                "/api/v1/storefront/home",
                 HTTP_X_TENANT_SUBDOMAIN="alpha",
             )
             mock_page_filter.assert_not_called()
@@ -150,7 +151,7 @@ class BusinessHomePageAPITests(TestCase):
             PageService, "get_published_home_page", wraps=service.get_published_home_page
         ) as mock_published:
             response = self.client.get(
-                "/api/business-content/home",
+                "/api/v1/storefront/home",
                 HTTP_X_TENANT_SUBDOMAIN="alpha",
             )
 
@@ -170,7 +171,7 @@ class BusinessHomePageAPITests(TestCase):
         )
 
         response = self.client.get(
-            "/api/business-content/home",
+            "/api/v1/storefront/home",
             HTTP_X_TENANT_SUBDOMAIN="alpha",
         )
 
@@ -179,7 +180,7 @@ class BusinessHomePageAPITests(TestCase):
         self.assertEqual(response.data["data"]["slug"], "home")
 
         # Verify it was cached in Redis under business-content:home:{business_id}
-        cache_key = home_cache_key(self.business_alpha.id)
+        cache_key = page_cache_key("home", business_id=self.business_alpha.id)
         cached = self.cache.get_public(cache_key)
         self.assertIsNotNone(cached)
         self.assertEqual(cached["title"], "Alpha Storefront Home")
@@ -198,14 +199,14 @@ class BusinessHomePageAPITests(TestCase):
             )
 
             response = self.client.get(
-                "/api/business-content/home",
+                "/api/v1/storefront/home",
                 HTTP_X_TENANT_SUBDOMAIN="beta",
             )
 
             self.assertEqual(response.status_code, 404)
 
             # Verify negative result was cached
-            cache_key = home_cache_key(self.business_beta.id)
+            cache_key = page_cache_key("home", business_id=self.business_beta.id)
             cached = self.cache.get_public(cache_key)
             self.assertIs(cached, False)
         finally:
@@ -215,14 +216,14 @@ class BusinessHomePageAPITests(TestCase):
     def test_business_without_published_content_receives_404(self):
         """Business without any published home page receives 404."""
         response = self.client.get(
-            "/api/business-content/home",
+            "/api/v1/storefront/home",
             HTTP_X_TENANT_SUBDOMAIN="alpha",
         )
 
         self.assertEqual(response.status_code, 404)
 
         # Verify negative result was cached
-        cache_key = home_cache_key(self.business_alpha.id)
+        cache_key = page_cache_key("home", business_id=self.business_alpha.id)
         cached = self.cache.get_public(cache_key)
         self.assertIs(cached, False)
 
@@ -237,20 +238,20 @@ class BusinessHomePageAPITests(TestCase):
         )
 
         response = self.client.get(
-            "/api/business-content/home",
+            "/api/v1/storefront/home",
             HTTP_X_TENANT_SUBDOMAIN="alpha",
         )
 
         self.assertEqual(response.status_code, 404)
 
         # Malformed components
-        invalidate_page("home", self.business_alpha.id)
+        invalidate_page_cache("home", self.business_alpha.id)
         Page.objects.filter(business=self.business_alpha).update(
             published_content={"components": "not-a-list"}
         )
 
         response2 = self.client.get(
-            "/api/business-content/home",
+            "/api/v1/storefront/home",
             HTTP_X_TENANT_SUBDOMAIN="alpha",
         )
 
@@ -269,13 +270,13 @@ class BusinessHomePageAPITests(TestCase):
         )
 
         response = self.client.get(
-            "/api/business-content/home",
+            "/api/v1/storefront/home",
             HTTP_X_TENANT_SUBDOMAIN="alpha",
         )
         self.assertEqual(response.status_code, 404)
 
         # 2. Page with status=PUBLISHED only returns published_content, never draft_content
-        invalidate_page("home", self.business_alpha.id)
+        invalidate_page_cache("home", self.business_alpha.id)
         Page.objects.filter(business=self.business_alpha).update(
             status=Page.Status.PUBLISHED,
             draft_content={"components": [{"id": "unreleased-draft"}]},
@@ -283,7 +284,7 @@ class BusinessHomePageAPITests(TestCase):
         )
 
         response2 = self.client.get(
-            "/api/business-content/home",
+            "/api/v1/storefront/home",
             HTTP_X_TENANT_SUBDOMAIN="alpha",
         )
         self.assertEqual(response2.status_code, 200)
@@ -305,7 +306,7 @@ class BusinessHomePageAPITests(TestCase):
             side_effect=RuntimeError("Unexpected database disconnect"),
         ):
             response = self.client.get(
-                "/api/business-content/home",
+                "/api/v1/storefront/home",
                 HTTP_X_TENANT_SUBDOMAIN="alpha",
             )
 
