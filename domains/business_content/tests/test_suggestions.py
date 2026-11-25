@@ -182,11 +182,9 @@ class SuggestionContextEnforcementTests(APITestCase):
 
         self.assertEqual(response.status_code, 201, response.data)
 
-    def test_a_component_outside_the_pages_context_is_rejected(self):
-        # `picture` declares page+section only; `social_links` also allows
-        # footer, so the same page passes once the component matches.
+    def test_pages_accept_valid_json_regardless_of_backend_contract_context(self):
         SuggestionPage.objects.filter(slug="faq").update(context="footer")
-        rejected = self.client.post(
+        first = self.client.post(
             self.PAGES_URL,
             {
                 "title": "Questions",
@@ -197,18 +195,18 @@ class SuggestionContextEnforcementTests(APITestCase):
             },
             format="json",
         )
-        accepted = self.client.post(
+        second = self.client.post(
             self.PAGES_URL,
             {
-                "title": "Questions",
-                "slug": "faq",
+                "title": "Questions 2",
+                "slug": "faq-2",
                 "draft_content": self.draft([("social_links", {})]),
             },
             format="json",
         )
 
-        self.assertEqual(rejected.status_code, 400, rejected.data)
-        self.assertEqual(accepted.status_code, 201, accepted.data)
+        self.assertEqual(first.status_code, 201, first.data)
+        self.assertEqual(second.status_code, 201, second.data)
 
     def test_a_slug_outside_the_standard_set_defaults_to_the_full_vocabulary(self):
         # No suggestion holds this slug, so it falls back to the default
@@ -227,7 +225,7 @@ class SuggestionContextEnforcementTests(APITestCase):
 
         self.assertEqual(response.status_code, 201, response.data)
 
-    def test_updating_without_a_slug_still_resolves_the_stored_context(self):
+    def test_updating_without_a_slug_accepts_frontend_components_as_valid_json(self):
         SuggestionPage.objects.filter(slug="faq").update(context="footer")
         created = self.client.post(
             self.PAGES_URL,
@@ -240,12 +238,14 @@ class SuggestionContextEnforcementTests(APITestCase):
         )
         self.assertEqual(created.status_code, 201, created.data)
 
-        # A PATCH that omits `slug` (the panel does on save) must still
-        # resolve the context from the stored row, not fall back to `page`.
         response = self.client.patch(
             f"{self.PAGES_URL}/{created.data['data']['id']}",
-            {"draft_content": self.draft([("picture", {"image": "/q.png", "altText": "Q"})])},
+            {
+                "draft_content": self.draft(
+                    [("dynamic_product_slider", {"sourceMode": "filtered"})]
+                )
+            },
             format="json",
         )
 
-        self.assertEqual(response.status_code, 400, response.data)
+        self.assertEqual(response.status_code, 200, response.data)

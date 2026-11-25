@@ -335,6 +335,38 @@ class VendorContentAPITests(APITestCase):
         page = Page.objects.get(slug="my-page", business=self.business)
         self.assertEqual(create_response.data["data"]["business"], page.business_id)
 
+        custom_content = {
+            "schema_version": 1,
+            "contract_version": 4,
+            "components": [
+                {
+                    "id": "dyn-1",
+                    "key": "dynamic_product_slider",
+                    "version": 1,
+                    "props": {
+                        "sourceMode": "filtered",
+                        "loadingStrategy": "lazy",
+                        "filters": {"category": [self.category.id], "limit": 12},
+                    },
+                }
+            ],
+        }
+        patch_response = self.client.patch(
+            f"/api/business-content/vendor/pages/{page.id}",
+            {"title": "Updated page", "draft_content": custom_content},
+            format="json",
+        )
+        self.assertEqual(patch_response.status_code, 200, patch_response.data)
+        page.refresh_from_db()
+        self.assertEqual(page.draft_content, custom_content)
+
+        invalid_json_response = self.client.patch(
+            f"/api/business-content/vendor/pages/{page.id}",
+            {"draft_content": None},
+            format="json",
+        )
+        self.assertEqual(invalid_json_response.status_code, 400)
+
     # ── selector options ─────────────────────────────────────────────
 
     def test_product_options_only_offer_business_catalog(self):

@@ -1,15 +1,12 @@
 from django.core.validators import validate_unicode_slug
 from rest_framework import serializers
 
-from ..contracts import empty_draft_content, validate_draft_content
+from ..contracts import empty_draft_content
 from ..models import Page
 from .business_slug_scope_mixin import BusinessSlugScopeMixin
-from .content_context_scope_mixin import ContentContextScopeMixin
 
 
-class PageSerializer(
-    BusinessSlugScopeMixin, ContentContextScopeMixin, serializers.ModelSerializer
-):
+class PageSerializer(BusinessSlugScopeMixin, serializers.ModelSerializer):
     slug = serializers.SlugField(
         max_length=50,
         allow_unicode=True,
@@ -18,7 +15,6 @@ class PageSerializer(
     draft_content = serializers.JSONField(
         required=False,
         default=empty_draft_content,
-        validators=[validate_draft_content],
     )
 
     class Meta:

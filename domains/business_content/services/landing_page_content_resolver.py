@@ -34,6 +34,12 @@ class LandingPageContentResolver:
 
     def resolve(self, content):
         resolved = deepcopy(content)
+        if not isinstance(resolved, dict):
+            return resolved
+        components = resolved.get("components")
+        if not isinstance(components, list):
+            return resolved
+
         contracts = load_content_contracts()
         definitions = {
             (component["key"], component["version"]): component
@@ -41,14 +47,19 @@ class LandingPageContentResolver:
         }
         references = {resource: [] for resource in self.loaders}
 
-        for component in resolved.get("components", []):
+        for component in components:
+            if not isinstance(component, dict):
+                continue
+            props = component.get("props")
+            if not isinstance(props, dict):
+                continue
             definition = definitions.get((component.get("key"), component.get("version")))
             if not definition:
                 continue
             for name, prop_definition in definition.get("props", {}).items():
-                if name in component.get("props", {}):
+                if name in props:
                     self._collect_references(
-                        component["props"][name], prop_definition, references
+                        props[name], prop_definition, references
                     )
 
         loaded = {}
@@ -57,14 +68,19 @@ class LandingPageContentResolver:
             items = self.loaders[resource](unique_ids)
             loaded[resource] = {item["id"]: item for item in items}
 
-        for component in resolved.get("components", []):
+        for component in components:
+            if not isinstance(component, dict):
+                continue
+            props = component.get("props")
+            if not isinstance(props, dict):
+                continue
             definition = definitions.get((component.get("key"), component.get("version")))
             if not definition:
                 continue
             for name, prop_definition in definition.get("props", {}).items():
-                if name in component.get("props", {}):
-                    component["props"][name] = self._resolve_value(
-                        component["props"][name], prop_definition, loaded
+                if name in props:
+                    props[name] = self._resolve_value(
+                        props[name], prop_definition, loaded
                     )
         return resolved
 
